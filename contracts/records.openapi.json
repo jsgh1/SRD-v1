@@ -1,0 +1,2970 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SRD records API interna",
+    "version": "0.1.0"
+  },
+  "servers": [
+    {
+      "url": "http://records:8000/internal/v1"
+    }
+  ],
+  "paths": {
+    "/person-fields": {
+      "get": {
+        "summary": "Configuración de campos de personas de la junta; todos los lectores",
+        "operationId": "get_person_fields",
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado confirmado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {},
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error normalizado 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error normalizado 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error normalizado 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error normalizado 409",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Error normalizado 419",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error normalizado 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error normalizado 429",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error normalizado 503",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": []
+      },
+      "put": {
+        "summary": "Guardar campos adicionales; SA/AD o delegado vigente. Solo SA/AD conceden delegaciones. Versión compartida y conservación histórica.",
+        "operationId": "put_person_fields",
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado confirmado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {},
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error normalizado 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error normalizado 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error normalizado 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error normalizado 409",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Error normalizado 419",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error normalizado 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error normalizado 429",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error normalizado 503",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonFieldSchema"
+              }
+            }
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/person-filter-settings": {
+      "get": {
+        "summary": "Filtros visibles comunes, versión y permisos de edición. custom=null en la configuración inicial significa todos los campos.",
+        "operationId": "get_person_filter_settings",
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado confirmado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {},
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error normalizado 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error normalizado 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error normalizado 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error normalizado 409",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Error normalizado 419",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error normalizado 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error normalizado 429",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error normalizado 503",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": []
+      },
+      "put": {
+        "summary": "Guardar filtros comunes; SA/AD o rol delegado vigente. Solo SA/AD pueden enviar delegated_roles. Conflicto de versión: 409; no modifica permisos de lectura.",
+        "operationId": "put_person_filter_settings",
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado confirmado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {},
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error normalizado 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error normalizado 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error normalizado 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error normalizado 409",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Error normalizado 419",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error normalizado 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error normalizado 429",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error normalizado 503",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonFilterSettings"
+              }
+            }
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/person-positions": {
+      "get": {
+        "summary": "Catálogo de cargos de personas de la junta; todos los lectores",
+        "operationId": "get_person_positions",
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado confirmado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {},
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error normalizado 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error normalizado 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error normalizado 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error normalizado 409",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Error normalizado 419",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error normalizado 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error normalizado 429",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error normalizado 503",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": []
+      },
+      "put": {
+        "summary": "Guardar cargos; SA/AD, versión, desactivación e historia",
+        "operationId": "put_person_positions",
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado confirmado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {},
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error normalizado 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error normalizado 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error normalizado 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error normalizado 409",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Error normalizado 419",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error normalizado 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error normalizado 429",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error normalizado 503",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonPositionCatalog"
+              }
+            }
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/dashboard": {
+      "get": {
+        "summary": "Indicadores exclusivos de junta; date en America/Bogota, generated_at UTC y timezone. Semana desde lunes; períodos hasta antes de la siguiente medianoche colombiana.",
+        "operationId": "get_dashboard",
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado confirmado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {},
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error normalizado 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error normalizado 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error normalizado 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error normalizado 409",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Error normalizado 419",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error normalizado 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error normalizado 429",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error normalizado 503",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/persons": {
+      "get": {
+        "summary": "Consulta paginada de personas",
+        "operationId": "get_persons",
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado confirmado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {},
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error normalizado 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error normalizado 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error normalizado 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error normalizado 409",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Error normalizado 419",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error normalizado 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error normalizado 429",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error normalizado 503",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "document_type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "RC",
+                "TI",
+                "CC",
+                "CE",
+                "NIT"
+              ]
+            }
+          },
+          {
+            "name": "gender",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "male",
+                "female",
+                "other"
+              ]
+            }
+          },
+          {
+            "name": "descriptive_role",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "admin",
+                "registrar",
+                "treasurer",
+                "auditor",
+                "viewer"
+              ]
+            },
+            "description": "Rol de la ficha; no representa permisos de cuenta."
+          },
+          {
+            "name": "position_code",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 60,
+              "pattern": "^[a-z0-9-]+$"
+            },
+            "description": "Código del catálogo de la junta activa, incluidos cargos inactivos. Todos los filtros se combinan con AND."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "zone",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "affiliated",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                10,
+                25,
+                50
+              ]
+            }
+          },
+          {
+            "name": "custom_filters",
+            "in": "query",
+            "description": "Hasta tres criterios combinados con AND. Codificar custom_filters[0][field_id] y [value] (índices 0..2). operator omitido o eq: coincidencia exacta, sin value_to. between: solo fechas ISO YYYY-MM-DD, value inicial y value_to final obligatorios, extremos inclusivos y ordenados. UUID de campo de la junta; campos y opciones inactivos admitidos. Números exactos comparados como cadenas, 1 difiere de 1.0.",
+            "schema": {
+              "type": "array",
+              "maxItems": 3,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "field_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "value": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "operator": {
+                    "type": "string",
+                    "enum": [
+                      "eq",
+                      "between"
+                    ]
+                  },
+                  "value_to": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                },
+                "required": [
+                  "field_id",
+                  "value"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "post": {
+        "summary": "Crear persona y evento durable",
+        "operationId": "post_persons",
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado confirmado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {},
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error normalizado 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error normalizado 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error normalizado 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error normalizado 409",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Error normalizado 419",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error normalizado 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error normalizado 429",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error normalizado 503",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Person"
+              }
+            }
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/persons/lookup": {
+      "get": {
+        "summary": "Consulta exacta por tipo y documento",
+        "operationId": "get_persons_lookup",
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado confirmado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {},
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error normalizado 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error normalizado 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error normalizado 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error normalizado 409",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Error normalizado 419",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error normalizado 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error normalizado 429",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error normalizado 503",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "document_type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "document_number",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/persons/{id}": {
+      "get": {
+        "summary": "Detalle; nota solo para SA/AD/RE",
+        "operationId": "get_persons__id_",
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado confirmado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {},
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error normalizado 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error normalizado 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error normalizado 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error normalizado 409",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Error normalizado 419",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error normalizado 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error normalizado 429",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error normalizado 503",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "summary": "Actualizar con versión requerida",
+        "operationId": "patch_persons__id_",
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado confirmado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {},
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error normalizado 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error normalizado 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error normalizado 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error normalizado 409",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Error normalizado 419",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error normalizado 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error normalizado 429",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error normalizado 503",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Person"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "summary": "Borrado confirmado con versión",
+        "operationId": "delete_persons__id_",
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado confirmado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {},
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error normalizado 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error normalizado 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error normalizado 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error normalizado 409",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Error normalizado 419",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error normalizado 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error normalizado 429",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error normalizado 503",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Delete"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/outbox-status": {
+      "get": {
+        "summary": "Estado de entrega y hasta 20 eventos agotados de la junta; requiere permiso de auditoría",
+        "operationId": "get_audit_delivery__service_",
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado confirmado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {},
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error normalizado 401",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error normalizado 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error normalizado 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error normalizado 409",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "419": {
+            "description": "Error normalizado 419",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error normalizado 422",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error normalizado 429",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error normalizado 503",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/persons/{id}/photo-access": {
+      "post": {
+        "summary": "Decisión mínima de acceso a fotos; solo emisor files",
+        "description": "Comprueba el rol del contexto firmado y la existencia de la persona en esa junta. No devuelve campos ni notas, no almacena concesiones y no valida por sí sola una sesión. No está publicada en el gateway.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "persons.read",
+                      "persons.write"
+                    ]
+                  }
+                },
+                "required": [
+                  "action"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Acceso permitido, sin datos de la persona",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "authorized": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "authorized"
+                      ]
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Firma o emisor no admitido"
+          },
+          "403": {
+            "description": "Emisor distinto de files o permisos insuficientes"
+          },
+          "404": {
+            "description": "Persona inexistente o fuera de la junta"
+          },
+          "422": {
+            "description": "Acción no admitida"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PersonFilterSettings": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "base": {
+            "type": "array",
+            "maxItems": 7,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "status",
+                "zone",
+                "affiliated",
+                "document_type",
+                "gender",
+                "descriptive_role",
+                "position_code"
+              ]
+            }
+          },
+          "custom": {
+            "type": "array",
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "delegated_roles": {
+            "type": "array",
+            "maxItems": 4,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "registrar",
+                "treasurer",
+                "auditor",
+                "viewer"
+              ]
+            }
+          }
+        },
+        "required": [
+          "version",
+          "base",
+          "custom"
+        ]
+      },
+      "PersonPositionCatalog": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "maxLength": 60,
+                  "pattern": "^[a-z0-9-]+$"
+                },
+                "label": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "active": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "code",
+                "label",
+                "active"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "version",
+          "items"
+        ]
+      },
+      "PersonFieldOption": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "active"
+        ],
+        "additionalProperties": false
+      },
+      "PersonField": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "text",
+              "date",
+              "number",
+              "select"
+            ]
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "options": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/PersonFieldOption"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "type",
+          "active",
+          "required",
+          "options"
+        ],
+        "additionalProperties": false
+      },
+      "PersonFieldSchema": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "fields": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/PersonField"
+            }
+          },
+          "delegated_roles": {
+            "type": "array",
+            "maxItems": 4,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "registrar",
+                "treasurer",
+                "auditor",
+                "viewer"
+              ]
+            },
+            "description": "Opcional; solo SA/AD. Omitir conserva las delegaciones vigentes."
+          }
+        },
+        "required": [
+          "version",
+          "fields"
+        ]
+      },
+      "QuickLink": {
+        "type": "object",
+        "properties": {
+          "function": {
+            "type": "string",
+            "enum": [
+              "register",
+              "list",
+              "lookup",
+              "settings",
+              "audit",
+              "downloads"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "function",
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "OrganizationQuickLinks": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "common",
+              "personal"
+            ],
+            "description": "Opcional: omitir conserva la política vigente. Solo SA puede cambiarla; AD puede enviar el valor vigente."
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "$ref": "#/components/schemas/QuickLink"
+            }
+          }
+        },
+        "required": [
+          "version",
+          "items"
+        ]
+      },
+      "PersonalQuickLinks": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "common_version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "inherit": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "$ref": "#/components/schemas/QuickLink"
+            }
+          }
+        },
+        "required": [
+          "version",
+          "common_version",
+          "inherit",
+          "items"
+        ]
+      },
+      "OrganizationCreate": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 40,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "terms": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 50000
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "terms"
+        ]
+      },
+      "OrganizationStatus": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "active",
+          "version"
+        ]
+      },
+      "AdministratorInvitation": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "Invitation": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "registrar",
+              "treasurer",
+              "auditor",
+              "viewer"
+            ]
+          }
+        },
+        "required": [
+          "email",
+          "role"
+        ]
+      },
+      "InvitationCredential": {
+        "type": "object",
+        "properties": {
+          "invitation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "secret": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "invitation_id",
+          "secret"
+        ]
+      },
+      "InvitationAccept": {
+        "type": "object",
+        "properties": {
+          "invitation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "secret": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "writeOnly": true
+          },
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 120
+          },
+          "password": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 128,
+            "writeOnly": true
+          },
+          "password_confirmation": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "terms_version_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accepted": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "invitation_id",
+          "secret",
+          "name",
+          "password",
+          "password_confirmation",
+          "terms_version_id",
+          "accepted"
+        ]
+      },
+      "Membership": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "registrar",
+              "treasurer",
+              "auditor",
+              "viewer"
+            ]
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "role",
+          "active",
+          "version"
+        ]
+      },
+      "SessionToken": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "Login": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "organization_code": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]{3,40}$"
+          },
+          "terms_version_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accepted": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "organization_code",
+          "terms_version_id",
+          "accepted"
+        ]
+      },
+      "Verify": {
+        "type": "object",
+        "properties": {
+          "challenge_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[0-9]{6}$"
+          }
+        },
+        "required": [
+          "challenge_id",
+          "code"
+        ]
+      },
+      "Challenge": {
+        "type": "object",
+        "properties": {
+          "challenge_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "challenge_id"
+        ]
+      },
+      "EmailChange": {
+        "type": "object",
+        "properties": {
+          "new_email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "new_email",
+          "password"
+        ]
+      },
+      "Recover": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "organization_code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "organization_code"
+        ]
+      },
+      "Reset": {
+        "type": "object",
+        "properties": {
+          "challenge_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "secret": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64
+          },
+          "password": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 128
+          },
+          "password_confirmation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "challenge_id",
+          "secret",
+          "password",
+          "password_confirmation"
+        ]
+      },
+      "Switch": {
+        "type": "object",
+        "properties": {
+          "organization_code": {
+            "type": "string"
+          },
+          "terms_version_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accepted": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "organization_code",
+          "terms_version_id",
+          "accepted"
+        ]
+      },
+      "Profile": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "light",
+              "dark"
+            ]
+          },
+          "presence": {
+            "type": "string",
+            "enum": [
+              "online",
+              "away",
+              "dnd",
+              "invisible"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "theme",
+          "presence"
+        ]
+      },
+      "Organization": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "accent": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "name",
+          "accent",
+          "version"
+        ]
+      },
+      "Terms": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 50000
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "body",
+          "version"
+        ]
+      },
+      "Person": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Versión vigente de /person-fields. Omitir equivale a 0; una versión antigua devuelve 409."
+          },
+          "positions_version": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Versión vigente de /person-positions. Omitir equivale a 0; una versión antigua devuelve 409."
+          },
+          "custom_values": {
+            "type": "object",
+            "maxProperties": 20,
+            "propertyNames": {
+              "format": "uuid"
+            },
+            "additionalProperties": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 500
+            },
+            "description": "UUID de campo a valor. Fechas YYYY-MM-DD, decimales en cadena (12 enteros y hasta 4 decimales), selecciones UUID de opción. Omitidos conservan su valor; null retira un valor activo."
+          },
+          "document_type": {
+            "type": "string",
+            "enum": [
+              "RC",
+              "TI",
+              "CC",
+              "CE",
+              "NIT"
+            ]
+          },
+          "document_number": {
+            "type": "string",
+            "maxLength": 30
+          },
+          "first_names": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "last_names": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "complete"
+            ]
+          },
+          "affiliated": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "zone": {
+            "type": "string",
+            "enum": [
+              "rural",
+              "urban"
+            ]
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "male",
+              "female",
+              "other"
+            ]
+          },
+          "birth_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "position_code": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 60,
+            "pattern": "^[a-z0-9-]+$",
+            "description": "Identificador del catálogo de la junta. Una opción inactiva solo puede conservarse en la ficha que ya la usaba."
+          },
+          "position_label": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 80,
+            "readOnly": true,
+            "description": "Nombre capturado al asignar el cargo; conserva su historia aunque cambie el catálogo."
+          },
+          "descriptive_role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "registrar",
+              "treasurer",
+              "auditor",
+              "viewer"
+            ]
+          },
+          "property_name": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 180
+          },
+          "neighborhood": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "authorization_basis": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "authorization_purpose": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "document_type",
+          "document_number",
+          "first_names",
+          "status",
+          "authorization_basis",
+          "authorization_purpose"
+        ]
+      },
+      "Delete": {
+        "type": "object",
+        "properties": {
+          "confirmed": {
+            "type": "boolean",
+            "const": true
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "confirmed",
+          "version"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "fields": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "fields"
+            ]
+          },
+          "correlation_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "error",
+          "correlation_id"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "internal": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-SRD-Context",
+        "description": "Base64(JSON claims).HMAC-SHA256; audiencia, método, ruta, hash del cuerpo, nonce y caducidad obligatorios."
+      }
+    }
+  }
+}

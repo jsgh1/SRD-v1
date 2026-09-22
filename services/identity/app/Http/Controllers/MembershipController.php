@@ -1,0 +1,77 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Application\InvitationService;
+use App\Application\MembershipService;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Srd\Access;
+
+final class MembershipController
+{
+    public function __construct(private MembershipService $members, private InvitationService $invitations) {}
+
+    public function index(Request $r): array
+    {
+        $p = Access::require('members.manage');
+        $d = $r->validate(['page' => 'sometimes|integer|min:1']);
+
+        return ['data' => $this->members->listing($p, (int) ($d['page'] ?? 1))];
+    }
+
+    public function update(Request $r, string $id): array
+    {
+        $p = Access::require('members.manage');
+        $d = $r->validate(['role' => ['required', Rule::in(MembershipService::ASSIGNABLE)], 'active' => 'required|boolean', 'version' => 'required|integer|min:1']);
+
+        return ['data' => $this->members->update($p, $id, $d)];
+    }
+
+    public function invitations(Request $r): array
+    {
+        $p = Access::require('members.manage');
+        $d = $r->validate(['page' => 'sometimes|integer|min:1']);
+
+        return ['data' => $this->invitations->listing($p, (int) ($d['page'] ?? 1))];
+    }
+
+    public function invite(Request $r): array
+    {
+        $p = Access::require('members.manage');
+        $d = $r->validate(['email' => 'required|email|max:254', 'role' => ['required', Rule::in(MembershipService::ASSIGNABLE)]]);
+
+        return ['data' => $this->invitations->issue($p, strtolower($d['email']), $d['role'])];
+    }
+
+    public function inviteAdministrator(Request $r, string $id): array
+    {
+        $p = Access::require('platform.manage');
+        abort_unless(\Illuminate\Support\Facades\DB::table('users')->where('id', $p['user_id'])->where('active', true)->where('superadmin', true)->exists(), 403);
+        $d = $r->validate(['email' => 'required|email|max:254']);
+        $p['organization_id'] = $id;
+        return ['data' => $this->invitations->issue($p, strtolower($d['email']), 'admin')];
+    }
+
+    public function revoke(string $id): array
+    {
+        $this->invitations->revoke(Access::require('members.manage'), $id);
+
+        return ['data' => []];
+    }
+
+    public function inspect(Request $r): array
+    {
+        $d = $r->validate(['invitation_id' => 'required|uuid', 'secret' => 'required|regex:/^[a-f0-9]{64}$/']);
+
+        return ['data' => $this->invitations->inspect($d['invitation_id'], $d['secret'])];
+    }
+
+    public function accept(Request $r): array
+    {
+        $d = $r->validate(['invitation_id' => 'required|uuid', 'secret' => 'required|regex:/^[a-f0-9]{64}$/', 'name' => 'required|string|min:2|max:120',
+            'password' => 'required|string|min:12|max:128|confirmed', 'terms_version_id' => 'required|uuid', 'accepted' => 'required|accepted']);
+
+        return ['data' => $this->invitations->accept($d)];
+    }
+}

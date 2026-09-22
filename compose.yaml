@@ -1,0 +1,681 @@
+{
+  "name": "srd",
+  "services": {
+    "gateway": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/php.Dockerfile",
+        "args": {
+          "SERVICE": "gateway"
+        }
+      },
+      "environment": {
+        "APP_NAME": "SRD-gateway",
+        "APP_ENV": "local",
+        "APP_DEBUG": "false",
+        "APP_KEY": "${APP_KEY_GATEWAY:?Ejecuta scripts/Initialize.ps1}",
+        "APP_URL": "http://localhost:8080",
+        "APP_LOCALE": "es",
+        "DB_CONNECTION": "mysql",
+        "DB_HOST": "mysql",
+        "DB_DATABASE": "srd_gateway",
+        "DB_USERNAME": "srd_gateway",
+        "DB_PASSWORD": "${DB_PASSWORD_GATEWAY:?Ejecuta scripts/Initialize.ps1}",
+        "SESSION_DRIVER": "file",
+        "SESSION_LIFETIME": "30",
+        "SESSION_COOKIE": "srd_session",
+        "SESSION_SAME_SITE": "strict",
+        "SESSION_SECURE_COOKIE": "false",
+        "CACHE_STORE": "file",
+        "HASH_DRIVER": "argon",
+        "MAIL_MAILER": "smtp",
+        "MAIL_HOST": "mailpit",
+        "MAIL_PORT": "1025",
+        "MAIL_FROM_ADDRESS": "seguridad@srd.test",
+        "MAIL_FROM_NAME": "SRD",
+        "INTERNAL_KEY": "${INTERNAL_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "CHALLENGE_KEY": "${CHALLENGE_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "PUBLIC_URL": "http://localhost:8080"
+      },
+      "networks": [
+        "internal"
+      ],
+      "depends_on": {
+        "mysql": {
+          "condition": "service_healthy"
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "php",
+          "-r",
+          "exit(@file_get_contents('http://127.0.0.1:8000/up') === false ? 1 : 0);"
+        ],
+        "interval": "15s",
+        "timeout": "5s",
+        "retries": 5
+      },
+      "volumes": [
+        "gateway_sessions:/app/services/gateway/storage/framework/sessions"
+      ]
+    },
+    "identity": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/php.Dockerfile",
+        "args": {
+          "SERVICE": "identity"
+        }
+      },
+      "environment": {
+        "APP_NAME": "SRD-identity",
+        "APP_ENV": "local",
+        "APP_DEBUG": "false",
+        "APP_KEY": "${APP_KEY_IDENTITY:?Ejecuta scripts/Initialize.ps1}",
+        "APP_URL": "http://localhost:8080",
+        "APP_LOCALE": "es",
+        "DB_CONNECTION": "mysql",
+        "DB_HOST": "mysql",
+        "DB_DATABASE": "srd_identity",
+        "DB_USERNAME": "srd_identity",
+        "DB_PASSWORD": "${DB_PASSWORD_IDENTITY:?Ejecuta scripts/Initialize.ps1}",
+        "SESSION_DRIVER": "file",
+        "SESSION_LIFETIME": "30",
+        "SESSION_COOKIE": "srd_session",
+        "SESSION_SAME_SITE": "strict",
+        "SESSION_SECURE_COOKIE": "false",
+        "CACHE_STORE": "file",
+        "HASH_DRIVER": "argon",
+        "MAIL_MAILER": "smtp",
+        "MAIL_HOST": "mailpit",
+        "MAIL_PORT": "1025",
+        "MAIL_FROM_ADDRESS": "seguridad@srd.test",
+        "MAIL_FROM_NAME": "SRD",
+        "INTERNAL_KEY": "${INTERNAL_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "CHALLENGE_KEY": "${CHALLENGE_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "PUBLIC_URL": "http://localhost:8080"
+      },
+      "networks": [
+        "internal"
+      ],
+      "depends_on": {
+        "mysql": {
+          "condition": "service_healthy"
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "php",
+          "-r",
+          "exit(@file_get_contents('http://127.0.0.1:8000/up') === false ? 1 : 0);"
+        ],
+        "interval": "15s",
+        "timeout": "5s",
+        "retries": 5
+      }
+    },
+    "identity-scheduler": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/php.Dockerfile",
+        "args": {
+          "SERVICE": "identity"
+        }
+      },
+      "environment": {
+        "APP_NAME": "SRD-identity",
+        "APP_ENV": "local",
+        "APP_DEBUG": "false",
+        "APP_KEY": "${APP_KEY_IDENTITY:?Ejecuta scripts/Initialize.ps1}",
+        "APP_URL": "http://localhost:8080",
+        "APP_LOCALE": "es",
+        "DB_CONNECTION": "mysql",
+        "DB_HOST": "mysql",
+        "DB_DATABASE": "srd_identity",
+        "DB_USERNAME": "srd_identity",
+        "DB_PASSWORD": "${DB_PASSWORD_IDENTITY:?Ejecuta scripts/Initialize.ps1}",
+        "SESSION_DRIVER": "file",
+        "SESSION_LIFETIME": "30",
+        "SESSION_COOKIE": "srd_session",
+        "SESSION_SAME_SITE": "strict",
+        "SESSION_SECURE_COOKIE": "false",
+        "CACHE_STORE": "file",
+        "HASH_DRIVER": "argon",
+        "MAIL_MAILER": "smtp",
+        "MAIL_HOST": "mailpit",
+        "MAIL_PORT": "1025",
+        "MAIL_FROM_ADDRESS": "seguridad@srd.test",
+        "MAIL_FROM_NAME": "SRD",
+        "INTERNAL_KEY": "${INTERNAL_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "CHALLENGE_KEY": "${CHALLENGE_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "PUBLIC_URL": "http://localhost:8080"
+      },
+      "networks": [
+        "internal"
+      ],
+      "command": [
+        "php",
+        "artisan",
+        "schedule:work"
+      ],
+      "depends_on": {
+        "identity": {
+          "condition": "service_healthy"
+        },
+        "audit": {
+          "condition": "service_healthy"
+        }
+      }
+    },
+    "configuration": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/php.Dockerfile",
+        "args": {
+          "SERVICE": "configuration"
+        }
+      },
+      "environment": {
+        "APP_NAME": "SRD-configuration",
+        "APP_ENV": "local",
+        "APP_DEBUG": "false",
+        "APP_KEY": "${APP_KEY_CONFIGURATION:?Ejecuta scripts/Initialize.ps1}",
+        "APP_URL": "http://localhost:8080",
+        "APP_LOCALE": "es",
+        "DB_CONNECTION": "mysql",
+        "DB_HOST": "mysql",
+        "DB_DATABASE": "srd_configuration",
+        "DB_USERNAME": "srd_configuration",
+        "DB_PASSWORD": "${DB_PASSWORD_CONFIGURATION:?Ejecuta scripts/Initialize.ps1}",
+        "SESSION_DRIVER": "file",
+        "SESSION_LIFETIME": "30",
+        "SESSION_COOKIE": "srd_session",
+        "SESSION_SAME_SITE": "strict",
+        "SESSION_SECURE_COOKIE": "false",
+        "CACHE_STORE": "file",
+        "HASH_DRIVER": "argon",
+        "MAIL_MAILER": "smtp",
+        "MAIL_HOST": "mailpit",
+        "MAIL_PORT": "1025",
+        "MAIL_FROM_ADDRESS": "seguridad@srd.test",
+        "MAIL_FROM_NAME": "SRD",
+        "INTERNAL_KEY": "${INTERNAL_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "CHALLENGE_KEY": "${CHALLENGE_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "PUBLIC_URL": "http://localhost:8080"
+      },
+      "networks": [
+        "internal"
+      ],
+      "depends_on": {
+        "mysql": {
+          "condition": "service_healthy"
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "php",
+          "-r",
+          "exit(@file_get_contents('http://127.0.0.1:8000/up') === false ? 1 : 0);"
+        ],
+        "interval": "15s",
+        "timeout": "5s",
+        "retries": 5
+      }
+    },
+    "configuration-scheduler": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/php.Dockerfile",
+        "args": {
+          "SERVICE": "configuration"
+        }
+      },
+      "environment": {
+        "APP_NAME": "SRD-configuration",
+        "APP_ENV": "local",
+        "APP_DEBUG": "false",
+        "APP_KEY": "${APP_KEY_CONFIGURATION:?Ejecuta scripts/Initialize.ps1}",
+        "APP_URL": "http://localhost:8080",
+        "APP_LOCALE": "es",
+        "DB_CONNECTION": "mysql",
+        "DB_HOST": "mysql",
+        "DB_DATABASE": "srd_configuration",
+        "DB_USERNAME": "srd_configuration",
+        "DB_PASSWORD": "${DB_PASSWORD_CONFIGURATION:?Ejecuta scripts/Initialize.ps1}",
+        "SESSION_DRIVER": "file",
+        "SESSION_LIFETIME": "30",
+        "SESSION_COOKIE": "srd_session",
+        "SESSION_SAME_SITE": "strict",
+        "SESSION_SECURE_COOKIE": "false",
+        "CACHE_STORE": "file",
+        "HASH_DRIVER": "argon",
+        "MAIL_MAILER": "smtp",
+        "MAIL_HOST": "mailpit",
+        "MAIL_PORT": "1025",
+        "MAIL_FROM_ADDRESS": "seguridad@srd.test",
+        "MAIL_FROM_NAME": "SRD",
+        "INTERNAL_KEY": "${INTERNAL_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "CHALLENGE_KEY": "${CHALLENGE_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "PUBLIC_URL": "http://localhost:8080"
+      },
+      "networks": [
+        "internal"
+      ],
+      "command": [
+        "php",
+        "artisan",
+        "schedule:work"
+      ],
+      "depends_on": {
+        "configuration": {
+          "condition": "service_healthy"
+        },
+        "audit": {
+          "condition": "service_healthy"
+        }
+      }
+    },
+    "records": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/php.Dockerfile",
+        "args": {
+          "SERVICE": "records"
+        }
+      },
+      "environment": {
+        "APP_NAME": "SRD-records",
+        "APP_ENV": "local",
+        "APP_DEBUG": "false",
+        "APP_KEY": "${APP_KEY_RECORDS:?Ejecuta scripts/Initialize.ps1}",
+        "APP_URL": "http://localhost:8080",
+        "APP_LOCALE": "es",
+        "DB_CONNECTION": "mysql",
+        "DB_HOST": "mysql",
+        "DB_DATABASE": "srd_records",
+        "DB_USERNAME": "srd_records",
+        "DB_PASSWORD": "${DB_PASSWORD_RECORDS:?Ejecuta scripts/Initialize.ps1}",
+        "SESSION_DRIVER": "file",
+        "SESSION_LIFETIME": "30",
+        "SESSION_COOKIE": "srd_session",
+        "SESSION_SAME_SITE": "strict",
+        "SESSION_SECURE_COOKIE": "false",
+        "CACHE_STORE": "file",
+        "HASH_DRIVER": "argon",
+        "MAIL_MAILER": "smtp",
+        "MAIL_HOST": "mailpit",
+        "MAIL_PORT": "1025",
+        "MAIL_FROM_ADDRESS": "seguridad@srd.test",
+        "MAIL_FROM_NAME": "SRD",
+        "INTERNAL_KEY": "${INTERNAL_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "CHALLENGE_KEY": "${CHALLENGE_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "PUBLIC_URL": "http://localhost:8080"
+      },
+      "networks": [
+        "internal"
+      ],
+      "depends_on": {
+        "mysql": {
+          "condition": "service_healthy"
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "php",
+          "-r",
+          "exit(@file_get_contents('http://127.0.0.1:8000/up') === false ? 1 : 0);"
+        ],
+        "interval": "15s",
+        "timeout": "5s",
+        "retries": 5
+      }
+    },
+    "records-scheduler": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/php.Dockerfile",
+        "args": {
+          "SERVICE": "records"
+        }
+      },
+      "environment": {
+        "APP_NAME": "SRD-records",
+        "APP_ENV": "local",
+        "APP_DEBUG": "false",
+        "APP_KEY": "${APP_KEY_RECORDS:?Ejecuta scripts/Initialize.ps1}",
+        "APP_URL": "http://localhost:8080",
+        "APP_LOCALE": "es",
+        "DB_CONNECTION": "mysql",
+        "DB_HOST": "mysql",
+        "DB_DATABASE": "srd_records",
+        "DB_USERNAME": "srd_records",
+        "DB_PASSWORD": "${DB_PASSWORD_RECORDS:?Ejecuta scripts/Initialize.ps1}",
+        "SESSION_DRIVER": "file",
+        "SESSION_LIFETIME": "30",
+        "SESSION_COOKIE": "srd_session",
+        "SESSION_SAME_SITE": "strict",
+        "SESSION_SECURE_COOKIE": "false",
+        "CACHE_STORE": "file",
+        "HASH_DRIVER": "argon",
+        "MAIL_MAILER": "smtp",
+        "MAIL_HOST": "mailpit",
+        "MAIL_PORT": "1025",
+        "MAIL_FROM_ADDRESS": "seguridad@srd.test",
+        "MAIL_FROM_NAME": "SRD",
+        "INTERNAL_KEY": "${INTERNAL_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "CHALLENGE_KEY": "${CHALLENGE_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "PUBLIC_URL": "http://localhost:8080"
+      },
+      "networks": [
+        "internal"
+      ],
+      "command": [
+        "php",
+        "artisan",
+        "schedule:work"
+      ],
+      "depends_on": {
+        "records": {
+          "condition": "service_healthy"
+        },
+        "audit": {
+          "condition": "service_healthy"
+        }
+      }
+    },
+    "audit": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/php.Dockerfile",
+        "args": {
+          "SERVICE": "audit"
+        }
+      },
+      "environment": {
+        "APP_NAME": "SRD-audit",
+        "APP_ENV": "local",
+        "APP_DEBUG": "false",
+        "APP_KEY": "${APP_KEY_AUDIT:?Ejecuta scripts/Initialize.ps1}",
+        "APP_URL": "http://localhost:8080",
+        "APP_LOCALE": "es",
+        "DB_CONNECTION": "mysql",
+        "DB_HOST": "mysql",
+        "DB_DATABASE": "srd_audit",
+        "DB_USERNAME": "srd_audit",
+        "DB_PASSWORD": "${DB_PASSWORD_AUDIT:?Ejecuta scripts/Initialize.ps1}",
+        "SESSION_DRIVER": "file",
+        "SESSION_LIFETIME": "30",
+        "SESSION_COOKIE": "srd_session",
+        "SESSION_SAME_SITE": "strict",
+        "SESSION_SECURE_COOKIE": "false",
+        "CACHE_STORE": "file",
+        "HASH_DRIVER": "argon",
+        "MAIL_MAILER": "smtp",
+        "MAIL_HOST": "mailpit",
+        "MAIL_PORT": "1025",
+        "MAIL_FROM_ADDRESS": "seguridad@srd.test",
+        "MAIL_FROM_NAME": "SRD",
+        "INTERNAL_KEY": "${INTERNAL_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "CHALLENGE_KEY": "${CHALLENGE_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "PUBLIC_URL": "http://localhost:8080"
+      },
+      "networks": [
+        "internal"
+      ],
+      "depends_on": {
+        "mysql": {
+          "condition": "service_healthy"
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "php",
+          "-r",
+          "exit(@file_get_contents('http://127.0.0.1:8000/up') === false ? 1 : 0);"
+        ],
+        "interval": "15s",
+        "timeout": "5s",
+        "retries": 5
+      }
+    },
+    "files": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/files.Dockerfile",
+        "args": {
+          "SERVICE": "files"
+        }
+      },
+      "environment": {
+        "APP_NAME": "SRD-files",
+        "APP_ENV": "local",
+        "APP_DEBUG": "false",
+        "APP_KEY": "${APP_KEY_FILES:?Ejecuta scripts/Initialize.ps1}",
+        "APP_URL": "http://localhost:8080",
+        "APP_LOCALE": "es",
+        "DB_CONNECTION": "mysql",
+        "DB_HOST": "mysql",
+        "DB_DATABASE": "srd_files",
+        "DB_USERNAME": "srd_files",
+        "DB_PASSWORD": "${DB_PASSWORD_FILES:?Ejecuta scripts/Initialize.ps1}",
+        "SESSION_DRIVER": "file",
+        "SESSION_LIFETIME": "30",
+        "SESSION_COOKIE": "srd_session",
+        "SESSION_SAME_SITE": "strict",
+        "SESSION_SECURE_COOKIE": "false",
+        "CACHE_STORE": "file",
+        "HASH_DRIVER": "argon",
+        "MAIL_MAILER": "smtp",
+        "MAIL_HOST": "mailpit",
+        "MAIL_PORT": "1025",
+        "MAIL_FROM_ADDRESS": "seguridad@srd.test",
+        "MAIL_FROM_NAME": "SRD",
+        "INTERNAL_KEY": "${INTERNAL_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "CHALLENGE_KEY": "${CHALLENGE_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "PUBLIC_URL": "http://localhost:8080"
+      },
+      "networks": [
+        "internal"
+      ],
+      "depends_on": {
+        "mysql": {
+          "condition": "service_healthy"
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "php",
+          "-r",
+          "exit(@file_get_contents('http://127.0.0.1:8000/up') === false ? 1 : 0);"
+        ],
+        "interval": "15s",
+        "timeout": "5s",
+        "retries": 5
+      },
+      "volumes": [
+        "files_objects:/app/services/files/storage/app/private",
+        "antivirus_signatures:/var/lib/clamav:ro"
+      ]
+    },
+    "files-scheduler": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/files.Dockerfile",
+        "args": {
+          "SERVICE": "files"
+        }
+      },
+      "environment": {
+        "APP_NAME": "SRD-files",
+        "APP_ENV": "local",
+        "APP_DEBUG": "false",
+        "APP_KEY": "${APP_KEY_FILES:?Ejecuta scripts/Initialize.ps1}",
+        "APP_URL": "http://localhost:8080",
+        "APP_LOCALE": "es",
+        "DB_CONNECTION": "mysql",
+        "DB_HOST": "mysql",
+        "DB_DATABASE": "srd_files",
+        "DB_USERNAME": "srd_files",
+        "DB_PASSWORD": "${DB_PASSWORD_FILES:?Ejecuta scripts/Initialize.ps1}",
+        "SESSION_DRIVER": "file",
+        "SESSION_LIFETIME": "30",
+        "SESSION_COOKIE": "srd_session",
+        "SESSION_SAME_SITE": "strict",
+        "SESSION_SECURE_COOKIE": "false",
+        "CACHE_STORE": "file",
+        "HASH_DRIVER": "argon",
+        "MAIL_MAILER": "smtp",
+        "MAIL_HOST": "mailpit",
+        "MAIL_PORT": "1025",
+        "MAIL_FROM_ADDRESS": "seguridad@srd.test",
+        "MAIL_FROM_NAME": "SRD",
+        "INTERNAL_KEY": "${INTERNAL_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "CHALLENGE_KEY": "${CHALLENGE_KEY:?Ejecuta scripts/Initialize.ps1}",
+        "PUBLIC_URL": "http://localhost:8080"
+      },
+      "networks": [
+        "internal"
+      ],
+      "volumes": [
+        "files_objects:/app/services/files/storage/app/private",
+        "antivirus_signatures:/var/lib/clamav:ro"
+      ],
+      "command": [
+        "php",
+        "artisan",
+        "schedule:work"
+      ],
+      "depends_on": {
+        "files": {
+          "condition": "service_healthy"
+        },
+        "audit": {
+          "condition": "service_healthy"
+        }
+      }
+    },
+    "antivirus": {
+      "image": "clamav/clamav:1.4.6@sha256:71fbb76b397cd84a90043caf1178a7f81bd0c131a031e7b0619afd721fbfad41",
+      "environment": {
+        "CLAMAV_NO_FRESHCLAMD": "true",
+        "CLAMAV_NO_MILTERD": "true",
+        "CLAMD_CONF_SelfCheck": "60",
+        "CLAMD_CONF_ConcurrentDatabaseReload": "no"
+      },
+      "networks": [
+        "internal"
+      ],
+      "volumes": [
+        "antivirus_signatures:/var/lib/clamav"
+      ],
+      "mem_limit": "2g",
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "clamdcheck.sh"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "start_period": "90s",
+        "retries": 18
+      }
+    },
+    "antivirus-updater": {
+      "image": "clamav/clamav:1.4.6@sha256:71fbb76b397cd84a90043caf1178a7f81bd0c131a031e7b0619afd721fbfad41",
+      "command": [
+        "sh",
+        "/srd-update-signatures.sh"
+      ],
+      "networks": [
+        "signature_updates"
+      ],
+      "volumes": [
+        "antivirus_signatures:/var/lib/clamav",
+        "./docker/update-signatures.sh:/srd-update-signatures.sh:ro"
+      ],
+      "mem_limit": "384m",
+      "healthcheck": {
+        "disable": true
+      }
+    },
+    "mysql": {
+      "image": "mysql:8.4@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb",
+      "environment": {
+        "MYSQL_ROOT_PASSWORD": "${MYSQL_ROOT_PASSWORD:?Ejecuta scripts/Initialize.ps1}",
+        "DB_PASSWORD_GATEWAY": "${DB_PASSWORD_GATEWAY:?Ejecuta scripts/Initialize.ps1}",
+        "DB_PASSWORD_IDENTITY": "${DB_PASSWORD_IDENTITY:?Ejecuta scripts/Initialize.ps1}",
+        "DB_PASSWORD_CONFIGURATION": "${DB_PASSWORD_CONFIGURATION:?Ejecuta scripts/Initialize.ps1}",
+        "DB_PASSWORD_RECORDS": "${DB_PASSWORD_RECORDS:?Ejecuta scripts/Initialize.ps1}",
+        "DB_PASSWORD_AUDIT": "${DB_PASSWORD_AUDIT:?Ejecuta scripts/Initialize.ps1}",
+        "DB_PASSWORD_FILES": "${DB_PASSWORD_FILES:?Ejecuta scripts/Initialize.ps1}"
+      },
+      "volumes": [
+        "mysql_data:/var/lib/mysql",
+        "./database/03_dcl/01_grants/initialize-services.sh:/docker-entrypoint-initdb.d/01-services.sh:ro"
+      ],
+      "networks": [
+        "internal"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "--protocol=TCP",
+          "-h",
+          "127.0.0.1"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 20
+      }
+    },
+    "mailpit": {
+      "image": "axllent/mailpit:v1.31.1@sha256:98b916bd3c8d61f7633a52d3ea2f58d00620cb01ca57ab59edde68c347a95365",
+      "networks": [
+        "internal",
+        "local_access"
+      ],
+      "ports": [
+        "127.0.0.1:8025:8025"
+      ]
+    },
+    "web": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/web.Dockerfile"
+      },
+      "ports": [
+        "127.0.0.1:8080:80"
+      ],
+      "networks": [
+        "internal",
+        "local_access"
+      ],
+      "depends_on": {
+        "gateway": {
+          "condition": "service_healthy"
+        }
+      }
+    }
+  },
+  "volumes": {
+    "mysql_data": {},
+    "gateway_sessions": {},
+    "files_objects": {},
+    "antivirus_signatures": {}
+  },
+  "networks": {
+    "internal": {
+      "internal": true
+    },
+    "local_access": {},
+    "signature_updates": {}
+  }
+}

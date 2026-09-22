@@ -1,0 +1,651 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SRD Archivos: API interna de fotografías",
+    "version": "0.1.0",
+    "description": "Servicio incorporado a Compose y conectado a rutas autenticadas del gateway. Solo emisor gateway con contexto de sesión previamente validada. El servicio consulta a Registros y exige antivirus real y comprobación reciente de firmas. Este contrato describe su API interna. La ruta photo-deletions admite exclusivamente al emisor records para órdenes persistentes de limpieza."
+  },
+  "servers": [
+    {
+      "url": "http://files:8000/internal/v1"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "internal": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-SRD-Context",
+        "description": "Contexto HMAC ligado a audiencia files, cuerpo, método, ruta, nonce y caducidad; incluye junta, usuario, rol y session_id."
+      }
+    }
+  },
+  "paths": {
+    "/persons/{id}/photos": {
+      "get": {
+        "summary": "Consultar tres posiciones de fotografías",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación confirmada; Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "slot",
+                              "version",
+                              "present",
+                              "size",
+                              "width",
+                              "height"
+                            ],
+                            "properties": {
+                              "slot": {
+                                "type": "string",
+                                "enum": [
+                                  "person",
+                                  "document",
+                                  "property"
+                                ]
+                              },
+                              "version": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "present": {
+                                "type": "boolean"
+                              },
+                              "size": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "width": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ]
+                              },
+                              "height": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "items"
+                      ]
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Firma inválida"
+          },
+          "403": {
+            "description": "Emisor, contexto o permiso inválido"
+          },
+          "404": {
+            "description": "Recurso no disponible"
+          },
+          "409": {
+            "description": "Versión en conflicto"
+          },
+          "413": {
+            "description": "Solicitud mayor de 7 MiB"
+          },
+          "422": {
+            "description": "Datos o imagen inválidos"
+          },
+          "503": {
+            "description": "Dependencia o antivirus no disponible"
+          },
+          "507": {
+            "description": "Cuota insuficiente"
+          }
+        }
+      }
+    },
+    "/persons/{id}/photos/{slot}": {
+      "get": {
+        "summary": "Leer fotografía privada normalizada",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slot",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "person",
+                "document",
+                "property"
+              ]
+            }
+          }
+        ],
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación confirmada; Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "content",
+                        "mime",
+                        "version"
+                      ],
+                      "properties": {
+                        "content": {
+                          "type": "string",
+                          "contentEncoding": "base64"
+                        },
+                        "mime": {
+                          "const": "image/png"
+                        },
+                        "version": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Firma inválida"
+          },
+          "403": {
+            "description": "Emisor, contexto o permiso inválido"
+          },
+          "404": {
+            "description": "Recurso no disponible"
+          },
+          "409": {
+            "description": "Versión en conflicto"
+          },
+          "413": {
+            "description": "Solicitud mayor de 7 MiB"
+          },
+          "422": {
+            "description": "Datos o imagen inválidos"
+          },
+          "503": {
+            "description": "Dependencia o antivirus no disponible"
+          },
+          "507": {
+            "description": "Cuota insuficiente"
+          }
+        }
+      },
+      "put": {
+        "summary": "Crear o reemplazar con versión esperada",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slot",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "person",
+                "document",
+                "property"
+              ]
+            }
+          }
+        ],
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "content",
+                  "version"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "content": {
+                    "type": "string",
+                    "maxLength": 6990508,
+                    "contentEncoding": "base64",
+                    "description": "Base64 canónico sin espacios. JPEG, PNG o WebP; máximo 5 MiB y 20 millones de píxeles."
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483647
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación confirmada; Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "slot",
+                        "version",
+                        "present",
+                        "size",
+                        "width",
+                        "height"
+                      ],
+                      "properties": {
+                        "slot": {
+                          "type": "string",
+                          "enum": [
+                            "person",
+                            "document",
+                            "property"
+                          ]
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "present": {
+                          "type": "boolean"
+                        },
+                        "size": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "width": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "height": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Firma inválida"
+          },
+          "403": {
+            "description": "Emisor, contexto o permiso inválido"
+          },
+          "404": {
+            "description": "Recurso no disponible"
+          },
+          "409": {
+            "description": "Versión en conflicto"
+          },
+          "413": {
+            "description": "Solicitud mayor de 7 MiB"
+          },
+          "422": {
+            "description": "Datos o imagen inválidos"
+          },
+          "503": {
+            "description": "Dependencia o antivirus no disponible"
+          },
+          "507": {
+            "description": "Cuota insuficiente"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Borrar foto con confirmación y versión",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slot",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "person",
+                "document",
+                "property"
+              ]
+            }
+          }
+        ],
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "confirmed",
+                  "version"
+                ],
+                "properties": {
+                  "confirmed": {
+                    "const": true
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2147483647
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación confirmada; Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "slot",
+                        "version",
+                        "present",
+                        "size",
+                        "width",
+                        "height"
+                      ],
+                      "properties": {
+                        "slot": {
+                          "type": "string",
+                          "enum": [
+                            "person",
+                            "document",
+                            "property"
+                          ]
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "present": {
+                          "type": "boolean"
+                        },
+                        "size": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "width": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "height": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Firma inválida"
+          },
+          "403": {
+            "description": "Emisor, contexto o permiso inválido"
+          },
+          "404": {
+            "description": "Recurso no disponible"
+          },
+          "409": {
+            "description": "Versión en conflicto"
+          },
+          "413": {
+            "description": "Solicitud mayor de 7 MiB"
+          },
+          "422": {
+            "description": "Datos o imagen inválidos"
+          },
+          "503": {
+            "description": "Dependencia o antivirus no disponible"
+          },
+          "507": {
+            "description": "Cuota insuficiente"
+          }
+        }
+      }
+    },
+    "/photo-deletions/{id}": {
+      "post": {
+        "summary": "Orden interna de limpieza de una persona ya eliminada; solo emisor records",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Contexto firmado con organization_id, user_id y correlation_id. Sin autoridad en el cuerpo. Idempotente: registra marca terminal y retira metadatos; la retirada física y la liberación de cuota son posteriores mediante el recolector. Sin ruta pública en el gateway.",
+        "security": [
+          {
+            "internal": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Orden persistida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "accepted": {
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "accepted"
+                      ]
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "correlation_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "correlation_id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Firma inválida"
+          },
+          "403": {
+            "description": "Emisor o contexto inválido"
+          },
+          "500": {
+            "description": "Operación no confirmada; reintentar la misma orden"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+format: srd-laravel-migrations-v1
+authority: services/*/database/migrations
+services:
+  - gateway
+  - identity
+  - configuration
+  - records
+  - audit
+  - files
+# Índice documental. No ejecutarlo con Liquibase.

@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@playwright/test": "1.58.2"
+  },
+  "devDependencies": {
+    "prettier": "3.8.1"
+  }
+}

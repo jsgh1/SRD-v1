@@ -1,0 +1,764 @@
+{
+  "source": "SRS SRD versión 1.0, 05/09/2026",
+  "counts": {
+    "functional": 56,
+    "nonfunctional": 18,
+    "usecases": 20
+  },
+  "functional": [
+    {
+      "id": "RF-001",
+      "title": "Crear y administrar juntas",
+      "case": "CU-01",
+      "interface": "UI-11",
+      "acceptance": "CA-RF-001",
+      "state": "Parcial",
+      "detail": "Alta con términos, listado paginado, activación/suspensión e invitación de administrador por UI de plataforma. Acceso exclusivo SA, versiones y auditoría; validación integral pendiente.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-002",
+      "title": "Administrar cuentas internas",
+      "case": "CU-01",
+      "interface": "UI-11",
+      "acceptance": "CA-RF-002",
+      "state": "Parcial",
+      "detail": "Bootstrap, invitación privada 24 h/uso único, vinculación de cuentas existentes, roles/activación por junta y revocación de sesiones. Pruebas backend; validación integral pendiente.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-003",
+      "title": "Iniciar sesión y aceptar términos",
+      "case": "CU-02",
+      "interface": "UI-01",
+      "acceptance": "CA-RF-003",
+      "state": "Parcial",
+      "detail": "Login con términos, cookie de sesión y CSRF; prueba SMTP/Chromium.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-004",
+      "title": "Verificar el acceso por correo",
+      "case": "CU-02",
+      "interface": "UI-02",
+      "acceptance": "CA-RF-004",
+      "state": "Parcial",
+      "detail": "Código HMAC de cinco minutos, cinco intentos, consumo único; probado con SQLite y SMTP.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-005",
+      "title": "Reenviar códigos de verificación",
+      "case": "CU-02",
+      "interface": "UI-02",
+      "acceptance": "CA-RF-005",
+      "state": "Parcial",
+      "detail": "Espera de 60 s, cinco envíos/hora, invalida código previo; probado.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-006",
+      "title": "Recuperar contraseña",
+      "case": "CU-03",
+      "interface": "UI-01",
+      "acceptance": "CA-RF-006",
+      "state": "Parcial",
+      "detail": "Enlace de recuperación con fragmento efímero, 15 min, contraseña y revocación; pruebas backend.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-007",
+      "title": "Seleccionar junta y aplicar permisos",
+      "case": "CU-01",
+      "interface": "UI-03",
+      "acceptance": "CA-RF-007",
+      "state": "Parcial",
+      "detail": "Contexto firmado, membresía vigente, junta y términos; pruebas cruzadas. Selector por código.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-008",
+      "title": "Cerrar y revocar sesiones",
+      "case": "CU-03",
+      "interface": "UI-11",
+      "acceptance": "CA-RF-008",
+      "state": "Parcial",
+      "detail": "Logout, revocar otras sesiones, 30 min inactividad/8 h; pruebas backend.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-009",
+      "title": "Editar perfil y preferencias",
+      "case": "CU-04",
+      "interface": "UI-11",
+      "acceptance": "CA-RF-009",
+      "state": "Parcial",
+      "detail": "Nombre/tema/preferencia persistentes y copia de correo. Fotografías pendientes.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-010",
+      "title": "Confirmar cambio de correo",
+      "case": "CU-04",
+      "interface": "UI-11",
+      "acceptance": "CA-RF-010",
+      "state": "Parcial",
+      "detail": "Cambio con contraseña y código al nuevo correo, revocación de otras sesiones y aviso durable al correo anterior; pruebas backend. Validación multidispositivo pendiente.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-011",
+      "title": "Gestionar presencia",
+      "case": "CU-15",
+      "interface": "UI-10",
+      "acceptance": "CA-RF-011",
+      "state": "Parcial",
+      "detail": "Preferencia persistente, latidos cada 30 segundos sin renovar inactividad, agregación de sesiones válidas y vencimiento a los 90 segundos; Invisible se representa como Desconectado. Indicador propio y contactos con actualización automática visible y manual sin prolongar sesión; chat y avisos No molestar pendientes.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-012",
+      "title": "Mostrar navegación e identidad de la junta",
+      "case": "CU-05",
+      "interface": "UI-03",
+      "acceptance": "CA-RF-012",
+      "state": "Parcial",
+      "detail": "Shell responsive y menú de módulos disponibles. Búsqueda global, campana y logo pendientes.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-013",
+      "title": "Configurar tres accesos rápidos",
+      "case": "CU-05",
+      "interface": "UI-03",
+      "acceptance": "CA-RF-013",
+      "state": "Parcial",
+      "detail": "Hasta tres accesos configurables por SA/AD con etiquetas, catálogo autorizado, herencia, persistencia y versiones. Solo SA cambia la política común/personal; AD conserva edición de accesos comunes. Delegación granular pendiente.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-014",
+      "title": "Consultar indicadores y últimos registros",
+      "case": "CU-05",
+      "interface": "UI-03",
+      "acceptance": "CA-RF-014",
+      "state": "Parcial",
+      "detail": "Conteos, últimas fichas, barras y circulares con actualización manual y fecha del servidor. Probados medianoche colombiana, lunes, cambio de mes y borrado. Pendientes carga y concurrencia integral.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-015",
+      "title": "Buscar información autorizada",
+      "case": "CU-05",
+      "interface": "UI-03",
+      "acceptance": "CA-RF-015",
+      "state": "Parcial",
+      "detail": "Búsqueda conjunta de personas y contactos desde el encabezado, resultados separados, paginación y errores independientes; detalle autorizado y exclusión de notas. Otros dominios y recursos pendientes.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-016",
+      "title": "Crear registro de persona",
+      "case": "CU-06",
+      "interface": "UI-04",
+      "acceptance": "CA-RF-016",
+      "state": "Parcial",
+      "detail": "Ficha base con junta, autor, documento único, nota y campos adicionales tipados. Opción Guardar y añadir fotos: ficha persistida antes de las cargas, sin repetir el alta si una foto falla. Validación integral pendiente.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-017",
+      "title": "Guardar pendientes y completar registros",
+      "case": "CU-06",
+      "interface": "UI-04",
+      "acceptance": "CA-RF-017",
+      "state": "Parcial",
+      "detail": "Validación Pendiente/Completado de campos base y obligatoriedad de campos adicionales activos.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-018",
+      "title": "Validar campos y ubicación condicional",
+      "case": "CU-06",
+      "interface": "UI-04",
+      "acceptance": "CA-RF-018",
+      "state": "Parcial",
+      "detail": "Validaciones y ubicación condicional. Cargo validado contra catálogo versionado por junta; otros catálogos configurables pendientes.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-019",
+      "title": "Administrar campos y catálogos dinámicos",
+      "case": "CU-17",
+      "interface": "UI-11",
+      "acceptance": "CA-RF-019",
+      "state": "Parcial",
+      "detail": "Campos adicionales tipados, versiones e historia; edición delegable por SA/AD a roles de la junta, con revocación bajo bloqueo. Catálogo de cargos configurable por SA/AD y etiquetas históricas. Otros catálogos base y validación integral pendientes.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-020",
+      "title": "Adjuntar fotos al registro",
+      "case": "CU-06",
+      "interface": "UI-05",
+      "acceptance": "CA-RF-020",
+      "state": "Parcial",
+      "detail": "Fotos de persona, documento y predio desde el detalle o el paso opcional Guardar y añadir fotos del alta: carga, lectura privada, ampliación, reemplazo, borrado confirmado y versiones, con gateway autenticado y ClamAV. Nuevas eliminaciones con limpieza persistente. Orientación EXIF 1–8 en JPEG. La ficha se guarda antes de subir imágenes; otros formatos de orientación, dispositivos y validación integral pendientes.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-021",
+      "title": "Listar, filtrar y paginar registros",
+      "case": "CU-07",
+      "interface": "UI-05",
+      "acceptance": "CA-RF-021",
+      "state": "Parcial",
+      "detail": "Filtros base y hasta tres criterios adicionales: coincidencia exacta o intervalo inclusivo para fechas, paginación 10/25/50 y limpieza. Selección visible común por junta con versiones y delegación por rol. No altera permisos de lectura. Otros rangos, consultas guardadas y validación integral pendientes.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-022",
+      "title": "Consultar detalle y proteger notas",
+      "case": "CU-07",
+      "interface": "UI-05",
+      "acceptance": "CA-RF-022",
+      "state": "Parcial",
+      "detail": "Consulta exacta y detalle sin nota para roles excluidos. Fotografías privadas y ampliación desde el detalle, con permisos por junta. Validación integral pendiente.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-023",
+      "title": "Editar registros con control de concurrencia",
+      "case": "CU-08",
+      "interface": "UI-04",
+      "acceptance": "CA-RF-023",
+      "state": "Parcial",
+      "detail": "Edición con versión y conflicto 409; probado.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-024",
+      "title": "Eliminar un registro con confirmación",
+      "case": "CU-08",
+      "interface": "UI-05",
+      "acceptance": "CA-RF-024",
+      "state": "Parcial",
+      "detail": "Confirmación y borrado de persona/notas con evento mínimo; nuevas eliminaciones generan limpieza durable de fotografías. Conciliación histórica, otros adjuntos y supresión de copias pendientes.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-025",
+      "title": "Crear y editar eventos de calendario",
+      "case": "CU-09",
+      "interface": "UI-06",
+      "acceptance": "CA-RF-025",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-026",
+      "title": "Calcular estados y recordatorios de eventos",
+      "case": "CU-09",
+      "interface": "UI-06",
+      "acceptance": "CA-RF-026",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-027",
+      "title": "Consultar saldo de tesorería",
+      "case": "CU-10",
+      "interface": "UI-07",
+      "acceptance": "CA-RF-027",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-028",
+      "title": "Registrar ingresos y egresos",
+      "case": "CU-10",
+      "interface": "UI-07",
+      "acceptance": "CA-RF-028",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-029",
+      "title": "Corregir movimientos mediante reverso",
+      "case": "CU-10",
+      "interface": "UI-07",
+      "acceptance": "CA-RF-029",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-030",
+      "title": "Gestionar inventario de inmuebles",
+      "case": "CU-11",
+      "interface": "UI-08",
+      "acceptance": "CA-RF-030",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-031",
+      "title": "Gestionar bienes muebles y existencias",
+      "case": "CU-11",
+      "interface": "UI-08",
+      "acceptance": "CA-RF-031",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-032",
+      "title": "Exportar información en PDF y Excel",
+      "case": "CU-12",
+      "interface": "UI-09",
+      "acceptance": "CA-RF-032",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-033",
+      "title": "Configurar planilla de hasta diez columnas",
+      "case": "CU-12",
+      "interface": "UI-09",
+      "acceptance": "CA-RF-033",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-034",
+      "title": "Personalizar encabezados y firmas de planillas",
+      "case": "CU-12",
+      "interface": "UI-09",
+      "acceptance": "CA-RF-034",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-035",
+      "title": "Nombrar archivos exportados",
+      "case": "CU-12",
+      "interface": "UI-09",
+      "acceptance": "CA-RF-035",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-036",
+      "title": "Exportar ficha individual y comprobantes",
+      "case": "CU-12",
+      "interface": "UI-09",
+      "acceptance": "CA-RF-036",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-037",
+      "title": "Procesar exportaciones extensas",
+      "case": "CU-12",
+      "interface": "UI-09",
+      "acceptance": "CA-RF-037",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-038",
+      "title": "Organizar carpetas internas",
+      "case": "CU-13",
+      "interface": "UI-12",
+      "acceptance": "CA-RF-038",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-039",
+      "title": "Validar archivos y controlar almacenamiento",
+      "case": "CU-13",
+      "interface": "UI-12",
+      "acceptance": "CA-RF-039",
+      "state": "Parcial",
+      "detail": "Fotos conectadas al gateway y al detalle de fichas, con MySQL y volumen privados, permisos, ClamAV, actualización de firmas, limpieza y outbox programados. Nuevos borrados de personas con orden durable, reintentos y protección contra cargas concurrentes. Copia local cifrada con fotos y verificación de metadatos. Otros tipos de archivo, conciliación histórica y operación integral pendientes.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-040",
+      "title": "Buscar contactos e iniciar chat interno",
+      "case": "CU-14",
+      "interface": "UI-10",
+      "acceptance": "CA-RF-040",
+      "state": "Parcial",
+      "detail": "Directorio paginado de cuentas activas de la junta, búsqueda por nombre y presencia pública sin correos ni fechas de conexión. Inicio de conversaciones pendiente.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-041",
+      "title": "Enviar y conservar mensajes",
+      "case": "CU-14",
+      "interface": "UI-10",
+      "acceptance": "CA-RF-041",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-042",
+      "title": "Adjuntar documentos, imágenes y notas de voz",
+      "case": "CU-14",
+      "interface": "UI-10",
+      "acceptance": "CA-RF-042",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-043",
+      "title": "Mostrar estados de entrega y lectura",
+      "case": "CU-14",
+      "interface": "UI-10",
+      "acceptance": "CA-RF-043",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-044",
+      "title": "Realizar llamadas de voz individuales",
+      "case": "CU-15",
+      "interface": "UI-10",
+      "acceptance": "CA-RF-044",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-045",
+      "title": "Consultar y limpiar notificaciones",
+      "case": "CU-16",
+      "interface": "UI-03",
+      "acceptance": "CA-RF-045",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-046",
+      "title": "Enviar alertas internas y por correo",
+      "case": "CU-16",
+      "interface": "UI-03",
+      "acceptance": "CA-RF-046",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-047",
+      "title": "Administrar configuración y delegaciones",
+      "case": "CU-17",
+      "interface": "UI-11",
+      "acceptance": "CA-RF-047",
+      "state": "Parcial",
+      "detail": "Perfil, nombre/color, términos y delegación independiente de campos adicionales y filtros. Política común/personal de accesos rápidos reservada a SA; AD edita accesos comunes. Resto de configuración/delegaciones pendiente.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-048",
+      "title": "Versionar términos y autorizaciones",
+      "case": "CU-17",
+      "interface": "UI-11",
+      "acceptance": "CA-RF-048",
+      "state": "Parcial",
+      "detail": "Términos inmutables por versión, aceptación por usuario/junta. Autorización de captura básica.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-049",
+      "title": "Registrar auditoría integral",
+      "case": "CU-18",
+      "interface": "UI-13",
+      "acceptance": "CA-RF-049",
+      "state": "Parcial",
+      "detail": "Outbox, confirmación positiva, reintentos bajo bloqueo y consumidor idempotente; tres escenarios de concurrencia MySQL probados. Cobertura integral pendiente.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-050",
+      "title": "Consultar y exportar auditoría",
+      "case": "CU-18",
+      "interface": "UI-13",
+      "acceptance": "CA-RF-050",
+      "state": "Parcial",
+      "detail": "Bitácora de solo lectura con filtros combinables por fecha UTC, actor, módulo, acción y resultado, paginación y detalle. Estado de entregas por junta y consulta de agotados. Exportación y supervisión global pendientes.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-051",
+      "title": "Descargar instaladores oficiales",
+      "case": "CU-19",
+      "interface": "UI-14",
+      "acceptance": "CA-RF-051",
+      "state": "Parcial",
+      "detail": "Estado vacío honesto, sin binarios publicados.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-052",
+      "title": "Ofrecer experiencia móvil priorizada",
+      "case": "CU-19",
+      "interface": "UI-15",
+      "acceptance": "CA-RF-052",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-053",
+      "title": "Mantener paridad web y Windows",
+      "case": "CU-19",
+      "interface": "UI-14",
+      "acceptance": "CA-RF-053",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-054",
+      "title": "Gestionar privacidad y supresión controlada",
+      "case": "CU-17",
+      "interface": "UI-11",
+      "acceptance": "CA-RF-054",
+      "state": "Pendiente",
+      "detail": "Conservado en alcance; no implementado.",
+      "evidence": "Sin evidencia de ejecución."
+    },
+    {
+      "id": "RF-055",
+      "title": "Supervisar servicios y tareas fallidas",
+      "case": "CU-20",
+      "interface": "UI-11",
+      "acceptance": "CA-RF-055",
+      "state": "Parcial",
+      "detail": "Salud /up y reintentos outbox; panel operativo y supervisión integral pendientes.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    },
+    {
+      "id": "RF-056",
+      "title": "Respaldar y restaurar información",
+      "case": "CU-20",
+      "interface": "UI-11",
+      "acceptance": "CA-RF-056",
+      "state": "Parcial",
+      "detail": "Copia manual local cifrada de seis bases, .env y fotografías con pausa de escritores; autenticación y simulacro aislado de SQL y objetos con tablas, claves foráneas, hashes y cuotas. Compatibilidad con copias anteriores sin fotos. Programación diaria, retención, copia externa, recuperación operativa, permisos, supresiones posteriores y conciliación pendientes.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
+    }
+  ],
+  "nonfunctional": [
+    {
+      "id": "RNF-001",
+      "title": "Rendimiento interactivo",
+      "state": "Pendiente de validación integral"
+    },
+    {
+      "id": "RNF-002",
+      "title": "Reportes y mensajería",
+      "state": "Pendiente de validación integral"
+    },
+    {
+      "id": "RNF-003",
+      "title": "Aislamiento entre juntas",
+      "state": "Pendiente de validación integral"
+    },
+    {
+      "id": "RNF-004",
+      "title": "Autenticación y secretos",
+      "state": "Pendiente de validación integral"
+    },
+    {
+      "id": "RNF-005",
+      "title": "Canales y cliente seguro",
+      "state": "Pendiente de validación integral"
+    },
+    {
+      "id": "RNF-006",
+      "title": "Autorización y mínimo privilegio",
+      "state": "Pendiente de validación integral"
+    },
+    {
+      "id": "RNF-007",
+      "title": "Integridad transaccional",
+      "state": "Pendiente de validación integral"
+    },
+    {
+      "id": "RNF-008",
+      "title": "Disponibilidad",
+      "state": "Pendiente de validación integral"
+    },
+    {
+      "id": "RNF-009",
+      "title": "Recuperación",
+      "state": "Pendiente de validación integral"
+    },
+    {
+      "id": "RNF-010",
+      "title": "Tolerancia a fallos",
+      "state": "Pendiente de validación integral"
+    },
+    {
+      "id": "RNF-011",
+      "title": "Usabilidad y accesibilidad",
+      "state": "Pendiente de validación integral"
+    },
+    {
+      "id": "RNF-012",
+      "title": "Adaptación y compatibilidad",
+      "state": "Pendiente de validación integral"
+    },
+    {
+      "id": "RNF-013",
+      "title": "Capacidad de almacenamiento",
+      "state": "Pendiente de validación integral"
+    },
+    {
+      "id": "RNF-014",
+      "title": "Mantenibilidad",
+      "state": "Pendiente de validación integral"
+    },
+    {
+      "id": "RNF-015",
+      "title": "Observabilidad",
+      "state": "Pendiente de validación integral"
+    },
+    {
+      "id": "RNF-016",
+      "title": "Privacidad y conservación",
+      "state": "Pendiente de validación integral"
+    },
+    {
+      "id": "RNF-017",
+      "title": "Tiempo y consistencia de lectura",
+      "state": "Pendiente de validación integral"
+    },
+    {
+      "id": "RNF-018",
+      "title": "Distribución y actualizaciones",
+      "state": "Pendiente de validación integral"
+    }
+  ],
+  "usecases": [
+    {
+      "id": "CU-01",
+      "title": "Administrar junta y acceso",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-02",
+      "title": "Iniciar sesión con verificación",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-03",
+      "title": "Recuperar acceso y cerrar sesiones",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-04",
+      "title": "Actualizar perfil y correo",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-05",
+      "title": "Consultar panel y buscar",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-06",
+      "title": "Registrar una persona",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-07",
+      "title": "Listar y consultar personas",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-08",
+      "title": "Editar o eliminar una persona",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-09",
+      "title": "Programar eventos y avisos",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-10",
+      "title": "Controlar tesorería",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-11",
+      "title": "Administrar inventario",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-12",
+      "title": "Exportar planilla o reporte",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-13",
+      "title": "Gestionar carpeta y archivos",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-14",
+      "title": "Conversar y compartir soportes",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-15",
+      "title": "Gestionar presencia y llamada",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-16",
+      "title": "Atender notificaciones",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-17",
+      "title": "Configurar la junta y privacidad",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-18",
+      "title": "Inspeccionar auditoría",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-19",
+      "title": "Usar aplicaciones y descargas",
+      "state": "Pendiente de aceptación integral"
+    },
+    {
+      "id": "CU-20",
+      "title": "Supervisar y recuperar operación",
+      "state": "Pendiente de aceptación integral"
+    }
+  ]
+}
