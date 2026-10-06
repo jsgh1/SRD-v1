@@ -18,6 +18,85 @@ final class PersonController
         return $this->service->index($p, PersonInput::filters($r));
     }
 
+    public function export(Request $r): array
+    {
+        abort_unless($r->attributes->get('issuer') === 'gateway', 403);
+        $p = Access::require('persons.export');
+        $filters = PersonInput::filters($r);
+        $name = $r->validate([
+            'filename' => 'sometimes|nullable|string|max:100',
+            'confirm_filename' => 'sometimes|boolean',
+        ]);
+        return $this->service->export($p, $filters, $name['filename'] ?? null, (bool) ($name['confirm_filename'] ?? false));
+    }
+
+    public function exportIndividual(Request $r, string $id): array
+    {
+        abort_unless($r->attributes->get('issuer') === 'gateway', 403);
+        $p = Access::require('persons.export');
+        $name = $r->validate(['filename' => 'sometimes|nullable|string|max:100', 'confirm_filename' => 'sometimes|boolean']);
+        return $this->service->exportIndividual($p, $id, $name['filename'] ?? null, (bool) ($name['confirm_filename'] ?? false));
+    }
+
+    public function exportIndividualPdf(Request $r, string $id): array
+    {
+        abort_unless($r->attributes->get('issuer') === 'gateway', 403);
+        $p = Access::require('persons.export');
+        $name = $r->validate(['filename' => 'sometimes|nullable|string|max:100', 'confirm_filename' => 'sometimes|boolean']);
+        return $this->service->exportIndividualPdf($p, $id, $name['filename'] ?? null, (bool) ($name['confirm_filename'] ?? false));
+    }
+
+    public function exportPdf(Request $r): array
+    {
+        abort_unless($r->attributes->get('issuer') === 'gateway', 403);
+        $p = Access::require('persons.export');
+        $filters = PersonInput::filters($r);
+        $name = $r->validate([
+            'filename' => 'sometimes|nullable|string|max:100',
+            'confirm_filename' => 'sometimes|boolean',
+        ]);
+        return $this->service->exportPdf($p, $filters, $name['filename'] ?? null, (bool) ($name['confirm_filename'] ?? false));
+    }
+
+    public function planilla(Request $r): array
+    {
+        [$p, $filters, $input, $headings] = $this->planillaRequest($r);
+        return $this->service->exportPlanilla($p, $filters, $input['columns'] ?? [], $headings,
+            $input['filename'] ?? null, (bool) ($input['confirm_filename'] ?? false));
+    }
+
+    public function planillaPreview(Request $r): array
+    {
+        [$p, $filters, $input, $headings] = $this->planillaRequest($r);
+        return $this->service->previewPlanilla($p, $filters, $input['columns'] ?? [], $headings,
+            $input['filename'] ?? null, (bool) ($input['confirm_filename'] ?? false));
+    }
+
+    public function planillaPdf(Request $r): array
+    {
+        [$p, $filters, $input, $headings] = $this->planillaRequest($r);
+        return $this->service->pdfPlanilla($p, $filters, $input['columns'] ?? [], $headings,
+            $input['filename'] ?? null, (bool) ($input['confirm_filename'] ?? false));
+    }
+
+    private function planillaRequest(Request $r): array
+    {
+        abort_unless($r->attributes->get('issuer') === 'gateway', 403);
+        $p = Access::require('persons.export');
+        $filters = PersonInput::filters($r);
+        $input = $r->validate([
+            'columns' => 'sometimes|array|list|max:5',
+            'columns.*' => 'required|string|distinct:strict|in:email,phone,property_name,zone,position_label,descriptive_role,status,affiliated',
+            'h1' => 'sometimes|nullable|string|max:120',
+            'h2' => 'sometimes|nullable|string|max:120',
+            'h3' => 'sometimes|nullable|string|max:120',
+            'filename' => 'sometimes|nullable|string|max:100',
+            'confirm_filename' => 'sometimes|boolean',
+        ]);
+        $headings = array_intersect_key($input, array_flip(['h1', 'h2', 'h3']));
+        return [$p, $filters, $input, $headings];
+    }
+
     public function show(string $id): array
     {
         return $this->service->show(Access::require('persons.read'), $id);

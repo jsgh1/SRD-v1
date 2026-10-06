@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   Building2,
   Home,
@@ -18,7 +18,11 @@ import {
   Copy,
   Hand,
   CalendarDays,
+  Wallet,
+  Package,
+  Folder,
   Check,
+  MessageCircle,
 } from "lucide-react";
 import {
   api,
@@ -31,14 +35,27 @@ import {
 import { Login } from "./Login";
 import { EmailChange } from "./EmailChange";
 import { Organizations } from "./Organizations";
+import { PlatformAccounts } from "./PlatformAccounts";
 import { QuickLinks, QuickLinkSettings } from "./QuickLinks";
 import { PersonFieldSettings } from "./PersonFields";
 import { PersonPositionSettings } from './PersonPositions';
 import { PersonFilterSettings } from './PersonFilterSettings';
+import { PlanillaSettings } from './PlanillaSettings';
 import { Presence } from './Presence';
 import { Contacts } from './Contacts';
+import { Chat } from './Chat';
 import { GlobalSearch } from './GlobalSearch';
+import { ServiceStatus } from './ServiceStatus';
+import { SchedulerAlert } from './SchedulerAlert';
+import { DeliveryAlert } from './DeliveryAlert';
+import { AuditDeliveryAlert } from './AuditDeliveryAlert';
 import { Audit } from "./Audit";
+import { Calendar } from './Calendar';
+import { Treasury } from './Treasury';
+import { Inventory } from './Inventory';
+import { Folders } from './Folders';
+import { FolderAccessSettings } from './FolderAccessSettings';
+import { Notifications } from './Notifications';
 import { Memberships, InvitationAcceptance } from "./Memberships";
 import { Empty, ErrorBox, Loading, Modal } from "./ui";
 import {
@@ -56,6 +73,11 @@ export function App() {
     [page, setPage] = useState("home"),
     [menu, setMenu] = useState(false),
     [profile, setProfile] = useState(false),
+    [calendarTarget, setCalendarTarget] = useState<string>(),
+    [chatTarget, setChatTarget] = useState<string>(),
+    [chatConversationTarget, setChatConversationTarget] = useState<string>(),
+    [folderTarget, setFolderTarget] = useState<string>(),
+    [folderRead, setFolderRead] = useState(false),
     [themeSaving, setThemeSaving] = useState(false),
     [theme, setTheme] = useState(localStorage.getItem("srd-theme") || "light"),
     [error, setError] = useState<unknown>();
@@ -70,6 +92,17 @@ export function App() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("srd-theme", theme);
   }, [theme]);
+  useEffect(() => {
+    if (!principal || principal.terms_required) { setFolderRead(false); return; }
+    let active = true;
+    const refresh = () => { void api<{can_read:boolean}>('folder-access').then(value => { if (active) setFolderRead(value.can_read); })
+      .catch(() => { if (active) setFolderRead(false); }); };
+    refresh();
+    const visible = () => { if (!document.hidden) refresh(); };
+    document.addEventListener('visibilitychange', visible);
+    window.addEventListener('focus', refresh);
+    return () => { active = false; document.removeEventListener('visibilitychange', visible); window.removeEventListener('focus', refresh); };
+  }, [principal?.organization.id, principal?.user_id, principal?.role, principal?.terms_required]);
   useEffect(() => {
     const fn = (e: StorageEvent) => {
       if (e.key === "srd-theme") setTheme(e.newValue || "light");
@@ -112,11 +145,14 @@ export function App() {
     }
   }
   function navigate(value: string) {
+    setFolderTarget(undefined);
     setPage(value);
     setMenu(false);
     setProfile(false);
     setError(null);
   }
+  const chatStarted = useCallback(() => setChatTarget(undefined), []);
+  const chatOpened = useCallback(() => setChatConversationTarget(undefined), []);
   if (location.pathname === '/invite') return <InvitationAcceptance />;
   if (loading)
     return (
@@ -174,6 +210,11 @@ export function App() {
     { key: "list", label: "Lista", icon: Users },
     { key: "lookup", label: "Consultar", icon: Search },
     { key: "contacts", label: "Contactos", icon: Users },
+    { key: "chat", label: "Chat", icon: MessageCircle },
+    { key: 'folders', label: 'Carpeta', icon: Folder, allow: canAdmin(principal.role) || folderRead },
+    { key: "calendar", label: "Calendario", icon: CalendarDays },
+    { key: "treasury", label: "Tesorería", icon: Wallet, allow: ["superadmin", "admin", "treasurer"].includes(principal.role) },
+    { key: "inventory", label: "Inventario", icon: Package, allow: ["superadmin", "admin", "treasurer"].includes(principal.role) },
     { key: "settings", label: "Configuración", icon: Settings },
     {
       key: "audit",
@@ -219,6 +260,7 @@ export function App() {
           <span>Buscar en la junta</span>
         </button>
         <div className="profile-anchor">
+          <Notifications key={principal.organization.id} organizationId={principal.organization.id} doNotDisturb={principal.user.presence === 'dnd'} onEvent={id => { setCalendarTarget(id); navigate('calendar'); }} onChat={id => { setChatTarget(undefined); setChatConversationTarget(id); navigate('chat'); }} />
           <Presence principal={principal} />
           <button
             className="profile-trigger"
@@ -301,6 +343,18 @@ export function App() {
       )}
       <main className="workspace">
         <ErrorBox error={error} />
+        {canAdmin(principal.role) && <SchedulerAlert key={`${principal.organization.id}:${principal.user_id}`} onOpen={() => {
+          navigate('settings');
+          window.scrollTo({ top: 0 });
+        }} />}
+        {canAdmin(principal.role) && <DeliveryAlert key={`${principal.organization.id}:${principal.user_id}`} onOpen={() => {
+          navigate('settings');
+          window.scrollTo({ top: 0 });
+        }} />}
+        {canAdmin(principal.role) && <AuditDeliveryAlert key={`${principal.organization.id}:${principal.user_id}`} onOpen={() => {
+          navigate('audit');
+          window.scrollTo({ top: 0 });
+        }} />}
         {page === "home" && (
           <Dashboard key={principal.organization.id} principal={principal} navigate={navigate} />
         )}
@@ -325,9 +379,14 @@ export function App() {
             setTheme={setTheme}
           />
         )}
-          {page === "audit" && <Audit />}
-          {page === 'contacts' && <Contacts key={principal.organization.id} />}
-          {page === 'search' && <GlobalSearch key={principal.organization.id} />}
+          {page === "audit" && <Audit key={principal.organization.id} principal={principal} />}
+          {page === 'calendar' && <Calendar key={principal.organization.id} principal={principal} openEventId={calendarTarget} onOpened={() => setCalendarTarget(undefined)} />}
+          {page === 'treasury' && <Treasury key={principal.organization.id} principal={principal} />}
+          {page === 'inventory' && <Inventory key={principal.organization.id} principal={principal} />}
+          {page === 'folders' && (canAdmin(principal.role) || folderRead) && <Folders key={`${principal.organization.id}:${folderTarget ?? 'root'}`} canManage={canAdmin(principal.role)} initialFolder={folderTarget} />}
+          {page === 'contacts' && <Contacts key={principal.organization.id} onChat={id => { setChatTarget(id); navigate('chat'); }} />}
+          {page === 'chat' && <Chat key={principal.organization.id} userId={chatTarget} conversationId={chatConversationTarget} onStarted={chatStarted} onOpened={chatOpened} selfId={principal.user_id} onContacts={() => navigate('contacts')} />}
+          {page === 'search' && <GlobalSearch key={principal.organization.id} principal={principal} folderRead={folderRead || canAdmin(principal.role)} onOpenFolder={id => { navigate('folders'); setFolderTarget(id); }} />}
         {page === "downloads" && (
           <>
             <div className="page-heading">
@@ -623,7 +682,7 @@ function SettingsPanel({
       <div className="page-heading">
         <div>
           <h1>Configuración</h1>
-          <p className="muted">Tu perfil y la identidad de tu junta.</p>
+          <p className="muted">Tu perfil, la identidad y los permisos de tu junta.</p>
         </div>
       </div>
       <ErrorBox error={error} />
@@ -633,6 +692,7 @@ function SettingsPanel({
           {notice}
         </p>
       )}
+      {canAdmin(principal.role) && <div id="service-status"><ServiceStatus key={principal.organization.id} /></div>}
       <section className="panel">
         <h2>Mi perfil</h2>
         <form onSubmit={(e) => submit(e, "profile", "PATCH")}>
@@ -668,7 +728,7 @@ function SettingsPanel({
             </label>
           </div>
           <p className="muted">
-            La conexión se confirma cada 30 segundos y vence tras 90 segundos sin señal. Invisible se representa como Desconectado. No molestar se integrará con los avisos cuando esté disponible el módulo de comunicación.
+            La conexión se confirma cada 30 segundos y vence tras 90 segundos sin señal. Invisible se representa como Desconectado. No molestar oculta el distintivo de la campana, pero conserva los avisos en la bandeja.
           </p>
           <button className="primary" disabled={busy}>
             Guardar perfil
@@ -680,8 +740,11 @@ function SettingsPanel({
       <PersonFieldSettings key={principal.organization.id} />
       {canAdmin(principal.role) && <PersonPositionSettings key={principal.organization.id} />}
       <PersonFilterSettings key={principal.organization.id} />
+      <PlanillaSettings key={principal.organization.id} organizationName={principal.organization.name} />
+      {canAdmin(principal.role) && <FolderAccessSettings key={principal.organization.id} />}
       {canAdmin(principal.role) && <Memberships principal={principal} />}
       {principal.role === 'superadmin' && <Organizations principal={principal} />}
+      {principal.role === 'superadmin' && <PlatformAccounts />}
         <section className="panel">
           <h2>Seguridad de la cuenta</h2>
         <button

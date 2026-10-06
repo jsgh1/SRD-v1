@@ -10,7 +10,8 @@ import { payloadMagic, lengthPrefix, inspectPayload } from './backup-payload.mjs
 const root = fs.realpathSync(path.resolve(import.meta.dirname, '..'));
 process.chdir(root);
 const directory = path.join(root, '.local', 'backups');
-const databases = ['gateway', 'identity', 'configuration', 'records', 'audit', 'files'].map(name => 'srd_' + name);
+const projectName = JSON.parse(fs.readFileSync(path.join(root, 'compose.yaml'), 'utf8')).name;
+const databases = ['gateway', 'identity', 'configuration', 'records', 'audit', 'files', 'calendar', 'notifications', 'treasury', 'inventory', 'chat'].map(name => 'srd_' + name);
 const command = process.argv[2];
 const id = randomUUID();
 let container, temporary, activeChild, result;
@@ -90,7 +91,7 @@ async function backup() {
   // Prevent concurrent backups from resuming each other's stopped services.
   const lock=fs.openSync(backupLock,'wx',0o600);ownsBackupLock=true;fs.writeFileSync(lock,id);fs.closeSync(lock);
   const compose=JSON.parse(fs.readFileSync('compose.yaml','utf8'));
-  const writers=new Set(['web','gateway','identity','configuration','records','audit','files','identity-scheduler','configuration-scheduler','records-scheduler','files-scheduler']);
+  const writers=new Set(['web','gateway','identity','configuration','records','audit','files','calendar','notifications','treasury','inventory','chat','identity-scheduler','configuration-scheduler','records-scheduler','files-scheduler','calendar-scheduler','notifications-scheduler','treasury-scheduler','inventory-scheduler','chat-scheduler']);
   const running=run(['compose','ps','--status','running','--format','json']);
   const rows=running.trim().startsWith('[')?JSON.parse(running):running.split('\n').filter(Boolean).map(line=>JSON.parse(line));
   const candidates=rows.filter(row=>writers.has(row.Service)).map(row=>row.ID);
@@ -149,7 +150,8 @@ async function restoreTest(payload) {
   let ready = false;
   let lastReadinessError;
   // The image's bootstrap server uses only a socket. TCP selects the final server.
-  const deadline = Date.now() + 300000;
+  // Docker Desktop may need several minutes for first-time InnoDB initialization.
+  const deadline = Date.now() + 600000;
   while (Date.now() < deadline) {
     if (interrupted) throw new Error('Operacion interrumpida.');
     try { sql('SELECT 1;'); ready = true; break; } catch (error) { lastReadinessError = error.message; await new Promise(resolve => setTimeout(resolve, 1000)); }
@@ -171,8 +173,8 @@ async function restoreTest(payload) {
     counts[db] ??= { tables: 0, rows: 0 };
     counts[db].tables++; counts[db].rows += Number(sql('SELECT COUNT(*) FROM ' + target + ';'));
   }
-  // Historical backups precede Files. Preserve their restore compatibility.
-  for (const db of databases.filter(db => db !== 'srd_files' || payload.includesFiles)) if (!counts[db]?.tables) throw new Error('Falta una base del respaldo.');
+  // Historical backups precede some services; require only databases present when created.
+  for (const db of databases.filter(db => (db !== 'srd_files' || payload.includesFiles) && (db !== 'srd_calendar' || payload.includesCalendar) && (db !== 'srd_notifications' || payload.includesNotifications) && (db !== 'srd_treasury' || payload.includesTreasury) && (db !== 'srd_inventory' || payload.includesInventory) && (db !== 'srd_chat' || payload.includesChat))) if (!counts[db]?.tables) throw new Error('Falta una base del respaldo.');
   audit('tables_checked', { tables: tables.length });
   // Verify every declared FK, including composite references, after import.
   const references = sql("SELECT TABLE_SCHEMA,TABLE_NAME,CONSTRAINT_NAME,COLUMN_NAME,REFERENCED_TABLE_SCHEMA,REFERENCED_TABLE_NAME,REFERENCED_COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE REFERENCED_TABLE_NAME IS NOT NULL AND TABLE_SCHEMA IN (" + databases.map(db => "'" + db + "'").join(',') + ') ORDER BY TABLE_SCHEMA,TABLE_NAME,CONSTRAINT_NAME,ORDINAL_POSITION;');
@@ -186,6 +188,20 @@ async function restoreTest(payload) {
     const nonnull = rows.map(r => 'c.' + identifier(r[3]) + ' IS NOT NULL').join(' AND ');
     if (Number(sql(`SELECT COUNT(*) FROM ${childTable} c LEFT JOIN ${parent} p ON ${join} WHERE ${nonnull} AND p.${identifier(rows[0][6])} IS NULL;`)) !== 0) throw new Error('La copia contiene referencias huerfanas.');
   }
+  if (payload.includesTreasury) {
+    const difference = sql('SELECT COUNT(*) FROM srd_treasury.treasury_accounts a WHERE a.balance_cents <> (SELECT COALESCE(SUM(m.sign * CAST(m.amount_cents AS SIGNED)),0) FROM srd_treasury.treasury_movements m WHERE m.organization_id=a.organization_id) OR a.next_number <> 1 + (SELECT COUNT(*) FROM srd_treasury.treasury_movements m WHERE m.organization_id=a.organization_id);');
+    if (Number(difference) !== 0) throw new Error('La cuenta de tesoreria no concilia con sus asientos.');
+    const history = sql('SELECT COUNT(*) FROM (SELECT balance_after_cents, SUM(sign * CAST(amount_cents AS SIGNED)) OVER (PARTITION BY organization_id ORDER BY number) AS expected FROM srd_treasury.treasury_movements) x WHERE balance_after_cents <> expected;');
+    if (Number(history) !== 0) throw new Error('Un comprobante de tesoreria no concilia con el historial.');
+    audit('treasury_reconciled');
+  }
+  if (payload.includesInventory) {
+    const mismatch = sql("SELECT COUNT(*) FROM srd_inventory.assets a WHERE a.quantity <> (SELECT COALESCE(SUM(m.delta),0) FROM srd_inventory.asset_movements m WHERE m.asset_id=a.id) OR a.version < 1;");
+    if (Number(mismatch) !== 0) throw new Error('El inventario no concilia con sus movimientos.');
+    const history = sql('SELECT COUNT(*) FROM (SELECT quantity_before,quantity_after,delta,LAG(quantity_after) OVER (PARTITION BY asset_id ORDER BY sequence) AS previous FROM srd_inventory.asset_movements) x WHERE quantity_after <> quantity_before + delta OR (previous IS NOT NULL AND quantity_before <> previous);');
+    if (Number(history) !== 0) throw new Error('El historial de inventario no concilia.');
+    audit('inventory_reconciled');
+  }
   let photoReport={included:false};
   if(payload.format===2){
     const objects=new Map(payload.objects.map(object=>[object.name,object]));
@@ -198,7 +214,9 @@ async function restoreTest(payload) {
       try{await Promise.all([copying,stream.done]);}catch(error){stream.child.kill();await Promise.allSettled([copying,stream.done]);throw error;}
       if(run(['exec',container,'sha256sum',target]).split(/\s+/)[0]!==object.sha256)throw new Error('La imagen restaurada no coincide.');
     }
-    const references=sql('SELECT blob_id,bytes,sha256 FROM srd_files.person_photos WHERE blob_id IS NOT NULL;').split('\n').filter(Boolean).map(line=>line.split('\t'));
+    const assetPhotos=tables.some(([db,table])=>db==='srd_files'&&table==='asset_photos');
+    const documents=tables.some(([db,table])=>db==='srd_files'&&table==='folder_documents');
+    const references=sql('SELECT blob_id,bytes,sha256 FROM srd_files.person_photos WHERE blob_id IS NOT NULL' + (assetPhotos ? ' UNION ALL SELECT blob_id,bytes,sha256 FROM srd_files.asset_photos WHERE blob_id IS NOT NULL' : '') + ';').split('\n').filter(Boolean).map(line=>line.split('\t'));
     const garbage=sql('SELECT blob_id,bytes FROM srd_files.file_garbage;').split('\n').filter(Boolean).map(line=>line.split('\t'));
     const used=new Set();
     for(const [blob,size,hash] of [...references,...garbage]){
@@ -206,9 +224,16 @@ async function restoreTest(payload) {
       if(!object||object.size!==Number(size)||(hash&&object.sha256!==hash)||used.has(blob))throw new Error('Metadatos de fotografía incompatibles con los objetos restaurados.');
       used.add(blob);
     }
-    if(Number(sql('SELECT COUNT(*) FROM srd_files.file_quotas q WHERE q.reserved_bytes <> (SELECT COALESCE(SUM(p.bytes),0) FROM srd_files.person_photos p WHERE p.organization_id=q.organization_id) + (SELECT COALESCE(SUM(g.bytes),0) FROM srd_files.file_garbage g WHERE g.organization_id=q.organization_id);'))!==0)throw new Error('Cuotas de fotos inconsistentes.');
+    const documentRows=documents?sql('SELECT blob_id,bytes,sha256,ready FROM srd_files.folder_documents;').split('\n').filter(Boolean).map(line=>line.split('\t')):[];
+    for(const [blob,size,hash,ready] of documentRows){
+      if(!/^[a-f0-9]{48}$/.test(blob)||used.has(blob))throw new Error('Referencia de documento inválida.');
+      const object=objects.get(blob+'.bin');
+      if(ready==='1'&&(!object||object.size!==Number(size)||object.sha256!==hash))throw new Error('Documento restaurado incompleto.');
+      if(object)used.add(blob);
+    }
+    if(Number(sql('SELECT COUNT(*) FROM srd_files.file_quotas q WHERE q.reserved_bytes <> (SELECT COALESCE(SUM(p.bytes),0) FROM srd_files.person_photos p WHERE p.organization_id=q.organization_id)' + (assetPhotos ? ' + (SELECT COALESCE(SUM(a.bytes),0) FROM srd_files.asset_photos a WHERE a.organization_id=q.organization_id)' : '') + (documents?' + (SELECT COALESCE(SUM(d.bytes),0) FROM srd_files.folder_documents d WHERE d.organization_id=q.organization_id)':'') + ' + (SELECT COALESCE(SUM(g.bytes),0) FROM srd_files.file_garbage g WHERE g.organization_id=q.organization_id);'))!==0)throw new Error('Cuotas de archivos inconsistentes.');
     if(tables.some(([db,table])=>db==='srd_files'&&table==='file_deleted_persons')&&Number(sql('SELECT COUNT(*) FROM srd_files.person_photos p JOIN srd_files.file_deleted_persons d ON p.organization_id=d.organization_id AND p.person_id=d.person_id;'))!==0)throw new Error('Hay fotos de una persona marcada como eliminada.');
-    photoReport={included:true,restored:objects.size,active:references.length,pending_removal:garbage.length,unreferenced:objects.size-used.size,hashes_verified:true,quotas_verified:true};
+    photoReport={included:true,restored:objects.size,active:references.length,documents:documentRows.filter(r=>r[3]==='1').length,pending_documents:documentRows.filter(r=>r[3]!=='1').length,pending_removal:garbage.length,unreferenced:objects.size-used.size,hashes_verified:true,quotas_verified:true};
     audit('photos_restored',photoReport);
   }
   return { file: path.basename(payload.file), sha256: payload.sha256, databases: counts, foreign_keys_checked: groups.size, photos:photoReport, isolated: true };
@@ -230,8 +255,19 @@ try {
   process.stderr.write('Respaldo no completado: ' + error.message + '\n'); process.exitCode = 1;
 } finally {
   if(stoppedContainers.length){
-    try{run(['start',...stoppedContainers]);audit('writers_resumed',{count:stoppedContainers.length});stoppedContainers=[];}
-    catch{process.stderr.write('No se pudieron reanudar todos los servicios de SRD; revisa el manifiesto privado de pausa y ejecuta scripts/Up.ps1 -SkipBuild.\n');process.exitCode=1;}
+    let pending=stoppedContainers;
+    for(let attempt=0;attempt<2&&pending.length;attempt++){
+      const retry=[];
+      for(const cid of pending){
+        try{
+          if(run(['inspect','--format','{{index .Config.Labels "com.docker.compose.project"}}',cid])!==projectName)throw new Error('Contenedor ajeno');
+          if(run(['inspect','--format','{{.State.Running}}',cid])!=='true')run(['start',cid]);
+        }catch{retry.push(cid);}
+      }
+      pending=retry;
+    }
+    if(!pending.length){audit('writers_resumed',{count:stoppedContainers.length});stoppedContainers=[];}
+    else{process.stderr.write('No se pudieron reanudar todos los servicios de SRD; revisa el manifiesto privado de pausa y ejecuta scripts/Up.ps1 -SkipBuild.\n');process.exitCode=1;}
   }
   if(pauseManifest&&stoppedContainers.length===0&&fs.existsSync(pauseManifest)){within(pauseManifest);fs.unlinkSync(pauseManifest);}
   if(ownsBackupLock&&backupLock&&fs.existsSync(backupLock)){within(backupLock);fs.unlinkSync(backupLock);}

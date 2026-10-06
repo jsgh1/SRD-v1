@@ -11,6 +11,26 @@ final class AuditTest extends TestCase
 {
     use RefreshDatabase,SignedRequests;
 
+    public function test_notifications_publish_only_their_own_events(): void
+    {
+        $event = $this->event(['service' => 'notifications', 'action' => 'notifications.read']);
+        $this->internal('POST', 'events', $event, [], 'notifications')->assertOk();
+        $this->internal('POST', 'events', $this->event(), [], 'notifications')->assertForbidden();
+        $principal = ['organization_id' => $event['organization_id'], 'user_id' => $event['actor_id'], 'role' => 'auditor'];
+        $this->internal('GET', 'events', ['service' => 'notifications'], $principal)->assertOk()->assertJsonPath('data.total', 1);
+    }
+
+    public function test_calendar_publishes_only_its_own_events_and_is_filterable(): void
+    {
+        $event = $this->event(['service' => 'calendar', 'action' => 'calendar.event_created']);
+        $this->internal('POST', 'events', $event, [], 'calendar')->assertOk();
+        $this->internal('POST', 'events', $event, [], 'calendar')->assertOk();
+        $this->internal('POST', 'events', $this->event(), [], 'calendar')->assertForbidden();
+        $principal = ['organization_id' => $event['organization_id'], 'user_id' => $event['actor_id'], 'role' => 'auditor'];
+        $this->internal('GET', 'events', ['service' => 'calendar'], $principal)->assertOk()->assertJsonPath('data.total', 1);
+        $this->assertDatabaseCount('audit_events', 1);
+    }
+
     public function test_files_can_publish_only_its_own_events_and_cannot_read_audit(): void
     {
         $event = $this->event(['service' => 'files', 'action' => 'photo.created']);

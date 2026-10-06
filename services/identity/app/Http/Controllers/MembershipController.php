@@ -20,6 +20,21 @@ final class MembershipController
         return ['data' => $this->members->listing($p, (int) ($d['page'] ?? 1))];
     }
 
+    public function folderReaders(Request $r): array
+    {
+        $p = Access::require('members.manage');
+        $d = $r->validate(['page' => 'sometimes|integer|min:1|max:100000', 'search' => 'sometimes|string|max:120',
+            'ids' => 'sometimes|array|list|max:20', 'ids.*' => 'required|uuid|distinct:strict']);
+        return ['data' => $this->members->folderReaders($p, (int)($d['page'] ?? 1), $d['search'] ?? null, $d['ids'] ?? [])];
+    }
+
+    public function verifyFolderReaders(Request $r): array
+    {
+        $p = Access::require('members.manage');
+        $d = $r->validate(['ids' => 'present|array|list|max:20', 'ids.*' => 'required|uuid|distinct:strict']);
+        return ['data' => ['items' => $this->members->verifiedFolderReaders($p, $d['ids'])]];
+    }
+
     public function update(Request $r, string $id): array
     {
         $p = Access::require('members.manage');

@@ -7,7 +7,8 @@ $pdo = Illuminate\Support\Facades\DB::connection()->getPdo();
 $service = getenv('SRD_CHECK_SERVICE');
 if ($pdo->query('SELECT DATABASE()')->fetchColumn() !== 'srd_'.$service) throw new RuntimeException('Wrong own database');
 $pdo->query('SELECT COUNT(*) FROM migrations')->fetchColumn();
-foreach (['gateway', 'identity', 'configuration', 'records', 'audit', 'files'] as $other) {
+$services = ['gateway', 'identity', 'configuration', 'records', 'audit', 'files', 'calendar', 'notifications', 'treasury', 'inventory', 'chat'];
+foreach ($services as $other) {
     if ($other === $service) continue;
     try {
         $pdo->query('SELECT COUNT(*) FROM srd_'.$other.'.migrations');
@@ -17,4 +18,4 @@ foreach (['gateway', 'identity', 'configuration', 'records', 'audit', 'files'] a
     }
     throw new RuntimeException('Cross-database read allowed: '.$other);
 }
-echo $service.": own database accessible, five foreign databases denied.\n";
+echo $service.": own database accessible, ".(count($services) - 1)." foreign databases denied.\n";

@@ -14,11 +14,13 @@ final class Access
 
         return match ($action) {
             'platform.manage' => $role === 'superadmin',
-            'organization.manage','persons.delete','members.manage' => in_array($role, ['superadmin', 'admin'], true),
+            'folders.manage' => in_array($role, ['superadmin', 'admin'], true),
+            'organization.manage','persons.delete','members.manage','calendar.manage','calendar.delivery.manage','mail.delivery.read','mail.delivery.manage' => in_array($role, ['superadmin', 'admin'], true),
             'persons.write','persons.note' => in_array($role, ['superadmin', 'admin', 'registrar'], true),
             'treasury.read','treasury.write','treasury.export','inventory.read','inventory.write','inventory.export' => in_array($role, ['superadmin', 'admin', 'treasurer'], true),
             'audit.read','audit.export' => in_array($role, ['superadmin', 'admin', 'auditor'], true),
-            'persons.read','persons.export','profile.write','dashboard.read','downloads.read','contacts.read' => true,
+            'audit.retry' => in_array($role, ['superadmin', 'admin'], true),
+            'persons.read','persons.export','profile.write','dashboard.read','downloads.read','contacts.read','chat.read','calendar.read','notifications.read' => true,
             default => false,
         };
     }

@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Application\ChallengeService;
+use App\Application\ChatSocketClosureQueue;
 use App\Application\SessionService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 use Srd\DependencyFailure;
 use Srd\InternalClient;
 use Srd\Outbox;
@@ -112,6 +115,7 @@ return ['data' => $data];
         $p = $this->sessions->resolve($r->string('token')->toString(), true);
         DB::transaction(function () use ($p) {
             DB::table('auth_sessions')->where('id', $p['session_id'])->update(['revoked_at' => now()]);
+            app(ChatSocketClosureQueue::class)->enqueue([$p['session_id']]);
             Outbox::record('auth.logout', $p['organization_id'], $p['user_id'], $p['session_id']);
         });
 
@@ -121,12 +125,20 @@ return ['data' => $data];
     public function revokeOthers(Request $r): array
     {
         $p = $this->sessions->resolve($r->string('token')->toString());
-        DB::transaction(function () use ($p) {
-            DB::table('auth_sessions')->where('user_id', $p['user_id'])->where('id', '!=', $p['session_id'])->whereNull('revoked_at')->update(['revoked_at' => now()]);
+        $revokedIds = DB::transaction(function () use ($p) {
+            $ids = DB::table('auth_sessions')->where('user_id', $p['user_id'])
+                ->where('id', '!=', $p['session_id'])->whereNull('revoked_at')
+                ->lockForUpdate()->pluck('id')->all();
+            if ($ids !== []) {
+                DB::table('auth_sessions')->whereIn('id', $ids)->update(['revoked_at' => now()]);
+                app(ChatSocketClosureQueue::class)->enqueue($ids);
+            }
             Outbox::record('auth.sessions_revoked', $p['organization_id'], $p['user_id'], $p['session_id']);
+
+            return $ids;
         });
 
-        return ['data' => []];
+        return ['data' => ['revoked_session_ids' => $revokedIds]];
     }
 
     public function switchOrganization(Request $r): array
@@ -139,11 +151,20 @@ return ['data' => $data];
             $u = DB::table('users')->where('id', $p['user_id'])->lockForUpdate()->first();
             abort_unless($this->sessions->role($u, $org['id']), 403);
             abort_unless($org['terms']['id'] === $d['terms_version_id'], 409);
+            $old = DB::table('auth_sessions')->where('id', $p['session_id'])->lockForUpdate()->first();
+            abort_unless($old && $old->revoked_at === null && Carbon::parse($old->expires_at)->isFuture()
+                && Carbon::parse($old->last_activity_at)->gt(now()->subMinutes(30)), 401);
             DB::table('terms_acceptances')->insertOrIgnore(['user_id' => $u->id, 'organization_id' => $org['id'], 'terms_version_id' => $d['terms_version_id'], 'accepted_at' => now()]);
-            DB::table('auth_sessions')->where('id', $p['session_id'])->update(['organization_id' => $org['id']]);
-            Outbox::record('auth.organization_selected', $org['id'], $u->id, $p['session_id']);
+            $newId = (string) Str::uuid();
+            $token = bin2hex(random_bytes(32));
+            DB::table('auth_sessions')->insert(['id' => $newId, 'user_id' => $u->id, 'organization_id' => $org['id'],
+                'token_hash' => hash('sha256', $token), 'last_activity_at' => now(),
+                'expires_at' => $old->expires_at, 'created_at' => now()]);
+            DB::table('auth_sessions')->where('id', $old->id)->update(['revoked_at' => now()]);
+            app(ChatSocketClosureQueue::class)->enqueue([$old->id]);
+            Outbox::record('auth.organization_selected', $org['id'], $u->id, $newId);
 
-            return ['data' => []];
+            return ['data' => ['token' => $token]];
         });
     }
 
@@ -171,7 +192,7 @@ return ['data' => $data];
     public function reset(Request $r): array
     {
         $d = $r->validate(['challenge_id' => 'required|uuid', 'secret' => 'required|string|size:64', 'password' => 'required|string|min:12|max:128|confirmed']);
-        $ok = DB::transaction(function () use ($d) {
+        $revokedIds = DB::transaction(function () use ($d) {
             $c = $this->challenges->consume($d['challenge_id'], 'reset', $d['secret']);
             if (! $c) {
                 return false;
@@ -181,14 +202,19 @@ return ['data' => $data];
                 return false;
             }
             DB::table('users')->where('id', $u->id)->update(['password' => Hash::make($d['password']), 'updated_at' => now()]);
-            DB::table('auth_sessions')->where('user_id', $u->id)->update(['revoked_at' => now()]);
+            $ids = DB::table('auth_sessions')->where('user_id', $u->id)->whereNull('revoked_at')
+                ->lockForUpdate()->pluck('id')->all();
+            if ($ids !== []) {
+                DB::table('auth_sessions')->whereIn('id', $ids)->update(['revoked_at' => now()]);
+                app(ChatSocketClosureQueue::class)->enqueue($ids);
+            }
             DB::table('auth_challenges')->where('user_id',$u->id)->whereNull('consumed_at')->update(['consumed_at' => now()]);
             Outbox::record('auth.password_reset',$c->organization_id,$u->id,$u->id);
 
-            return true;
+            return $ids;
         });
-        abort_unless($ok,422);
+        abort_if($revokedIds === false, 422);
 
-        return ['data' => []];
+        return ['data' => ['revoked_session_ids' => $revokedIds]];
     }
 }

@@ -9,15 +9,17 @@
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
+    "lucide-react": "0.577.0",
+    "pdfmake": "0.3.11",
+    "pusher-js": "^8.6.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "lucide-react": "0.577.0"
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "typescript": "5.9.3",
-    "vite": "7.3.1",
-    "@vitejs/plugin-react": "5.1.4",
     "@types/react": "19.2.14",
-    "@types/react-dom": "19.2.3"
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "5.1.4",
+    "typescript": "5.9.3",
+    "vite": "7.3.1"
   }
 }

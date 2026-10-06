@@ -11,7 +11,8 @@ final class PhotoContext
     public function handle(Request $request, Closure $next)
     {
         abort_unless($request->attributes->get('issuer') === 'gateway', 403);
-        $principal = Access::require($request->isMethod('GET') ? 'persons.read' : 'persons.write');
+        $resource = $request->is('internal/v1/assets/*') ? 'inventory' : 'persons';
+        $principal = Access::require($resource.'.'.($request->isMethod('GET') ? 'read' : 'write'));
         foreach (['organization_id', 'user_id', 'session_id'] as $key) {
             abort_unless(is_string($principal[$key] ?? null) && Str::isUuid($principal[$key]), 403);
         }

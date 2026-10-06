@@ -3,6 +3,7 @@
 namespace App\Http\Validation;
 
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 final class PersonInput
 {
@@ -16,6 +17,11 @@ final class PersonInput
 
     public static function filters(Request $r): array
     {
-        return $r->validate(['document_type' => 'nullable|in:RC,TI,CC,CE,NIT', 'gender' => 'nullable|in:male,female,other', 'descriptive_role' => 'nullable|in:admin,registrar,treasurer,auditor,viewer', 'position_code' => 'nullable|string|max:60|regex:/^[a-z0-9-]+$/D', 'custom_filters' => 'sometimes|array|list|max:3', 'custom_filters.*' => 'required|array:field_id,value,operator,value_to', 'custom_filters.*.field_id' => 'required|uuid|distinct:strict', 'custom_filters.*.value' => 'required|string|max:120', 'custom_filters.*.operator' => 'sometimes|required|in:eq,between', 'custom_filters.*.value_to' => 'sometimes|required|string|max:120', 'q' => 'nullable|string|max:120', 'status' => 'nullable|in:pending,complete', 'zone' => 'nullable|in:rural,urban', 'affiliated' => 'nullable|boolean', 'page' => 'nullable|integer|min:1', 'page_size' => 'nullable|in:10,25,50']);
+        $filters = $r->validate(['document_type' => 'nullable|in:RC,TI,CC,CE,NIT', 'gender' => 'nullable|in:male,female,other', 'descriptive_role' => 'nullable|in:admin,registrar,treasurer,auditor,viewer', 'position_code' => 'nullable|string|max:60|regex:/^[a-z0-9-]+$/D', 'birth_date_from' => 'sometimes|required|date_format:Y-m-d', 'birth_date_to' => 'sometimes|required|date_format:Y-m-d', 'registered_from' => 'sometimes|required|date_format:Y-m-d', 'registered_to' => 'sometimes|required|date_format:Y-m-d', 'custom_filters' => 'sometimes|array|list|max:3', 'custom_filters.*' => 'required|array:field_id,value,operator,value_to', 'custom_filters.*.field_id' => 'required|uuid|distinct:strict', 'custom_filters.*.value' => 'required|string|max:120', 'custom_filters.*.operator' => 'sometimes|required|in:eq,between', 'custom_filters.*.value_to' => 'sometimes|required|string|max:120', 'q' => 'nullable|string|max:120', 'status' => 'nullable|in:pending,complete', 'zone' => 'nullable|in:rural,urban', 'affiliated' => 'nullable|boolean', 'page' => 'nullable|integer|min:1', 'page_size' => 'nullable|in:10,25,50']);
+        if (array_key_exists('birth_date_from', $filters) !== array_key_exists('birth_date_to', $filters)) throw ValidationException::withMessages(['birth_date_from' => 'Indica ambas fechas de nacimiento.']);
+        if (isset($filters['birth_date_from']) && $filters['birth_date_to'] < $filters['birth_date_from']) throw ValidationException::withMessages(['birth_date_to' => 'La fecha final no puede ser anterior a la inicial.']);
+        if (array_key_exists('registered_from', $filters) !== array_key_exists('registered_to', $filters)) throw ValidationException::withMessages(['registered_from' => 'Indica ambas fechas de registro.']);
+        if (isset($filters['registered_from']) && $filters['registered_to'] < $filters['registered_from']) throw ValidationException::withMessages(['registered_to' => 'La fecha final de registro no puede ser anterior a la inicial.']);
+        return $filters;
     }
 }

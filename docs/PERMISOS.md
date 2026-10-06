@@ -2,8 +2,13 @@
 
 SA: superadministrador. AD: administrador. RE: registrador. TE: tesorero. AU: auditor. CO: consultor.
 
+La lectura delegada de Carpetas empieza deshabilitada en cada junta. SA/AD pueden conceder o revocar RE/TE/AU/CO mediante **Configuración → Acceso a Carpeta**; la concesión incluye navegación, listado, vista previa disponible y descarga privada, pero ninguna escritura. El backend verifica el rol y la configuración vigente en cada petición. El cambio se guarda con versión y deja evento mínimo `folder.access_updated`. La delegación por usuario y la de escritura siguen pendientes.
+
 | Acción | SA | AD | RE | TE | AU | CO |
 |---|---|---|---|---|---|---|
+| Gestionar carpetas y archivos privados: crear, cargar, renombrar, mover y eliminar | Sí | Sí | No | No | No | No |
+| Leer carpetas y listar/descargar archivos privados | Sí | Sí | Delegación | Delegación | Delegación | Delegación |
+| Configurar lectura delegada de Carpetas por rol | Sí | Sí | No | No | No | No |
 | Panel, lista, consulta y detalle de personas | Sí | Sí | Sí | Sí | Sí | Sí |
 | Crear/editar personas | Sí | Sí | Sí | No | No | No |
 | Leer/escribir nota interna | Sí | Sí | Sí | No | No | No |
@@ -30,7 +35,7 @@ SA: superadministrador. AD: administrador. RE: registrador. TE: tesorero. AU: au
 | Gestionar agenda y carpetas compartidas | Sí | Sí | Delegación | Delegación | Delegación | Delegación |
 | Descargas publicadas y chat con miembros | Sí | Sí | Sí | Sí | Sí | Sí |
 
-La tabla conserva el alcance, no afirma implementación de módulos pendientes. Tesorería, inventario y exportación tienen política preparada en Srd\Access, pero no tienen endpoints aún. Las delegaciones comienzan deshabilitadas. Están implementadas por separado la edición de filtros visibles y la de campos adicionales de personas: SA/AD pueden habilitar cada una para RE/TE/AU/CO dentro de su junta y revocarla; los delegados no pueden otorgar permisos. Las delegaciones de cargos y otros módulos siguen pendientes. La administración de cuentas no puede conceder un rol global desde un administrador de junta.
+La tabla conserva el alcance de los módulos, aunque algunos siguen parciales. Tesorería e Inventario ya aplican sus permisos en endpoints propios; la exportación general sigue pendiente. Las delegaciones comienzan deshabilitadas. Están implementadas por separado la edición de filtros visibles y la de campos adicionales de personas: SA/AD pueden habilitar cada una para RE/TE/AU/CO dentro de su junta y revocarla; los delegados no pueden otorgar permisos. Las delegaciones de cargos y otros módulos siguen pendientes. La administración de cuentas no puede conceder un rol global desde un administrador de junta.
 
 Srd\Access implementa la política utilizada por los servicios existentes. React filtra acciones; el backend decide siempre. Las consultas usan organization_id derivado del contexto firmado y los recursos de otra junta responden 404. Usuarios sin nota no reciben ese campo en detalle, lista ni indicadores. Los roles descriptivos de personas no participan en la autorización.
 

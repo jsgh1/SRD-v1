@@ -8,6 +8,15 @@ const deniedDirs = new Set([
   "vendor",
   "dist",
   "test-results",
+  ".gradle",
+  ".kotlin",
+  ".cxx",
+  ".idea",
+  "build",
+  "coverage",
+  ".cache",
+  "out",
+  "entregables",
 ]);
 const files = [];
 function walk(relative = "") {
@@ -22,9 +31,10 @@ function walk(relative = "") {
     }
     if (
       entry.name === ".env" ||
+      entry.name === ".DS_Store" ||
       entry.name === 'recovery-key.bin' || /[.]srdbackup([.]json)?$/.test(entry.name) ||
       (entry.name.startsWith(".env.") && entry.name !== ".env.example") ||
-      /\.(sqlite|log|tsbuildinfo)$/.test(entry.name) ||
+      /\.(sqlite|log|tsbuildinfo|keystore|jks|p12|pfx|pem|key|crt|cer)$/.test(entry.name) ||
       entry.name.startsWith(".phpunit")
     )
       continue;

@@ -26,9 +26,30 @@ final class InternalAuth
             && config('srd.service') === 'records'
             && $request->method() === 'POST'
             && preg_match('#^/internal/v1/persons/[0-9a-fA-F-]{36}/photo-access$#D', $request->getPathInfo()) === 1;
+        $filesAssetProbe = ($claims['iss'] ?? '') === 'files'
+            && config('srd.service') === 'inventory'
+            && $request->method() === 'POST'
+            && preg_match('#^/internal/v1/assets/[0-9a-fA-F-]{36}/photo-access$#D', $request->getPathInfo()) === 1;
         $filesAudit = ($claims['iss'] ?? '') === 'files' && config('srd.service') === 'audit'
             && $request->method() === 'POST' && $request->getPathInfo() === '/internal/v1/events';
-        abort_unless($filesProbe || $filesAudit || in_array($claims['iss'] ?? '', ['gateway', 'identity', 'configuration', 'records', 'audit'], true), 401);
+        $calendarAudit = ($claims['iss'] ?? '') === 'calendar' && ($claims['aud'] ?? '') === 'audit' && ($claims['method'] ?? '') === 'POST' && ($claims['path'] ?? '') === '/internal/v1/events';
+        $calendarMembers = ($claims['iss'] ?? '') === 'calendar' && ($claims['aud'] ?? '') === 'identity'
+            && ($claims['method'] ?? '') === 'POST' && ($claims['path'] ?? '') === '/internal/v1/calendar-participants/resolve';
+        $chatContact = ($claims['iss'] ?? '') === 'chat' && ($claims['aud'] ?? '') === 'identity'
+            && ($claims['method'] ?? '') === 'POST' && ($claims['path'] ?? '') === '/internal/v1/chat-contacts/resolve';
+        $chatAudit = ($claims['iss'] ?? '') === 'chat' && ($claims['aud'] ?? '') === 'audit'
+            && ($claims['method'] ?? '') === 'POST' && ($claims['path'] ?? '') === '/internal/v1/events';
+        $calendarDelivery = ($claims['iss'] ?? '') === 'calendar' && ($claims['aud'] ?? '') === 'notifications'
+            && ($claims['method'] ?? '') === 'POST' && ($claims['path'] ?? '') === '/internal/v1/deliveries';
+        $chatDelivery = ($claims['iss'] ?? '') === 'chat' && ($claims['aud'] ?? '') === 'notifications'
+            && ($claims['method'] ?? '') === 'POST' && ($claims['path'] ?? '') === '/internal/v1/deliveries';
+        $notificationsAudit = ($claims['iss'] ?? '') === 'notifications' && ($claims['aud'] ?? '') === 'audit'
+            && ($claims['method'] ?? '') === 'POST' && ($claims['path'] ?? '') === '/internal/v1/events';
+        $treasuryAudit = ($claims['iss'] ?? '') === 'treasury' && ($claims['aud'] ?? '') === 'audit'
+            && ($claims['method'] ?? '') === 'POST' && ($claims['path'] ?? '') === '/internal/v1/events';
+        $inventoryAudit = ($claims['iss'] ?? '') === 'inventory' && ($claims['aud'] ?? '') === 'audit'
+            && ($claims['method'] ?? '') === 'POST' && ($claims['path'] ?? '') === '/internal/v1/events';
+        abort_unless($filesProbe || $filesAssetProbe || $filesAudit || $calendarAudit || $calendarMembers || $calendarDelivery || $chatDelivery || $chatContact || $chatAudit || $notificationsAudit || $treasuryAudit || $inventoryAudit || in_array($claims['iss'] ?? '', ['gateway', 'identity', 'configuration', 'records', 'audit'], true), 401);
         abort_unless(Cache::add('internal-nonce:'.hash('sha256', $claims['iss'].($claims['nonce'] ?? '')), true, 65), 401);
         $request->attributes->set('principal', $claims['context'] ?? []);
         $request->attributes->set('issuer', $claims['iss']);

@@ -8,7 +8,7 @@ use Srd\Outbox;
 
 final class PersonFilterSettings
 {
-    public const BASE = ['status','zone','affiliated','document_type','gender','descriptive_role','position_code'];
+    public const BASE = ['status','zone','affiliated','document_type','gender','descriptive_role','position_code','birth_date','registered_at'];
     public function read(array $p, bool $lock = false): array
     {
         if ($lock) DB::table('person_filter_settings')->upsert([

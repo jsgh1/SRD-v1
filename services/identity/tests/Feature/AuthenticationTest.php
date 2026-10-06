@@ -25,7 +25,11 @@ final class AuthenticationTest extends TestCase
         parent::setUp();
         DB::table('users')->insert(['id' => $this->user, 'name' => 'Cuenta de prueba', 'email' => 'operador@example.test', 'password' => Hash::make('Clave-de-prueba-123'), 'created_at' => now(), 'updated_at' => now()]);
         DB::table('memberships')->insert(['id' => '44444444-4444-4444-8444-444444444444', 'user_id' => $this->user, 'organization_id' => $this->org, 'role' => 'registrar']);
-        Http::fake(fn ($request) => Http::response(['data' => ['id' => str_ends_with($request->url(), '/code/otra') ? '55555555-5555-4555-8555-555555555555' : $this->org, 'code' => 'prueba', 'name' => 'Junta de prueba', 'terms' => ['id' => $this->terms, 'version' => 1, 'body' => 'Términos ficticios para pruebas automatizadas.']]]));
+        Http::fake(fn ($request) => Http::response(['data' => ['id' => str_ends_with($request->url(), '/code/otra')
+            || str_ends_with($request->url(), '/organizations/55555555-5555-4555-8555-555555555555')
+                ? '55555555-5555-4555-8555-555555555555' : $this->org, 'code' => 'prueba',
+            'name' => 'Junta de prueba', 'terms' => ['id' => $this->terms, 'version' => 1,
+                'body' => 'Términos ficticios para pruebas automatizadas.']]]));
     }
 
     private function login(): array
@@ -53,6 +57,39 @@ final class AuthenticationTest extends TestCase
         $this->assertSame($activity, DB::table('auth_sessions')->value('last_activity_at'));
     }
 
+    public function test_expired_session_socket_closure_retries_and_leaves_active_sessions_alone(): void
+    {
+        $user = DB::table('users')->where('id', $this->user)->first();
+        $sessions = app(\App\Application\SessionService::class);
+        $expired = $sessions->create($user, $this->org, $this->terms)['token'];
+        $idle = $sessions->create($user, $this->org, $this->terms)['token'];
+        $active = $sessions->create($user, $this->org, $this->terms)['token'];
+        $expiredId = DB::table('auth_sessions')->where('token_hash', hash('sha256', $expired))->value('id');
+        $idleId = DB::table('auth_sessions')->where('token_hash', hash('sha256', $idle))->value('id');
+        $activeId = DB::table('auth_sessions')->where('token_hash', hash('sha256', $active))->value('id');
+        DB::table('auth_sessions')->where('id', $expiredId)->update(['expires_at' => now()->subSecond()]);
+        DB::table('auth_sessions')->where('id', $idleId)->update(['last_activity_at' => now()->subMinutes(31)]);
+        $available = false;
+        Http::swap(new \Illuminate\Http\Client\Factory());
+        Http::fake(function () use (&$available) {
+            return Http::response(['data' => []], $available ? 200 : 503);
+        });
+
+        $closer = app(\App\Application\ExpiredSessionCloser::class);
+        $this->assertSame(0, $closer->run());
+        $this->assertNull(DB::table('auth_sessions')->where('id', $expiredId)->value('revoked_at'));
+        $available = true;
+        $this->assertSame(2, $closer->run());
+        $this->assertNotNull(DB::table('auth_sessions')->where('id', $expiredId)->value('revoked_at'));
+        $this->assertNotNull(DB::table('auth_sessions')->where('id', $idleId)->value('revoked_at'));
+        $this->assertNull(DB::table('auth_sessions')->where('id', $activeId)->value('revoked_at'));
+        $this->assertSame(0, $closer->run());
+        $sentIds = collect(Http::recorded())->map(fn ($pair) => $pair[0]['session_id'])->all();
+        $this->assertContains($expiredId, $sentIds);
+        $this->assertContains($idleId, $sentIds);
+        $this->assertNotContains($activeId, $sentIds);
+    }
+
     public function test_presence_expires_without_renewing_idle_time_and_masks_invisible(): void
     {
         $sessions = app(\App\Application\SessionService::class);
@@ -62,9 +99,9 @@ final class AuthenticationTest extends TestCase
         $activity = DB::table('auth_sessions')->value('last_activity_at');
         $this->assertSame('offline', $presence->effective($this->user));
         $this->internal('POST', 'auth/presence', ['token' => $token])->assertOk()->assertJsonPath('data.effective', 'online');
-        $this->travel(89)->seconds();
+        $this->travel(80)->seconds();
         $this->assertSame('online', $presence->effective($this->user));
-        $this->travel(1)->seconds();
+        $this->travel(10)->seconds();
         $this->assertSame('offline', $presence->effective($this->user));
         foreach (['away', 'dnd', 'invisible'] as $preference) {
             DB::table('users')->where('id', $this->user)->update(['presence' => $preference]);
@@ -97,6 +134,53 @@ final class AuthenticationTest extends TestCase
         $this->internal('POST', 'auth/presence', ['token' => $first])->assertUnauthorized();
     }
 
+    public function test_revoke_others_returns_only_sessions_revoked_by_this_call(): void
+    {
+        $sessions = app(\App\Application\SessionService::class);
+        $user = DB::table('users')->where('id', $this->user)->first();
+        $current = $sessions->create($user, $this->org, $this->terms)['token'];
+        $other = $sessions->create($user, $this->org, $this->terms)['token'];
+        $alreadyRevoked = $sessions->create($user, $this->org, $this->terms)['token'];
+        $currentId = DB::table('auth_sessions')->where('token_hash', hash('sha256', $current))->value('id');
+        $otherId = DB::table('auth_sessions')->where('token_hash', hash('sha256', $other))->value('id');
+        $oldId = DB::table('auth_sessions')->where('token_hash', hash('sha256', $alreadyRevoked))->value('id');
+        DB::table('auth_sessions')->where('id', $oldId)->update(['revoked_at' => now()]);
+
+        $this->internal('POST', 'auth/revokeOthers', ['token' => $current])->assertOk()
+            ->assertJsonPath('data.revoked_session_ids', [$otherId]);
+        $this->assertDatabaseHas('chat_socket_closures', ['session_id' => $otherId, 'confirmed_at' => null]);
+        $this->assertDatabaseMissing('chat_socket_closures', ['session_id' => $currentId]);
+        $this->assertNull(DB::table('auth_sessions')->where('id', $currentId)->value('revoked_at'));
+        $this->assertNotNull(DB::table('auth_sessions')->where('id', $otherId)->value('revoked_at'));
+        $this->internal('POST', 'auth/me', ['token' => $other])->assertUnauthorized();
+        $this->internal('POST', 'auth/revokeOthers', ['token' => $current])->assertOk()
+            ->assertJsonPath('data.revoked_session_ids', []);
+    }
+
+    public function test_revoked_socket_closure_queue_retries_until_gateway_confirms(): void
+    {
+        $user = DB::table('users')->where('id', $this->user)->first();
+        $sessions = app(\App\Application\SessionService::class);
+        $current = $sessions->create($user, $this->org, $this->terms)['token'];
+        $other = $sessions->create($user, $this->org, $this->terms)['token'];
+        $otherId = DB::table('auth_sessions')->where('token_hash', hash('sha256', $other))->value('id');
+        $this->internal('POST', 'auth/revokeOthers', ['token' => $current])->assertOk();
+
+        $available = false;
+        Http::swap(new \Illuminate\Http\Client\Factory());
+        Http::fake(function () use (&$available) {
+            return Http::response(['data' => []], $available ? 200 : 503);
+        });
+        $queue = app(\App\Application\ChatSocketClosureQueue::class);
+        $this->assertSame(0, $queue->deliver());
+        $this->assertNull(DB::table('chat_socket_closures')->where('session_id', $otherId)->value('confirmed_at'));
+        $available = true;
+        $this->assertSame(1, $queue->deliver());
+        $this->assertNotNull(DB::table('chat_socket_closures')->where('session_id', $otherId)->value('confirmed_at'));
+        $this->assertSame(0, $queue->deliver());
+        Http::assertSent(fn ($request) => $request['session_id'] === $otherId);
+    }
+
     public function test_login_requires_terms_and_internal_signature(): void
     {
         $this->postJson('/internal/v1/auth/login', [])->assertUnauthorized();
@@ -117,6 +201,8 @@ final class AuthenticationTest extends TestCase
         $this->internal('POST', 'auth/verify', ['challenge_id' => $id, 'code' => $code])->assertUnprocessable();
         $this->internal('POST', 'auth/me', ['token' => $token])->assertOk()->assertJsonPath('data.organization_id', $this->org)->assertJsonPath('data.role', 'registrar');
         $this->internal('POST', 'auth/logout', ['token' => $token])->assertOk();
+        $this->assertDatabaseHas('chat_socket_closures', ['session_id' => DB::table('auth_sessions')->value('id'),
+            'confirmed_at' => null]);
         $this->internal('POST', 'auth/me', ['token' => $token])->assertUnauthorized();
     }
 
@@ -175,13 +261,43 @@ final class AuthenticationTest extends TestCase
     {
         [$id,$code] = $this->login();
         $token = $this->internal('POST', 'auth/verify', ['challenge_id' => $id, 'code' => $code])->json('data.token');
+        $sessionId = DB::table('auth_sessions')->where('token_hash', hash('sha256', $token))->value('id');
         $this->internal('POST', 'auth/switchOrganization', ['token' => $token, 'organization_code' => 'otra', 'accepted' => true, 'terms_version_id' => $this->terms])->assertForbidden();
+        $this->assertNull(DB::table('auth_sessions')->where('id', $sessionId)->value('revoked_at'));
+        $this->assertDatabaseMissing('chat_socket_closures', ['session_id' => $sessionId]);
+        $this->internal('POST', 'auth/me', ['token' => $token])->assertOk();
+    }
+
+    public function test_switch_rotates_session_and_queues_only_old_socket_without_extending_absolute_expiry(): void
+    {
+        [$id, $code] = $this->login();
+        $token = $this->internal('POST', 'auth/verify', ['challenge_id' => $id, 'code' => $code])->json('data.token');
+        $old = DB::table('auth_sessions')->where('token_hash', hash('sha256', $token))->first();
+        $destination = '55555555-5555-4555-8555-555555555555';
+        DB::table('memberships')->insert(['id' => '66666666-6666-4666-8666-666666666666',
+            'user_id' => $this->user, 'organization_id' => $destination, 'role' => 'viewer']);
+
+        $newToken = $this->internal('POST', 'auth/switchOrganization', ['token' => $token,
+            'organization_code' => 'otra', 'accepted' => true, 'terms_version_id' => $this->terms])
+            ->assertOk()->json('data.token');
+        $this->assertNotSame($token, $newToken);
+        $new = DB::table('auth_sessions')->where('token_hash', hash('sha256', $newToken))->first();
+        $this->assertNotSame($old->id, $new->id);
+        $this->assertSame($destination, $new->organization_id);
+        $this->assertSame($old->expires_at, $new->expires_at);
+        $this->assertNotNull(DB::table('auth_sessions')->where('id', $old->id)->value('revoked_at'));
+        $this->assertDatabaseHas('chat_socket_closures', ['session_id' => $old->id, 'confirmed_at' => null]);
+        $this->assertDatabaseMissing('chat_socket_closures', ['session_id' => $new->id]);
+        $this->internal('POST', 'auth/me', ['token' => $token])->assertUnauthorized();
+        $this->internal('POST', 'auth/me', ['token' => $newToken])->assertOk()
+            ->assertJsonPath('data.organization_id', $destination);
     }
 
     public function test_recovery_is_generic_and_reset_revokes_sessions(): void
     {
         [$id,$code] = $this->login();
         $token = $this->internal('POST', 'auth/verify', ['challenge_id' => $id, 'code' => $code])->json('data.token');
+        $sessionId = DB::table('auth_sessions')->where('token_hash', hash('sha256', $token))->value('id');
         $a = $this->internal('POST', 'auth/recover', ['email' => 'operador@example.test', 'organization_code' => 'prueba'])->assertOk()->json('data');
         $message = Mail::getSymfonyTransport()->messages()->last()->getOriginalMessage()->getHtmlBody();
         preg_match('/\/reset#([a-f0-9-]+)\.([a-f0-9]{64})/', $message, $m);
@@ -190,7 +306,9 @@ final class AuthenticationTest extends TestCase
         $this->assertEquals($a, $b);
         $this->internal('POST', 'auth/verify', ['challenge_id' => $m[1], 'code' => '123456'])->assertUnprocessable();
         $payload = ['challenge_id' => $m[1], 'secret' => $m[2], 'password' => 'Nueva-clave-segura-123', 'password_confirmation' => 'Nueva-clave-segura-123'];
-        $this->internal('POST', 'auth/reset', $payload)->assertOk();
+        $this->internal('POST', 'auth/reset', $payload)->assertOk()
+            ->assertJsonPath('data.revoked_session_ids', [$sessionId]);
+        $this->assertDatabaseHas('chat_socket_closures', ['session_id' => $sessionId, 'confirmed_at' => null]);
         $this->internal('POST', 'auth/reset', $payload)->assertUnprocessable();
         $this->internal('POST', 'auth/me', ['token' => $token])->assertUnauthorized();
         $this->assertTrue(Hash::check($payload['password'], DB::table('users')->value('password')));
@@ -213,6 +331,7 @@ final class AuthenticationTest extends TestCase
         $this->travel(61)->seconds();
         [$otherId, $otherCode] = $this->login();
         $otherToken = $this->internal('POST', 'auth/verify', ['challenge_id' => $otherId, 'code' => $otherCode])->json('data.token');
+        $otherSessionId = DB::table('auth_sessions')->where('token_hash', hash('sha256', $otherToken))->value('id');
         $body = ['new_email' => 'nuevo@example.test', 'password' => 'incorrecta'];
         $this->internal('POST', 'profile/email-change', $body, $principal)->assertUnauthorized();
         $body['password'] = 'Clave-de-prueba-123';
@@ -222,7 +341,10 @@ final class AuthenticationTest extends TestCase
         $this->internal('POST', 'auth/verify', ['challenge_id' => $changeId, 'code' => $m[1]])->assertUnprocessable();
         $this->internal('POST', 'profile/email-change/confirm', ['challenge_id' => $changeId, 'code' => $m[1] === '000000' ? '999999' : '000000'], $principal)->assertUnprocessable();
         $this->assertDatabaseHas('users', ['id' => $this->user, 'email' => 'operador@example.test']);
-        $this->internal('POST', 'profile/email-change/confirm', ['challenge_id' => $changeId, 'code' => $m[1]], $principal)->assertOk();
+        $this->internal('POST', 'profile/email-change/confirm', ['challenge_id' => $changeId, 'code' => $m[1]], $principal)
+            ->assertOk()->assertJsonPath('data.revoked_session_ids', [$otherSessionId]);
+        $this->assertDatabaseHas('chat_socket_closures', ['session_id' => $otherSessionId, 'confirmed_at' => null]);
+        $this->assertDatabaseMissing('chat_socket_closures', ['session_id' => $principal['session_id']]);
         $this->assertDatabaseHas('users', ['id' => $this->user, 'email' => 'nuevo@example.test']);
         $this->internal('POST', 'auth/me', ['token' => $token])->assertOk();
         $this->internal('POST', 'auth/me', ['token' => $otherToken])->assertUnauthorized();

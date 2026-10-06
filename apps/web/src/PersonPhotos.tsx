@@ -4,8 +4,10 @@ import { ErrorBox, Loading, Modal } from './ui';
 
 type Photo = { slot: string; version: number; present: boolean; size: number; width: number | null; height: number | null };
 const labels: Record<string, string> = { person: 'Foto de la persona', document: 'Foto del documento', property: 'Foto del predio' };
+const assetLabels: Record<string, string> = { front: 'Vista frontal', side: 'Vista lateral', detail: 'Detalle' };
 
-export function PersonPhotos({ id }: { id: string }) {
+export function PersonPhotos({ id, kind = 'person', writable = true }: { id: string; kind?: 'person' | 'asset'; writable?: boolean }) {
+  const prefix = kind === 'person' ? 'persons' : 'assets';
   const [photos, setPhotos] = useState<Photo[]>();
   const [write, setWrite] = useState(false);
   const [error, setError] = useState<unknown>();
@@ -13,21 +15,21 @@ export function PersonPhotos({ id }: { id: string }) {
   useEffect(() => {
     let active = true;
     setPhotos(undefined); setError(undefined); setWrite(false);
-    Promise.all([api<{items: Photo[]}>(`persons/${id}/photos`), api<Principal>('me')])
-      .then(([data, principal]) => { if (active) { setPhotos(data.items); setWrite(canWrite(principal.role)); } })
+    Promise.all([api<{items: Photo[]}>(`${prefix}/${id}/photos`), api<Principal>('me')])
+      .then(([data, principal]) => { if (active) { setPhotos(data.items); setWrite(writable && canWrite(principal.role)); } })
       .catch(e => { if (active) setError(e); });
     return () => { active = false; };
-  }, [id, revision]);
-  return <section className="person-photos" aria-label="Fotografías de la ficha">
+  }, [id, prefix, revision, writable]);
+  return <section className="person-photos" aria-label={kind === 'person' ? 'Fotografías de la ficha' : 'Fotografías del bien'}>
     <h3>Fotografías</h3>
     <p className="muted">JPEG, PNG o WebP de hasta 5 MB. Cada imagen se analiza antes de guardarla.</p>
     <ErrorBox error={error} />
     {error ? <button type="button" onClick={() => setRevision(r => r + 1)}>Reintentar fotografías</button> : !photos ? <Loading /> :
-      <div className="photo-grid">{photos.map(photo => <PhotoCard key={`${id}-${photo.slot}`} id={id} initial={photo} writable={write} />)}</div>}
+      <div className="photo-grid">{photos.map(photo => <PhotoCard key={`${prefix}-${id}-${photo.slot}`} id={id} prefix={prefix} initial={photo} writable={write} label={(kind === 'person' ? labels : assetLabels)[photo.slot]} />)}</div>}
   </section>;
 }
 
-function PhotoCard({ id, initial, writable }: { id: string; initial: Photo; writable: boolean }) {
+function PhotoCard({ id, prefix, initial, writable, label }: { id: string; prefix: string; initial: Photo; writable: boolean; label: string }) {
   const [photo, setPhoto] = useState(initial);
   const [src, setSrc] = useState<string>();
   const [error, setError] = useState<unknown>();
@@ -37,8 +39,7 @@ function PhotoCard({ id, initial, writable }: { id: string; initial: Photo; writ
   const [expanded, setExpanded] = useState(false);
   const [message, setMessage] = useState('');
   const [revision, setRevision] = useState(0);
-  const path = `persons/${id}/photos/${photo.slot}`;
-  const label = labels[photo.slot];
+  const path = `${prefix}/${id}/photos/${photo.slot}`;
   useEffect(() => {
     let active = true;
     setSrc(undefined);
@@ -54,7 +55,7 @@ function PhotoCard({ id, initial, writable }: { id: string; initial: Photo; writ
   async function reload() {
     setBusy(true); setError(undefined); setMessage(''); setConfirm(false); setSrc(undefined);
     try {
-      const data = await api<{items: Photo[]}>(`persons/${id}/photos`);
+      const data = await api<{items: Photo[]}>(`${prefix}/${id}/photos`);
       const current = data.items.find(p => p.slot === photo.slot);
       if (!current) throw new Error('No se pudo consultar la fotografía.');
       setPhoto(current); setReloadRequired(false); setRevision(r => r + 1);

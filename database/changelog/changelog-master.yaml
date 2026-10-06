@@ -7,4 +7,9 @@ services:
   - records
   - audit
   - files
+  - calendar
+  - notifications
+  - treasury
+  - inventory
+  - chat
 # Índice documental. No ejecutarlo con Liquibase.

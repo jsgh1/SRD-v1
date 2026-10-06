@@ -1,6 +1,8 @@
 <?php
 
 use App\Application\InvitationService;
+use App\Application\ExpiredSessionCloser;
+use App\Application\ChatSocketClosureQueue;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Crypt;
@@ -42,6 +44,12 @@ Artisan::command('srd:security-notices', function () {
     }
 });
 Schedule::command('srd:security-notices')->everyMinute()->withoutOverlapping();
+Artisan::command('srd:expire-chat-sessions', function () {
+    $revoked = app(ChatSocketClosureQueue::class)->deliver();
+    $expired = app(ExpiredSessionCloser::class)->run();
+    $this->info("Cierres confirmados: vencidas {$expired}, revocadas {$revoked}.");
+});
+Schedule::command('srd:expire-chat-sessions')->everyMinute()->withoutOverlapping();
 Artisan::command('srd:bootstrap {organization_code}', function () {
     if (DB::table('users')->where('superadmin', true)->exists()) {
         $this->error('Ya existe el superadministrador inicial.');

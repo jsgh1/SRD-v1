@@ -4,7 +4,7 @@ import { ErrorBox, Loading } from './ui';
 import type { FieldSchema } from './PersonFields';
 
 export type FilterSettings = { version: number; base: string[]; custom: string[] | null; delegated_roles: string[]; can_manage: boolean; can_delegate: boolean };
-const baseLabels: Record<string,string> = { status:'Estado',zone:'Zona',affiliated:'Afiliación',document_type:'Tipo de documento',gender:'Género',descriptive_role:'Rol descriptivo',position_code:'Cargo' };
+const baseLabels: Record<string,string> = { status:'Estado',zone:'Zona',affiliated:'Afiliación',document_type:'Tipo de documento',gender:'Género',descriptive_role:'Rol descriptivo',position_code:'Cargo',birth_date:'Intervalo de nacimiento',registered_at:'Intervalo de registro' };
 export function PersonFilterSettings() {
   const [settings,setSettings]=useState<FilterSettings>(), [schema,setSchema]=useState<FieldSchema>();
   const [base,setBase]=useState<string[]>([]), [custom,setCustom]=useState<string[]>([]), [roles,setRoles]=useState<string[]>([]);

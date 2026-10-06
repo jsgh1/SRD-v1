@@ -36,6 +36,34 @@ final class MembershipService
             ->orderBy('u.name')->orderBy('m.id')->forPage($page, 25)->get(), 'total' => $query->count(), 'page' => $page, 'page_size' => 25];
     }
 
+    public function folderReaders(array $principal, int $page, ?string $search = null, array $ids = []): array
+    {
+        $query = DB::table('memberships as m')->join('users as u', 'u.id', '=', 'm.user_id')
+            ->where('m.organization_id', $principal['organization_id'])->where('m.active', true)
+            ->where('u.active', true)->whereIn('m.role', ['registrar', 'treasurer', 'auditor', 'viewer']);
+        if ($ids !== []) $query->whereIn('m.id', $ids);
+        elseif ($search !== null && $search !== '') {
+            $escaped = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $search);
+            $query->where(function ($q) use ($escaped) {
+                $q->whereRaw("u.name LIKE ? ESCAPE '!'", ['%'.$escaped.'%'])
+                    ->orWhereRaw("u.email LIKE ? ESCAPE '!'", ['%'.$escaped.'%']);
+            });
+        }
+        return ['items' => (clone $query)->select('m.id', 'm.version', 'm.role', 'u.name', 'u.email')
+            ->orderBy('u.name')->orderBy('m.id')->forPage($page, 25)->get(),
+            'total' => $query->count(), 'page' => $page, 'page_size' => 25];
+    }
+
+    public function verifiedFolderReaders(array $principal, array $ids): array
+    {
+        if ($ids === []) return [];
+        $items = $this->folderReaders($principal, 1, null, $ids)['items'];
+        abort_unless(count($items) === count($ids), 422);
+        $versions = [];
+        foreach ($items as $item) $versions[$item->id] = (int)$item->version;
+        return array_map(fn ($id) => ['id' => $id, 'version' => $versions[$id]], $ids);
+    }
+
     public function update(array $p, string $id, array $data): array
     {
         return DB::transaction(function () use ($p, $id, $data) {
@@ -51,13 +79,18 @@ final class MembershipService
                     ->where('active', true)->where('role', 'admin')->count() > 1, 409);
             }
             DB::table('memberships')->where('id', $id)->update(['role' => $data['role'], 'active' => $data['active'], 'version' => $data['version'] + 1]);
-            DB::table('auth_sessions')->where('organization_id', $p['organization_id'])->where('user_id', $member->user_id)
-                ->whereNull('revoked_at')->update(['revoked_at' => now()]);
+            $revokedIds = DB::table('auth_sessions')->where('organization_id', $p['organization_id'])
+                ->where('user_id', $member->user_id)->whereNull('revoked_at')
+                ->lockForUpdate()->pluck('id')->all();
+            if ($revokedIds !== []) {
+                DB::table('auth_sessions')->whereIn('id', $revokedIds)->update(['revoked_at' => now()]);
+                app(ChatSocketClosureQueue::class)->enqueue($revokedIds);
+            }
             DB::table('auth_challenges')->where('organization_id', $p['organization_id'])->where('user_id', $member->user_id)
                 ->whereNull('consumed_at')->update(['consumed_at' => now()]);
             Outbox::record('membership.updated', $p['organization_id'], $p['user_id'], $id);
 
-            return ['version' => $data['version'] + 1];
+            return ['version' => $data['version'] + 1, 'revoked_session_ids' => $revokedIds];
         });
     }
 }

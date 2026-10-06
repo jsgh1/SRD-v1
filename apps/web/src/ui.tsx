@@ -28,7 +28,7 @@ export function Modal({
     return () => ref.current?.close();
   }, []);
   return (
-    <dialog ref={ref} aria-label={title} onCancel={event => { event.stopPropagation(); onClose(); }}>
+    <dialog ref={ref} aria-label={title} onCancel={event => { event.preventDefault(); event.stopPropagation(); onClose(); }}>
       <header>
         <h2>{title}</h2>
         <button

@@ -52,7 +52,7 @@ test('junta filter selection persists, delegates cannot grant and revocation rej
     await expect(stale.locator('.sidebar').getByRole('button',{name:'Home',exact:true})).toBeVisible();
     await navigate(stale,'Configuración');
     await expect(panel(stale).getByRole('checkbox',{name:'Género',exact:true})).toBeChecked();
-    for(const label of ['Estado','Zona','Afiliación','Tipo de documento','Rol descriptivo','Cargo','Referencia oculta']) await panel(page).getByRole('checkbox',{name:label,exact:true}).uncheck();
+    for(const label of ['Estado','Zona','Afiliación','Tipo de documento','Rol descriptivo','Cargo','Intervalo de nacimiento','Intervalo de registro','Referencia oculta']) await panel(page).getByRole('checkbox',{name:label,exact:true}).uncheck();
     await panel(page).getByRole('checkbox',{name:'Permitir a Consultor',exact:true}).check();
     await save(page);
     await save(stale,409);

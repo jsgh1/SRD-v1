@@ -1,10 +1,11 @@
 <?php
-foreach(['ImageRejected','ScannerUnavailable','Scanner','ClamdScanner','ImageGate','PhotoConflict','PhotoNotFound','PhotoQuotaExceeded','PhotoStorage','PhotoStore'] as $c)require __DIR__.'/../services/files/app/'.$c.'.php';
+foreach(['ImageRejected','ScannerUnavailable','Scanner','ClamdScanner','ImageGate','PhotoConflict','PhotoNotFound','PhotoQuotaExceeded','PhotoStorage','AssetPhotoStorage','PhotoStore'] as $c)require __DIR__.'/../services/files/app/'.$c.'.php';
 use SrdFiles\{Scanner, ImageGate, PhotoStore, PhotoConflict, PhotoNotFound, PhotoQuotaExceeded};
 function connection():PDO{return new PDO('mysql:host=mysql;dbname=srd_files_probe;charset=utf8mb4','root','',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);}
 function expect(bool $ok,string $message='Comprobación fallida'):void{if(!$ok)throw new RuntimeException($message);}
 function rejects(callable $f,string $type):void{try{$f();}catch(Throwable $e){expect($e instanceof $type,get_class($e).': '.$e->getMessage());return;}throw new RuntimeException('Faltó rechazo: '.$type);}
 $db=connection();$db->exec(file_get_contents(__DIR__.'/../services/files/database/schema.mysql.sql'));
+$db->exec(file_get_contents(__DIR__.'/../services/files/database/asset-photos.mysql.sql'));
 $db->exec(file_get_contents(__DIR__.'/../services/files/database/deleted-persons.mysql.sql'));
 $base=realpath(__DIR__.'/..').'/.local/photo-storage';$root=$base.'/run-'.bin2hex(random_bytes(12));
 mkdir($root,0700);mkdir($root.'/objects',0700);mkdir($root.'/quarantine',0700);
@@ -63,6 +64,23 @@ $check('quota-blocks-upload-and-releases-after-cleanup',function()use($db,$root,
     $small->collect($p['organization_id']);expect($small->put($p,$person,'document','sample.png',$png,2)['present']);
 });
 $check('outbox-metadata-no-content',function()use($db){$events=$db->query('SELECT * FROM outbox_events')->fetchAll(PDO::FETCH_ASSOC);expect(count($events)>=8);foreach($events as $event){expect(in_array($event['action'],['photo.created','photo.replaced','photo.deleted'],true));expect($event['published_at']===null);expect(!str_contains(json_encode($event),'sample.png'));}});
+$check('asset-slots-share-private-quota-and-live-object-protection',function()use($db,$root,$gate,$p,$png){
+    $asset='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    $authorizer=fn(array $principal,string $id,string $action):bool=>$id===$asset && in_array($action,['inventory.read','inventory.write'],true);
+    $photos=new PhotoStore($db,$root.'/objects',$gate,$authorizer,PhotoStore::QUOTA_BYTES,'asset');
+    expect(array_column($photos->list($p,$asset),'slot')===PhotoStore::ASSET_SLOTS,'Asset slots');
+    $saved=$photos->put($p,$asset,'front','sample.png',$png,0);
+    expect($saved['present']&&$saved['version']===1,'Asset upload');
+    $row=$db->query("SELECT blob_id,bytes FROM asset_photos WHERE asset_id='$asset' AND slot='front'")->fetch(PDO::FETCH_ASSOC);
+    expect(strlen($photos->read($p,$asset,'front')['content'])===(int)$row['bytes'],'Asset read length');
+    $q=$db->prepare('INSERT INTO file_garbage (blob_id,organization_id,bytes) VALUES (?,?,?)');
+    $q->execute([$row['blob_id'],$p['organization_id'],$row['bytes']]);
+    try{rejects(fn()=>$photos->collect($p['organization_id']),RuntimeException::class);}
+    finally{$q=$db->prepare('DELETE FROM file_garbage WHERE blob_id=?');$q->execute([$row['blob_id']]);}
+    expect($photos->delete($p,$asset,'front',1,true)['present']===false,'Asset delete');
+    expect($photos->collect($p['organization_id'])===1,'Asset collection');
+    expect(!file_exists($root.'/objects/'.$row['blob_id'].'.png'),'Asset object removed');
+});
 $check('transaction-failure-removes-unreferenced-object',function()use($db,$store,$p,$person,$png,$root){
     $reserved=(int)$db->query('SELECT reserved_bytes FROM file_quotas')->fetchColumn();$files=glob($root.'/objects/*');
     rejects(fn()=>$store->put($p+['correlation_id'=>'invalid'],$person,'person','sample.png',$png,4),InvalidArgumentException::class);
@@ -133,7 +151,7 @@ $check('mysql-race-person-deletion-and-upload-never-resurrect',function()use($ro
     $q=$localDb->prepare('SELECT reserved_bytes FROM file_quotas WHERE organization_id=?');$q->execute([$p['organization_id']]);expect((int)$q->fetchColumn()===0);
 });
 $db=connection();
-$check('quota-reconciles-active-plus-garbage',function()use($db){foreach($db->query('SELECT * FROM file_quotas')->fetchAll(PDO::FETCH_ASSOC)as $r){$q=$db->prepare('SELECT COALESCE(SUM(bytes),0) FROM (SELECT bytes FROM person_photos WHERE organization_id=? UNION ALL SELECT bytes FROM file_garbage WHERE organization_id=?) x');$q->execute([$r['organization_id'],$r['organization_id']]);expect((int)$q->fetchColumn()===(int)$r['reserved_bytes']);}});
+$check('quota-reconciles-active-plus-garbage',function()use($db){foreach($db->query('SELECT * FROM file_quotas')->fetchAll(PDO::FETCH_ASSOC)as $r){$q=$db->prepare('SELECT COALESCE(SUM(bytes),0) FROM (SELECT bytes FROM person_photos WHERE organization_id=? UNION ALL SELECT bytes FROM asset_photos WHERE organization_id=? UNION ALL SELECT bytes FROM file_garbage WHERE organization_id=?) x');$q->execute([$r['organization_id'],$r['organization_id'],$r['organization_id']]);expect((int)$q->fetchColumn()===(int)$r['reserved_bytes']);}});
 $report=['database'=>$db->query('SELECT VERSION()')->fetchColumn(),'scanner'=>'Controlled test double; real scanner evidence is in file-safety/results.json','passed'=>count(array_filter($results,fn($r)=>$r['passed'])),'failed'=>count(array_filter($results,fn($r)=>!$r['passed'])),'cases'=>$results];
 // Only files created in this random test directory; no recursion and no source/user files.
 foreach(glob($root.'/objects/*')as $path){expect(is_file($path)&&!is_link($path));unlink($path);}rmdir($root.'/objects');expect(glob($root.'/quarantine/*')===[]);rmdir($root.'/quarantine');foreach(glob($root.'/*')as $path){expect(is_file($path)&&!is_link($path));unlink($path);}rmdir($root);

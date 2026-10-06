@@ -47,7 +47,7 @@ export async function api<T = any>(
   try { json = await response.json(); }
   catch {
     throw new ApiError(response.status, response.status === 413
-      ? 'La fotografía supera el tamaño permitido.'
+      ? 'El archivo supera el tamaño permitido.'
       : 'No se pudo confirmar la operación. Recarga para comprobar su estado.');
   }
   if (!response.ok) {
@@ -58,7 +58,7 @@ export async function api<T = any>(
       json.error?.fields,
     );
   }
-  if (path === "auth/logout" || path === "auth/verify") csrf = "";
+  if (path === "auth/logout" || path === "auth/verify" || path === "auth/switchOrganization") csrf = "";
   return json.data;
 }
 export const roleNames: Record<string, string> = {

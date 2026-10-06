@@ -1,12 +1,14 @@
 # Almacenamiento privado de fotografías
 
-`PhotoStore` es el núcleo de la aplicación Laravel de Archivos. Usa MySQL/InnoDB y objetos PNG privados en disco, después de pasar por `ImageGate`. Está conectado al gateway y a la sección **Fotografías** del detalle de una persona guardada. No se publican enlaces anónimos a los objetos.
+**Ampliación para Inventario (23/09/2026).** El mismo motor atiende `/api/v1/assets/{id}/photos` y tres posiciones por bien: frontal, lateral y detalle. Archivos vuelve a comprobar en Inventario, mediante contexto firmado, la junta, el permiso y la existencia del bien en cada operación. Las fotos de bienes dados de baja conservan lectura y bloquean escritura. Personas y bienes comparten cuota, análisis ClamAV, retirada física y respaldo cifrado.
+
+`PhotoStore` es el núcleo de la aplicación Laravel de Archivos. Usa MySQL/InnoDB y objetos PNG privados en disco, después de pasar por `ImageGate`. Está conectado al gateway y a la sección **Fotografías** del detalle de personas y bienes. No se publican enlaces anónimos a los objetos.
 
 Desde **Lista → Ver persona**, administradores, superadministradores y registradores pueden agregar o reemplazar fotos de la persona, documento y predio. Los demás roles con acceso a la ficha pueden verlas y ampliarlas. El borrado requiere confirmación. Cada operación usa la versión de la fotografía: si otra pestaña la cambió, es necesario recargar antes de volver a guardar.
 
 En **Nuevo registro**, **Guardar y añadir fotos** guarda primero la ficha y abre inmediatamente sus tres espacios de imágenes. **Terminar e ir a la lista** permite completar el recorrido con o sin fotos; **Guardar registro** conserva la salida directa a la lista. Si falla una carga, la ficha ya está guardada y se puede recargar/reintentar esa foto sin repetir el alta. No hay una transacción conjunta entre ficha y fotografías ni se mantienen archivos seleccionados al recargar la página. Tras recargar o salir, se continúa desde Lista → Ver persona.
 
-El navegador envía las peticiones a `/api/v1/persons/{id}/photos`. El gateway resuelve la sesión vigente, comprueba los términos, aplica CSRF a los cambios y firma el contexto para Archivos. Nginx permite hasta 8 MiB de cuerpo solo en estas rutas; Archivos conserva su límite de 7 MiB para el JSON y 5 MiB para la imagen. La espera interna del gateway es de 75 segundos para Archivos, sin reintentar escrituras automáticamente; ante error o resultado sin confirmar, la interfaz exige recargar la fotografía.
+El navegador envía las peticiones a `/api/v1/persons/{id}/photos` o `/api/v1/assets/{id}/photos`. El gateway resuelve la sesión vigente, comprueba los términos, aplica CSRF a los cambios y firma el contexto para Archivos. Nginx permite hasta 8 MiB de cuerpo solo en estas rutas de fotos; Archivos conserva su límite de 7 MiB para el JSON y 5 MiB para la imagen. La espera interna del gateway es de 75 segundos para Archivos, sin reintentar escrituras automáticamente; ante error o resultado sin confirmar, la interfaz exige recargar la fotografía.
 
 ## Operaciones del motor
 
@@ -28,7 +30,7 @@ El proveedor no tiene un antivirus ficticio ni un autorizador que permita todo. 
 - Eliminación con confirmación y versión. Se conserva una fila vacía con versión incrementada, para impedir que un formulario antiguo recree una foto borrada usando la versión inicial.
 - Eventos mínimos `photo.created`, `photo.replaced` y `photo.deleted` en outbox, dentro de la misma transacción. No contienen bytes, nombres originales ni rutas. El planificador los envía a Auditoría.
 
-El constructor exige un autorizador de recursos: debe confirmar explícitamente acceso vigente a la persona y a su junta para leer o escribir. Se comprueba antes de procesar y antes de persistir; la lectura también vuelve a comprobarlo antes de entregar los bytes. En las pruebas es un doble controlado; **esto no sustituye la integración con Identidad y Registros**. El código no debe exponerse por HTTP usando un autorizador que acepte todos los recursos.
+El constructor exige un autorizador de recursos: debe confirmar explícitamente acceso vigente a la persona o bien y a su junta para leer o escribir. Se comprueba antes de procesar y antes de persistir; la lectura también vuelve a comprobarlo antes de entregar los bytes. En las pruebas es un doble controlado; en operación se consulta Registros o Inventario con contexto firmado y la sesión ya validada por el gateway. El código no debe exponerse por HTTP usando un autorizador que acepte todos los recursos.
 
 ## Cuota, reemplazos y limpieza
 

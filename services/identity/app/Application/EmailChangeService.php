@@ -47,7 +47,7 @@ final class EmailChangeService
         return $this->delivered($result, $result['destination'] ?? '');
     }
 
-    public function confirm(array $principal, string $challengeId, string $code): bool
+    public function confirm(array $principal, string $challengeId, string $code): array|false
     {
         return DB::transaction(function () use ($principal, $challengeId, $code) {
             // User before challenge is also the lock order used by issue/resend.
@@ -64,8 +64,13 @@ final class EmailChangeService
             }
 
             DB::table('users')->where('id', $user->id)->update(['email' => $challenge->destination, 'updated_at' => now()]);
-            DB::table('auth_sessions')->where('user_id', $user->id)->where('id', '!=', $principal['session_id'])
-                ->whereNull('revoked_at')->update(['revoked_at' => now()]);
+            $revokedIds = DB::table('auth_sessions')->where('user_id', $user->id)
+                ->where('id', '!=', $principal['session_id'])->whereNull('revoked_at')
+                ->lockForUpdate()->pluck('id')->all();
+            if ($revokedIds !== []) {
+                DB::table('auth_sessions')->whereIn('id', $revokedIds)->update(['revoked_at' => now()]);
+                app(ChatSocketClosureQueue::class)->enqueue($revokedIds);
+            }
             DB::table('auth_challenges')->where('user_id', $user->id)->whereNull('consumed_at')->update(['consumed_at' => now()]);
             DB::table('security_notices')->insert([
                 'id' => (string) Str::uuid(), 'organization_id' => $principal['organization_id'],
@@ -74,7 +79,7 @@ final class EmailChangeService
             ]);
             Outbox::record('profile.email_changed', $principal['organization_id'], $user->id, $user->id);
 
-            return true;
+            return $revokedIds;
         });
     }
 

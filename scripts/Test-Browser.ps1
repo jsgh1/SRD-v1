@@ -1,21 +1,37 @@
-param([switch]$Compose,[string]$Php='G:\xampp\php\php.exe',[ValidatePattern('^[a-z0-9-]+[.]spec[.]mjs$')][string]$Spec)
+param([switch]$Compose,[switch]$Tls,[string]$Php='G:\xampp\php\php.exe',[ValidatePattern('^[a-z0-9-]+[.]spec[.]mjs$')][string]$Spec)
 $ErrorActionPreference='Stop'
 $SrdRoot=Split-Path $PSScriptRoot -Parent
 Set-Location -LiteralPath $SrdRoot
 $env:PLAYWRIGHT_BROWSERS_PATH=Join-Path $SrdRoot '.local/browsers'
-$env:SRD_TEST_URL=if($Compose){'http://localhost:8080'}else{'http://127.0.0.1:5173'}
+if($Tls -and -not $Compose){throw 'La prueba TLS necesita -Compose.'}
+$env:SRD_TEST_URL=if($Tls){'https://localhost:8443'}elseif($Compose){'http://localhost:8080'}else{'http://127.0.0.1:5173'}
+$env:SRD_TEST_TLS=if($Tls){'1'}else{'0'}
 $env:SRD_MAILPIT_URL=if($Compose){'http://localhost:8025'}else{'http://127.0.0.1:8125'}
 $SrdRunDirectory=Join-Path $SrdRoot ('.local/browser-runs/'+[guid]::NewGuid().ToString())
 New-Item -ItemType Directory -Path $SrdRunDirectory -Force | Out-Null
-$SrdSpecs=@(Get-ChildItem -LiteralPath (Join-Path $SrdRoot 'tools/browser-tests') -Filter '*.spec.mjs' -File | Sort-Object Name | Select-Object -ExpandProperty Name)
+$SrdAllSpecs=@(Get-ChildItem -LiteralPath (Join-Path $SrdRoot 'tools/browser-tests') -Filter '*.spec.mjs' -File | Sort-Object Name | Select-Object -ExpandProperty Name)
+$SrdSpecs=@($SrdAllSpecs | Where-Object { $_ -ne 'chat-latency.spec.mjs' })
 if($Spec){
-    if($Spec -notin $SrdSpecs){throw 'No existe la prueba solicitada.'}
+    if($Spec -notin $SrdAllSpecs){throw 'No existe la prueba solicitada.'}
     $SrdSpecs=@($Spec)
 }
 $SrdFailed=$false
 try {
     foreach($SrdSpec in $SrdSpecs) {
+        if($SrdSpec -eq 'document-boundary.spec.mjs') {
+            & $Php -d extension=zip tools/create-office-boundary-fixture.php
+            if($LASTEXITCODE){throw 'No se pudieron crear los documentos sintéticos del límite de tamaño.'}
+        }
+        if($SrdSpec -eq 'folder-image.spec.mjs') {
+            & $Php -d extension=gd tools/create-folder-image-fixture.php
+            if($LASTEXITCODE){throw 'No se pudo crear la imagen sintética para navegador.'}
+        }
+        if($SrdSpec -in @('folder-access.spec.mjs','folder-search.spec.mjs')) {
+            & $Php -d extension=zip tools/create-office-fixture.php
+            if($LASTEXITCODE){throw 'No se pudo crear el documento sintético para permisos.'}
+        }
         # Each file gets its own accounts and juntas, so code cooldowns cannot cross tests.
+        $env:SRD_BROWSER_SPEC=$SrdSpec
         $SrdBrowserFixture=node tools/browser-fixture.mjs
         if($LASTEXITCODE){throw 'No se pudo preparar una ejecución aislada.'}
         $env:SRD_BROWSER_FIXTURE=$SrdBrowserFixture
@@ -23,7 +39,9 @@ try {
             & "$PSScriptRoot/Seed-ComposeTests.ps1" -FixturePath $SrdBrowserFixture
         } else {
             $env:SRD_FIXTURE_PATH=$SrdBrowserFixture
-            foreach($SrdService in @('configuration','identity')) {
+            $SrdServices=@('configuration','identity')
+            if($SrdSpec -eq 'calendar-delivery-retry.spec.mjs'){$SrdServices+='calendar'}
+            foreach($SrdService in $SrdServices) {
                 & $Php tools/create-fixtures.php $SrdService
                 if($LASTEXITCODE){throw 'Falló la preparación local de las pruebas.'}
             }
@@ -38,5 +56,7 @@ try {
 } finally {
     Remove-Item Env:SRD_BROWSER_REPORT -ErrorAction SilentlyContinue
     Remove-Item Env:SRD_BROWSER_OUTPUT -ErrorAction SilentlyContinue
+    Remove-Item Env:SRD_BROWSER_SPEC -ErrorAction SilentlyContinue
+    Remove-Item Env:SRD_TEST_TLS -ErrorAction SilentlyContinue
 }
 if($SrdFailed){throw 'Fallaron pruebas de navegador. Revisar .local/browser-results.json y .local/browser-runs.'}

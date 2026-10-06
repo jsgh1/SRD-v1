@@ -15,6 +15,11 @@ import { PersonFilters, type ExtraFilter } from './PersonFilters';
 import { type PositionCatalog } from './PersonPositions';
 import { PersonPhotos } from './PersonPhotos';
 import type { FilterSettings } from './PersonFilterSettings';
+import { ExportFilename, addExportFilename, exportFilenameReady, safeXlsxFilename, type ExportFilenameChoice } from './ExportFilename';
+import { Planilla } from './Planilla';
+import type { PersonExportPdfData } from './PersonExportPdf';
+import type { PersonIndividualPdfData } from './PersonIndividualPdf';
+import { loadPersonPdfPhotos } from './PersonPdfPhotos';
 
 export const documents: Record<string, string> = {
   RC: "Registro Civil",
@@ -45,6 +50,7 @@ export type Person = Record<string, any> & {
   status: string;
   version: number;
 };
+type Workbook = { filename: string; mime: string; content: string; count: number };
 export function Status({ value }: { value: string }) {
   return (
     <span className={"status " + value}>
@@ -141,11 +147,43 @@ export function PersonDetail({
 }) {
   const [person, setPerson] = useState<Person>(),
     [error, setError] = useState<unknown>();
+  const [individualName, setIndividualName] = useState<ExportFilenameChoice>({ name: '', confirmed: false });
+  const [individualBusy, setIndividualBusy] = useState(false), [individualError, setIndividualError] = useState<unknown>();
+  const [includePdfPhotos, setIncludePdfPhotos] = useState(false);
   useEffect(() => {
+    setPerson(undefined); setError(undefined); setIndividualError(undefined);
+    setIndividualName({ name: '', confirmed: false });
+    setIncludePdfPhotos(false);
+    let active = true;
     api("persons/" + id)
-      .then(setPerson)
-      .catch(setError);
+      .then(data => { if (active) setPerson(data); })
+      .catch(value => { if (active) setError(value); });
+    return () => { active = false; };
   }, [id]);
+  async function downloadIndividual(format: 'xlsx' | 'pdf' = 'xlsx') {
+    if (!person || individualBusy || !exportFilenameReady(individualName)) return;
+    setIndividualBusy(true); setIndividualError(undefined);
+    try {
+      const params = new URLSearchParams();
+      addExportFilename(params, individualName);
+      if (format === 'pdf') {
+        const photos = includePdfPhotos ? await loadPersonPdfPhotos(id, api) : undefined;
+        const data = await api<PersonIndividualPdfData>(`persons/${id}/pdf?${params}`);
+        const { downloadPersonIndividualPdf } = await import('./PersonIndividualPdf');
+        await downloadPersonIndividualPdf(data, photos);
+        return;
+      }
+      const file = await api<Workbook>(`persons/${id}/xlsx?${params}`);
+      if (!safeXlsxFilename(file.filename) || file.mime !== 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') throw new Error('La exportación no tiene un formato válido.');
+      const bytes = Uint8Array.from(atob(file.content), char => char.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: file.mime }));
+      const link = document.createElement('a');
+      link.href = url; link.download = file.filename;
+      document.body.append(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (value) { setIndividualError(value); }
+    finally { setIndividualBusy(false); }
+  }
   const labels: Record<string, string> = {
     document_type: "Tipo de documento",
     document_number: "Número de documento",
@@ -203,6 +241,15 @@ export function PersonDetail({
               </section>
             )}
             <AdditionalDetail values={person.custom_fields} />
+            <section aria-label="Exportar ficha individual">
+              <h3>Descargar ficha</h3>
+              <p className="muted">Incluye los datos base y campos adicionales guardados. No incluye notas internas ni autorizaciones. Excel contiene solo texto.</p>
+              <label className="check-label"><input type="checkbox" checked={includePdfPhotos} disabled={individualBusy} onChange={event => setIncludePdfPhotos(event.target.checked)} />Incluir fotografías en el PDF</label>
+              <ExportFilename value={individualName} onChange={setIndividualName} type="ficha_persona" defaultDescription="Si dejas el nombre vacío, se descargará como ficha_persona_AAAA-MM-DD.xlsx o ficha_persona_AAAA-MM-DD.pdf, según el formato, con la fecha de Colombia." />
+              <ErrorBox error={individualError} />
+              <button type="button" disabled={individualBusy || !exportFilenameReady(individualName)} onClick={() => void downloadIndividual()}>{individualBusy ? 'Preparando ficha…' : 'Descargar ficha Excel'}</button>
+              <button type="button" disabled={individualBusy || !exportFilenameReady(individualName)} onClick={() => void downloadIndividual('pdf')}>{individualBusy ? 'Preparando ficha…' : 'Descargar ficha PDF'}</button>
+            </section>
             <PersonPhotos key={id} id={id} />
             <p className="muted">
               Versión {person.version} · El cargo y el rol descriptivo no
@@ -214,8 +261,8 @@ export function PersonDetail({
     </Modal>
   );
 }
-type BaseFilters = { document_type: string; gender: string; descriptive_role: string; position_code: string };
-const emptyBaseFilters: BaseFilters = { document_type: '', gender: '', descriptive_role: '', position_code: '' };
+type BaseFilters = { document_type: string; gender: string; descriptive_role: string; position_code: string; birth_date_from: string; birth_date_to: string; registered_from: string; registered_to: string };
+const emptyBaseFilters: BaseFilters = { document_type: '', gender: '', descriptive_role: '', position_code: '', birth_date_from: '', birth_date_to: '', registered_from: '', registered_to: '' };
 
 function BasePersonFilters({ value, onChange, visible }: { value: BaseFilters; onChange: (value: BaseFilters) => void; visible: string[] }) {
   const [catalog, setCatalog] = useState<PositionCatalog>(), [error, setError] = useState<unknown>();
@@ -231,7 +278,7 @@ function BasePersonFilters({ value, onChange, visible }: { value: BaseFilters; o
     <select value={value[key]} onChange={e => onChange({ ...value, [key]: e.target.value })}>
       <option value="">Todos</option>{Object.entries(options).map(([code, name]) => <option key={code} value={code}>{name}</option>)}
     </select></label> : null;
-  if (!Object.keys(emptyBaseFilters).some(key=>visible.includes(key))) return null;
+  if (!Object.keys(emptyBaseFilters).some(key=>visible.includes(key)) && !visible.includes('birth_date') && !visible.includes('registered_at')) return null;
   return <fieldset className="person-extra-filters"><legend>Más filtros de la ficha</legend>
     <div className="person-extra-filter">
       {select('document_type', 'Tipo de documento', documents)}
@@ -241,6 +288,8 @@ function BasePersonFilters({ value, onChange, visible }: { value: BaseFilters; o
         <option value="">{catalog ? 'Todos' : 'Cargando cargos…'}</option>
         {catalog?.items.map(item => <option key={item.code} value={item.code}>{item.label}{item.active ? '' : ' (inactivo)'}</option>)}
       </select></label>}
+      {visible.includes('birth_date') && <><label>Nacimiento desde<input type="date" required={!!value.birth_date_to} max={value.birth_date_to || undefined} value={value.birth_date_from} onChange={e=>onChange({...value,birth_date_from:e.target.value})}/></label><label>Nacimiento hasta<input type="date" required={!!value.birth_date_from} min={value.birth_date_from || undefined} value={value.birth_date_to} onChange={e=>onChange({...value,birth_date_to:e.target.value})}/></label></>}
+      {visible.includes('registered_at') && <><label>Registro desde<input type="date" required={!!value.registered_to} max={value.registered_to || undefined} value={value.registered_from} onChange={e=>onChange({...value,registered_from:e.target.value})}/></label><label>Registro hasta<input type="date" required={!!value.registered_from} min={value.registered_from || undefined} value={value.registered_to} onChange={e=>onChange({...value,registered_to:e.target.value})}/></label></>}
     </div>
     <p className="muted">Todos los criterios deben coincidir. Cargo y rol describen la ficha, no los permisos de una cuenta. También puedes buscar cargos inactivos.</p>
     <ErrorBox error={error} />{!!error && <button type="button" onClick={() => setRevision(r => r + 1)}>Reintentar cargos</button>}
@@ -272,6 +321,9 @@ export function Persons({
     [remove, setRemove] = useState<Person>(),
     [busy, setBusy] = useState(false),
     [refresh, setRefresh] = useState(0);
+  const [exporting, setExporting] = useState(false), [exportError, setExportError] = useState<unknown>();
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportName, setExportName] = useState<ExportFilenameChoice>({ name: '', confirmed: false });
   const [filterSettings,setFilterSettings]=useState<FilterSettings>(), [filterError,setFilterError]=useState<unknown>(), [filterRevision,setFilterRevision]=useState(0);
   useEffect(()=>{
     if(mode !== 'list') return;
@@ -294,6 +346,38 @@ export function Persons({
       .catch(error => { if (active) setError(error); });
     return () => { active = false; };
   }, [mode, page, size, applied, refresh]);
+  async function exportExcel() {
+    if (exporting) return;
+    setExporting(true); setExportError(undefined);
+    try {
+      const params = new URLSearchParams(applied);
+      addExportFilename(params, exportName);
+      const file = await api<Workbook>(`persons/export?${params}`);
+      if (!safeXlsxFilename(file.filename)
+        || file.mime !== 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+        throw new Error('La exportación no tiene un formato válido.');
+      }
+      const bytes = Uint8Array.from(atob(file.content), char => char.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: file.mime }));
+      const link = document.createElement('a');
+      link.href = url; link.download = file.filename;
+      document.body.append(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (value) { setExportError(value); }
+    finally { setExporting(false); }
+  }
+  async function exportPdf() {
+    if (exportingPdf) return;
+    setExportingPdf(true); setExportError(undefined);
+    try {
+      const params = new URLSearchParams(applied);
+      addExportFilename(params, exportName);
+      const data = await api<PersonExportPdfData>(`persons/export-pdf?${params}`);
+      const { downloadPersonExportPdf } = await import('./PersonExportPdf');
+      await downloadPersonExportPdf(data, principal.organization.name);
+    } catch (value) { setExportError(value); }
+    finally { setExportingPdf(false); }
+  }
   async function search(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -302,6 +386,14 @@ export function Persons({
       const criteria={status,zone,affiliated,...baseFilters};
       const params = new URLSearchParams({ q: query });
       Object.entries(criteria).forEach(([key,value])=>{if(filterSettings?.base.includes(key))params.set(key,value);});
+      if(filterSettings?.base.includes('birth_date') && baseFilters.birth_date_from && baseFilters.birth_date_to) {
+        params.set('birth_date_from',baseFilters.birth_date_from);
+        params.set('birth_date_to',baseFilters.birth_date_to);
+      }
+      if(filterSettings?.base.includes('registered_at') && baseFilters.registered_from && baseFilters.registered_to) {
+        params.set('registered_from',baseFilters.registered_from);
+        params.set('registered_to',baseFilters.registered_to);
+      }
       customFilters.forEach((filter, index) => {
         params.set(`custom_filters[${index}][field_id]`, filter.field_id);
         params.set(`custom_filters[${index}][value]`, filter.value);
@@ -446,6 +538,14 @@ export function Persons({
           </button>
           {mode === 'list' && <button type="button" onClick={() => { setQuery(''); setStatus(''); setZone(''); setAffiliated(''); setBaseFilters(emptyBaseFilters); setCustomFilters([]); setPage(1); setApplied(''); setRefresh(value => value + 1); }}>Limpiar filtros</button>}
         </form>
+        {mode === 'list' && <>
+          <section aria-label="Exportación de personas">
+            <ExportFilename value={exportName} onChange={setExportName} type="personas" />
+            <ErrorBox error={exportError} />
+            <div className="pagination"><button type="button" disabled={busy || exporting || exportingPdf || !result || result.total > 2000 || !exportFilenameReady(exportName)} onClick={() => void exportExcel()}>{exporting ? 'Preparando Excel…' : 'Exportar Excel'}</button><button type="button" disabled={busy || exporting || exportingPdf || !result || result.total > 2000 || !exportFilenameReady(exportName)} onClick={() => void exportPdf()}>{exportingPdf ? 'Preparando PDF…' : 'Exportar PDF'}</button><span>Usa los filtros aplicados e incluye todas las páginas, hasta 2000 personas. No incluye notas ni fotografías.</span></div>
+          </section>
+          <Planilla applied={applied} total={result?.total} busy={busy} organizationName={principal.organization.name} />
+        </>}
         {result ? (
           <>
             {result.items.length ? (

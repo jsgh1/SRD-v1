@@ -30,8 +30,10 @@ final class EmailChangeController
     {
         $principal = Access::require('profile.write');
         $data = $request->validate(['challenge_id' => 'required|uuid', 'code' => 'required|digits:6']);
-        abort_unless($this->service->confirm($principal, $data['challenge_id'], $data['code']), 422);
+        $revokedIds = $this->service->confirm($principal, $data['challenge_id'], $data['code']);
+        abort_if($revokedIds === false, 422);
 
-        return ['data' => ['message' => 'Correo actualizado. Se revocaron las otras sesiones y se programó un aviso al correo anterior.']];
+        return ['data' => ['message' => 'Correo actualizado. Se revocaron las otras sesiones y se programó un aviso al correo anterior.',
+            'revoked_session_ids' => $revokedIds]];
     }
 }

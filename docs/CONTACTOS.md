@@ -13,3 +13,5 @@ Un superadministrador solo aparece como contacto de una junta si tiene membresí
 API: `GET /api/v1/contacts?q=nombre&page=1`. Requiere sesión y permiso `contacts.read` (todos los roles vigentes). Devuelve `items`, `page`, `page_size=25`, `total`; cada elemento tiene únicamente `id`, `name`, `role`, `presence`. Identidad resuelve la presencia de la página en bloque, sin una consulta por contacto. No hay una ruta de consulta de cuentas arbitrarias.
 
 RF-040 continúa parcial: aún no se pueden iniciar conversaciones, enviar mensajes, adjuntar archivos ni llamar. Los avisos No molestar siguen pendientes. Las diferencias de mayúsculas y acentos dependen de la intercalación de la base de datos; no se ofrece búsqueda fonética.
+
+La búsqueda de la junta también actualiza los resultados de contactos cada 30 segundos visibles, con actualización manual, pausa en pestaña oculta, limpieza al desmontar y detención por 401/403. Conserva página/texto aplicados y no prolonga la sesión. Ver BUSQUEDA.md y VALIDACION.md para la evidencia dirigida y sus límites.

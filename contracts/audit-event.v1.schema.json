@@ -27,7 +27,12 @@
         "identity",
         "configuration",
         "records",
-        "files"
+        "files",
+        "calendar",
+        "notifications",
+        "treasury",
+        "inventory",
+        "chat"
       ]
     },
     "action": {

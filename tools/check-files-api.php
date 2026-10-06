@@ -4,7 +4,7 @@ require 'vendor/autoload.php';
 $app = require 'bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 if (!extension_loaded('gd') || !extension_loaded('pdo_mysql')) throw new RuntimeException('Missing image/database extension');
-foreach (['file_quotas', 'person_photos', 'file_garbage', 'outbox_events'] as $table) {
+foreach (['file_quotas', 'person_photos', 'asset_photos', 'file_garbage', 'outbox_events'] as $table) {
     if (!Illuminate\Support\Facades\Schema::hasTable($table)) throw new RuntimeException('Missing photo table');
     if (Illuminate\Support\Facades\DB::table($table)->count() !== 0) throw new RuntimeException('Probe unexpectedly persisted data');
 }

@@ -12,7 +12,7 @@ final class PersonFilterSettingsTest extends TestCase {
     public function test_defaults_scope_validation_and_versions(): void {
         foreach (Access::ROLES as $role) {
             $p=array_replace($this->p,['role'=>$role]);
-            $this->internal('GET','person-filter-settings',[],$p)->assertOk()->assertJsonPath('data.version',0)->assertJsonCount(7,'data.base')->assertJsonPath('data.custom',null)->assertJsonPath('data.can_manage',in_array($role,['admin','superadmin']));
+            $this->internal('GET','person-filter-settings',[],$p)->assertOk()->assertJsonPath('data.version',0)->assertJsonCount(9,'data.base')->assertJsonPath('data.custom',null)->assertJsonPath('data.can_manage',in_array($role,['admin','superadmin']));
             if (!in_array($role,['admin','superadmin'])) $this->internal('PUT','person-filter-settings',$this->data(),$p)->assertForbidden();
         }
         $this->assertDatabaseCount('person_filter_settings',0);

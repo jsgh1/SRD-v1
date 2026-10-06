@@ -42,6 +42,27 @@ final class MembershipTest extends TestCase
         return ['invitation_id' => $id, 'secret' => $m[2]];
     }
 
+    public function test_folder_reader_candidates_are_active_scoped_and_versioned(): void
+    {
+        $ids = [];
+        foreach (['viewer' => $this->org, 'registrar' => $this->other] as $role => $org) {
+            $user = (string) Str::uuid(); $id = (string) Str::uuid(); $ids[$role] = $id;
+            DB::table('users')->insert(['id'=>$user,'name'=>'Lector 50%_!','email'=>$role.'@example.test',
+                'password'=>'unused-test-hash','created_at'=>now(),'updated_at'=>now()]);
+            DB::table('memberships')->insert(['id'=>$id,'user_id'=>$user,'organization_id'=>$org,'role'=>$role,'version'=>3]);
+        }
+        $this->internal('GET','members/folder-readers',['search'=>'50%_!'],$this->principal)->assertOk()
+            ->assertJsonPath('data.total',1)->assertJsonPath('data.items.0.id',$ids['viewer']);
+        $this->internal('POST','members/folder-readers/verify',['ids'=>[$ids['viewer']]],$this->principal)
+            ->assertOk()->assertJsonPath('data.items.0.version',3);
+        $this->internal('POST','members/folder-readers/verify',['ids'=>[]],$this->principal)
+            ->assertOk()->assertJsonPath('data.items',[]);
+        $this->internal('POST','members/folder-readers/verify',['ids'=>[$ids['registrar']]],$this->principal)->assertUnprocessable();
+        DB::table('memberships')->where('id',$ids['viewer'])->update(['active'=>false]);
+        $this->internal('POST','members/folder-readers/verify',['ids'=>[$ids['viewer']]],$this->principal)->assertUnprocessable();
+        $this->internal('GET','members/folder-readers',[],array_replace($this->principal,['role'=>'viewer']))->assertForbidden();
+    }
+
     public function test_contacts_are_minimal_scoped_paginated_and_literal_search(): void
     {
         for ($i = 0; $i < 29; $i++) {
@@ -60,6 +81,48 @@ final class MembershipTest extends TestCase
         $this->internal('GET', 'contacts', ['q' => str_repeat('x', 121)], $this->principal)->assertUnprocessable();
         $this->internal('GET', 'contacts', ['page' => 0], $this->principal)->assertUnprocessable();
         $this->getJson('/internal/v1/contacts')->assertUnauthorized();
+    }
+
+    public function test_calendar_resolves_only_active_members_of_the_claimed_junta(): void
+    {
+        $member = (string) Str::uuid();
+        $foreign = (string) Str::uuid();
+        foreach ([$member => $this->org, $foreign => $this->other] as $id => $organization) {
+            DB::table('users')->insert(['id' => $id, 'name' => 'Integrante '.substr($id, 0, 5), 'email' => $id.'@example.test', 'password' => 'unused-test-hash', 'created_at' => now(), 'updated_at' => now()]);
+            DB::table('memberships')->insert(['id' => (string) Str::uuid(), 'user_id' => $id, 'organization_id' => $organization, 'role' => 'viewer']);
+        }
+        $path = 'calendar-participants/resolve';
+        $this->internal('POST', $path, ['user_ids' => [$this->admin, $member]], $this->principal, 'calendar')
+            ->assertOk()->assertJsonCount(2, 'data.items')->assertJsonMissingPath('data.items.0.email');
+        $this->internal('POST', $path, ['user_ids' => []], $this->principal, 'calendar')
+            ->assertOk()->assertJsonCount(0, 'data.items');
+        $this->internal('POST', $path, ['user_ids' => [$foreign]], $this->principal, 'calendar')->assertUnprocessable();
+        DB::table('memberships')->where('user_id', $member)->update(['active' => false]);
+        $this->internal('POST', $path, ['user_ids' => [$member]], $this->principal, 'calendar')->assertUnprocessable();
+        $this->internal('POST', $path, ['user_ids' => [$this->admin]], $this->principal, 'gateway')->assertForbidden();
+        $this->internal('GET', 'contacts', [], $this->principal, 'calendar')->assertUnauthorized();
+    }
+
+    public function test_chat_resolves_only_another_active_member_with_minimal_fields(): void
+    {
+        $member = (string) Str::uuid();
+        $foreign = (string) Str::uuid();
+        foreach ([$member => $this->org, $foreign => $this->other] as $id => $organization) {
+            DB::table('users')->insert(['id' => $id, 'name' => 'Contacto de prueba', 'email' => $id.'@example.test',
+                'password' => 'unused-test-hash', 'created_at' => now(), 'updated_at' => now()]);
+            DB::table('memberships')->insert(['id' => (string) Str::uuid(), 'user_id' => $id,
+                'organization_id' => $organization, 'role' => 'viewer']);
+        }
+        $path = 'chat-contacts/resolve';
+        $item = $this->internal('POST', $path, ['user_id' => $member], $this->principal, 'chat')
+            ->assertOk()->json('data');
+        $this->assertSame(['id', 'name', 'role'], array_keys($item));
+        $this->internal('POST', $path, ['user_id' => $foreign], $this->principal, 'chat')->assertUnprocessable();
+        $this->internal('POST', $path, ['user_id' => $this->admin], $this->principal, 'chat')->assertUnprocessable();
+        DB::table('users')->where('id', $member)->update(['active' => false]);
+        $this->internal('POST', $path, ['user_id' => $member], $this->principal, 'chat')->assertUnprocessable();
+        $this->internal('POST', $path, ['user_id' => $foreign], $this->principal, 'gateway')->assertForbidden();
+        $this->internal('GET', 'contacts', [], $this->principal, 'chat')->assertUnauthorized();
     }
 
     public function test_contacts_never_reveal_invisible_preference_or_last_seen(): void
@@ -181,9 +244,12 @@ final class MembershipTest extends TestCase
         $user = DB::table('users')->where('email', 'nuevo@example.test')->first();
         $member = DB::table('memberships')->where('user_id', $user->id)->first();
         foreach ([$this->org, $this->other] as $org) DB::table('auth_sessions')->insert(['id' => (string) Str::uuid(), 'user_id' => $user->id, 'organization_id' => $org, 'token_hash' => hash('sha256', $org), 'last_activity_at' => now(), 'expires_at' => now()->addHours(8), 'created_at' => now()]);
+        $revokedId = DB::table('auth_sessions')->where('organization_id', $this->org)->value('id');
         $this->internal('PATCH', 'members/'.$member->id, ['role' => 'superadmin', 'active' => true, 'version' => 1], $this->principal)->assertUnprocessable();
         $data = ['role' => 'viewer', 'active' => false, 'version' => 1];
-        $this->internal('PATCH', 'members/'.$member->id, $data, $this->principal)->assertOk();
+        $this->internal('PATCH', 'members/'.$member->id, $data, $this->principal)->assertOk()
+            ->assertJsonPath('data.revoked_session_ids', [$revokedId]);
+        $this->assertDatabaseHas('chat_socket_closures', ['session_id' => $revokedId, 'confirmed_at' => null]);
         $this->internal('PATCH', 'members/'.$member->id, $data, $this->principal)->assertConflict();
         $this->assertNotNull(DB::table('auth_sessions')->where('organization_id', $this->org)->value('revoked_at'));
         $this->assertNull(DB::table('auth_sessions')->where('organization_id', $this->other)->value('revoked_at'));

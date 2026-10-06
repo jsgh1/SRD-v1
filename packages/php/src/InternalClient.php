@@ -12,19 +12,10 @@ final class InternalClient
     {
         $body = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         $uri = '/internal/v1/'.$path;
-        $claims = ['iss' => config('srd.service'), 'aud' => $service, 'iat' => time(), 'exp' => time() + 30,
-            'nonce' => (string) Str::uuid(), 'method' => $method, 'path' => $uri,
-            'hash' => hash('sha256', $body), 'context' => $context];
-        $encoded = base64_encode(json_encode($claims, JSON_THROW_ON_ERROR));
-        $key = config('srd.internal_key');
-        if (! is_string($key) || strlen($key) < 32) {
-            throw new DependencyFailure;
-        }
-        $signature = hash_hmac('sha256', $encoded, $key);
+        $headers = $this->signedHeaders($service, $method, $uri, $body, $context);
         try {
             $response = Http::timeout($service === 'files' ? 75 : 15)->connectTimeout(3)->acceptJson()
-                ->withHeaders(['X-SRD-Context' => $encoded.'.'.$signature,
-                    'X-Correlation-ID' => request()->attributes->get('correlation_id', (string) Str::uuid())])
+                ->withHeaders($headers)
                 ->withBody($body, 'application/json')->send($method, config('srd.urls.'.$service).$uri);
         } catch (\Throwable) {
             throw new DependencyFailure;
@@ -41,5 +32,21 @@ final class InternalClient
         }
 
         return $response->json('data') ?? [];
+    }
+
+    public function signedHeaders(string $service, string $method, string $uri, string $body = '', array $context = []): array
+    {
+        $claims = ['iss' => config('srd.service'), 'aud' => $service, 'iat' => time(), 'exp' => time() + 30,
+            'nonce' => (string) Str::uuid(), 'method' => $method, 'path' => $uri,
+            'hash' => hash('sha256', $body), 'context' => $context];
+        $encoded = base64_encode(json_encode($claims, JSON_THROW_ON_ERROR));
+        $key = config('srd.internal_key');
+        if (! is_string($key) || strlen($key) < 32) {
+            throw new DependencyFailure;
+        }
+        $signature = hash_hmac('sha256', $encoded, $key);
+
+        return ['X-SRD-Context' => $encoded.'.'.$signature,
+            'X-Correlation-ID' => request()->attributes->get('correlation_id', (string) Str::uuid())];
     }
 }

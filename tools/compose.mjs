@@ -1,7 +1,7 @@
 import fs from "node:fs";
 const services = {};
 const volumes = { mysql_data: {} };
-const names = ["gateway", "identity", "configuration", "records", "audit", "files"];
+const names = ["gateway", "identity", "configuration", "records", "audit", "files", "calendar"];
 const envVar = (n) => "${" + n + ":?Ejecuta scripts/Initialize.ps1}";
 for (const name of names) {
   const environment = {
@@ -63,7 +63,7 @@ for (const name of names) {
     volumes.files_objects = {};
     services[name].volumes = ['files_objects:/app/services/files/storage/app/private', 'antivirus_signatures:/var/lib/clamav:ro'];
   }
-  if (["identity", "configuration", "records", "files"].includes(name))
+  if (["identity", "configuration", "records", "files", "calendar"].includes(name))
     services[name + "-scheduler"] = {
       build: services[name].build,
       environment,

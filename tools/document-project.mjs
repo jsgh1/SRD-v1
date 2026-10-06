@@ -31,9 +31,11 @@ if (
 )
   throw new Error("Unexpected requirement count");
 const partial = {
+  25: "API de eventos de junta con creación, edición versionada, cancelación y aislamiento; web con vistas de mes, semana y agenda. Participantes e invitaciones a eventos pendientes. Ver CALENDARIO.md.",
+  26: "Estados calculados al consultar; recordatorios y notificaciones pendientes. Ver CALENDARIO.md.",
   20: "Fotos de persona, documento y predio desde el detalle o el paso opcional Guardar y añadir fotos del alta: carga, lectura privada, ampliación, reemplazo, borrado confirmado y versiones, con gateway autenticado y ClamAV. Nuevas eliminaciones con limpieza persistente. Orientación EXIF 1–8 en JPEG. La ficha se guarda antes de subir imágenes; otros formatos de orientación, dispositivos y validación integral pendientes.",
   39: "Fotos conectadas al gateway y al detalle de fichas, con MySQL y volumen privados, permisos, ClamAV, actualización de firmas, limpieza y outbox programados. Nuevos borrados de personas con orden durable, reintentos y protección contra cargas concurrentes. Copia local cifrada con fotos y verificación de metadatos. Otros tipos de archivo, conciliación histórica y operación integral pendientes.",
-  56: "Copia manual local cifrada de seis bases, .env y fotografías con pausa de escritores; autenticación y simulacro aislado de SQL y objetos con tablas, claves foráneas, hashes y cuotas. Compatibilidad con copias anteriores sin fotos. Programación diaria, retención, copia externa, recuperación operativa, permisos, supresiones posteriores y conciliación pendientes.",
+  56: "Copia manual local cifrada de las bases de servicio, .env y fotografías con pausa de escritores; autenticación y simulacro aislado de SQL y objetos con tablas, claves foráneas, hashes y cuotas. Compatibilidad con copias anteriores sin fotos ni Calendario. Programación diaria, retención, copia externa, recuperación operativa, permisos, supresiones posteriores y conciliación pendientes.",
   1: "Alta con términos, listado paginado, activación/suspensión e invitación de administrador por UI de plataforma. Acceso exclusivo SA, versiones y auditoría; validación integral pendiente.",
   2: "Bootstrap, invitación privada 24 h/uso único, vinculación de cuentas existentes, roles/activación por junta y revocación de sesiones. Pruebas backend; validación integral pendiente.",
   3: "Login con términos, cookie de sesión y CSRF; prueba SMTP/Chromium.",
@@ -54,14 +56,14 @@ const partial = {
   17: "Validación Pendiente/Completado de campos base y obligatoriedad de campos adicionales activos.",
   18: "Validaciones y ubicación condicional. Cargo validado contra catálogo versionado por junta; otros catálogos configurables pendientes.",
   19: "Campos adicionales tipados, versiones e historia; edición delegable por SA/AD a roles de la junta, con revocación bajo bloqueo. Catálogo de cargos configurable por SA/AD y etiquetas históricas. Otros catálogos base y validación integral pendientes.",
-  21: "Filtros base y hasta tres criterios adicionales: coincidencia exacta o intervalo inclusivo para fechas, paginación 10/25/50 y limpieza. Selección visible común por junta con versiones y delegación por rol. No altera permisos de lectura. Otros rangos, consultas guardadas y validación integral pendientes.",
+  21: "Filtros base, intervalos inclusivos de nacimiento y de registro (días de Colombia) y hasta tres criterios adicionales exactos o por intervalo para fechas; paginación 10/25/50 y limpieza. Selección visible común por junta con versiones y delegación por rol. No altera permisos de lectura. Otros rangos, consultas guardadas y validación integral pendientes.",
   22: "Consulta exacta y detalle sin nota para roles excluidos. Fotografías privadas y ampliación desde el detalle, con permisos por junta. Validación integral pendiente.",
   23: "Edición con versión y conflicto 409; probado.",
   24: "Confirmación y borrado de persona/notas con evento mínimo; nuevas eliminaciones generan limpieza durable de fotografías. Conciliación histórica, otros adjuntos y supresión de copias pendientes.",
-  47: "Perfil, nombre/color, términos y delegación independiente de campos adicionales y filtros. Política común/personal de accesos rápidos reservada a SA; AD edita accesos comunes. Resto de configuración/delegaciones pendiente.",
+  47: "Perfil, nombre/color, términos y delegación independiente de campos adicionales, filtros y edición del calendario. Política común/personal de accesos rápidos reservada a SA; AD edita accesos comunes. Resto de configuración/delegaciones pendiente.",
   48: "Términos inmutables por versión, aceptación por usuario/junta. Autorización de captura básica.",
   49: "Outbox, confirmación positiva, reintentos bajo bloqueo y consumidor idempotente; tres escenarios de concurrencia MySQL probados. Cobertura integral pendiente.",
-  50: "Bitácora de solo lectura con filtros combinables por fecha UTC, actor, módulo, acción y resultado, paginación y detalle. Estado de entregas por junta y consulta de agotados. Exportación y supervisión global pendientes.",
+  50: "Bitácora de solo lectura con filtros combinables por fecha UTC, actor, módulo (incluidos Archivos y Calendario), acción y resultado, paginación y detalle. Estado de entregas por junta en cinco servicios. Exportación XLSX de hasta 2000 eventos filtrados por SA/AD/AU; PDF, lotes extensos y supervisión global pendientes.",
   51: "Estado vacío honesto, sin binarios publicados.",
   55: "Salud /up y reintentos outbox; panel operativo y supervisión integral pendientes.",
 };
@@ -169,7 +171,7 @@ for (const group of Object.keys(groups))
   );
 write(
   "database/changelog/changelog-master.yaml",
-  "format: srd-laravel-migrations-v1\nauthority: services/*/database/migrations\nservices:\n  - gateway\n  - identity\n  - configuration\n  - records\n  - audit\n  - files\n# Índice documental. No ejecutarlo con Liquibase.\n",
+  "format: srd-laravel-migrations-v1\nauthority: services/*/database/migrations\nservices:\n  - gateway\n  - identity\n  - configuration\n  - records\n  - audit\n  - files\n  - calendar\n# Índice documental. No ejecutarlo con Liquibase.\n",
 );
 console.log(
   "56 RF, 18 RNF, 20 CU verified. Traceability and database layout written.",

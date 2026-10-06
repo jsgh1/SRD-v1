@@ -2,7 +2,7 @@
 set -eu
 # Entrypoint MySQL: credentials originate in .env generated locally, never source data.
 export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"
-for service in gateway identity configuration records audit files; do
+for service in gateway identity configuration records audit files calendar notifications treasury inventory chat; do
   variable="DB_PASSWORD_${service^^}"
   credential="${!variable}"
   [[ "$credential" =~ ^[a-f0-9]{64}$ ]] || { echo 'Invalid generated database credential' >&2; exit 1; }

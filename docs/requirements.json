@@ -113,7 +113,7 @@
       "interface": "UI-10",
       "acceptance": "CA-RF-011",
       "state": "Parcial",
-      "detail": "Preferencia persistente, latidos cada 30 segundos sin renovar inactividad, agregación de sesiones válidas y vencimiento a los 90 segundos; Invisible se representa como Desconectado. Indicador propio y contactos con actualización automática visible y manual sin prolongar sesión; chat y avisos No molestar pendientes.",
+      "detail": "Preferencia persistente, latidos cada 30 segundos sin renovar inactividad, agregación de sesiones válidas y vencimiento a los 90 segundos; Invisible se representa como Desconectado. Indicador propio, directorio y contactos en búsqueda con actualización automática visible y manual sin prolongar sesión; chat y avisos No molestar pendientes.",
       "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
@@ -153,7 +153,7 @@
       "interface": "UI-03",
       "acceptance": "CA-RF-015",
       "state": "Parcial",
-      "detail": "Búsqueda conjunta de personas y contactos desde el encabezado, resultados separados, paginación y errores independientes; detalle autorizado y exclusión de notas. Otros dominios y recursos pendientes.",
+      "detail": "Búsqueda conjunta de personas, contactos, calendario, inventario y tesorería según permisos, con resultados, paginación y errores independientes; detalle autorizado y exclusión de notas. Detalles de calendario, bienes y tesorería protegidos ante respuestas obsoletas al abrir/cerrar/cambiar búsqueda; paginación del historial de bienes también protegida. Adjuntos y otros recursos pendientes.",
       "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
@@ -213,7 +213,7 @@
       "interface": "UI-05",
       "acceptance": "CA-RF-021",
       "state": "Parcial",
-      "detail": "Filtros base y hasta tres criterios adicionales: coincidencia exacta o intervalo inclusivo para fechas, paginación 10/25/50 y limpieza. Selección visible común por junta con versiones y delegación por rol. No altera permisos de lectura. Otros rangos, consultas guardadas y validación integral pendientes.",
+      "detail": "Filtros base, intervalos inclusivos de nacimiento y de registro (días de Colombia) y hasta tres criterios adicionales exactos o por intervalo para fechas; paginación 10/25/50, limpieza y exportación XLSX de la lista filtrada. Selección visible común por junta con versiones y delegación por rol. No altera permisos de lectura. Otros rangos, consultas guardadas y validación integral pendientes.",
       "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
@@ -252,9 +252,9 @@
       "case": "CU-09",
       "interface": "UI-06",
       "acceptance": "CA-RF-025",
-      "state": "Pendiente",
-      "detail": "Conservado en alcance; no implementado.",
-      "evidence": "Sin evidencia de ejecución."
+      "state": "Parcial",
+      "detail": "API de eventos de junta con creación, edición versionada, cancelación, aislamiento y hasta 50 participantes activos; mes, semana y agenda, invitaciones con respuesta propia y avisos internos. Reglas completas y aceptación integral pendientes. Ver CALENDARIO.md.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
       "id": "RF-026",
@@ -262,9 +262,9 @@
       "case": "CU-09",
       "interface": "UI-06",
       "acceptance": "CA-RF-026",
-      "state": "Pendiente",
-      "detail": "Conservado en alcance; no implementado.",
-      "evidence": "Sin evidencia de ejecución."
+      "state": "Parcial",
+      "detail": "Próximo en las 24 horas previas al inicio, En curso con inicio incluido/fin excluido y Cancelado prioritario, calculados al consultar y visibles en las tres vistas con actualización manual. Recordatorios durables de 24 horas y una hora, avisos internos, reintentos, idempotencia y preferencias personales disponibles. Selección por evento de 24 horas, una hora, ambas o ninguna disponible, con valores anteriores conservados al omitir opciones en una edición. Avance temporal local en Calendario y búsqueda, visible y al recuperar foco, con reloj del dispositivo, sin sondeo de API ni renovar sesión. Otros canales y aceptación integral pendientes. Ver CALENDARIO.md y NOTIFICACIONES.md.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
       "id": "RF-027",
@@ -272,9 +272,9 @@
       "case": "CU-10",
       "interface": "UI-07",
       "acceptance": "CA-RF-027",
-      "state": "Pendiente",
-      "detail": "Conservado en alcance; no implementado.",
-      "evidence": "Sin evidencia de ejecución."
+      "state": "Parcial",
+      "detail": "Saldo COP y movimientos por junta con apertura única, historial filtrable, comprobantes y XLSX del historial; validación integral pendiente.",
+      "evidence": "Ver docs/TESORERIA.md y docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
       "id": "RF-028",
@@ -282,9 +282,9 @@
       "case": "CU-10",
       "interface": "UI-07",
       "acceptance": "CA-RF-028",
-      "state": "Pendiente",
-      "detail": "Conservado en alcance; no implementado.",
-      "evidence": "Sin evidencia de ejecución."
+      "state": "Parcial",
+      "detail": "Ingresos y egresos informativos con centavos enteros, idempotencia y rechazo de sobregiro; archivo de soporte pendiente.",
+      "evidence": "Ver docs/TESORERIA.md y docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
       "id": "RF-029",
@@ -292,9 +292,9 @@
       "case": "CU-10",
       "interface": "UI-07",
       "acceptance": "CA-RF-029",
-      "state": "Pendiente",
-      "detail": "Conservado en alcance; no implementado.",
-      "evidence": "Sin evidencia de ejecución."
+      "state": "Parcial",
+      "detail": "Reverso enlazado único con motivo y control de saldo no negativo; validación integral pendiente.",
+      "evidence": "Ver docs/TESORERIA.md y docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
       "id": "RF-030",
@@ -302,9 +302,9 @@
       "case": "CU-11",
       "interface": "UI-08",
       "acceptance": "CA-RF-030",
-      "state": "Pendiente",
-      "detail": "Conservado en alcance; no implementado.",
-      "evidence": "Sin evidencia de ejecución."
+      "state": "Parcial",
+      "detail": "Ficha individual, código único, actualización versionada, baja histórica, historial paginado con filtros por operación, motivo y días de Colombia, tres fotos privadas y listado XLSX/PDF filtrado. XLSX/PDF del historial con filtros aplicados y todas las páginas, hasta 2000 movimientos, disponible. Fotos exportadas y validación integral pendientes.",
+      "evidence": "Ver docs/INVENTARIO.md y docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
       "id": "RF-031",
@@ -312,9 +312,9 @@
       "case": "CU-11",
       "interface": "UI-08",
       "acceptance": "CA-RF-031",
-      "state": "Pendiente",
-      "detail": "Conservado en alcance; no implementado.",
-      "evidence": "Sin evidencia de ejecución."
+      "state": "Parcial",
+      "detail": "Movimientos de cantidad con motivo, autor, idempotencia, rechazo de salida excesiva, historial paginado sin corte en cien y filtros por operación, motivo y días de Colombia, tres fotos privadas y listado XLSX/PDF filtrado. XLSX/PDF del historial con filtros aplicados y todas las páginas, hasta 2000 movimientos, disponible. Fotos exportadas y validación integral pendientes.",
+      "evidence": "Ver docs/INVENTARIO.md y docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
       "id": "RF-032",
@@ -322,9 +322,9 @@
       "case": "CU-12",
       "interface": "UI-09",
       "acceptance": "CA-RF-032",
-      "state": "Pendiente",
-      "detail": "Conservado en alcance; no implementado.",
-      "evidence": "Sin evidencia de ejecución."
+      "state": "Parcial",
+      "detail": "XLSX/PDF del historial individual de Inventario con filtros aplicados, todas las páginas y hasta 2000 movimientos disponible. XLSX filtrado de Personas, planilla de firmas, Auditoría, Inventario y Tesorería. Personas, Planilla, Inventario, historial de Tesorería y Auditoría descargan PDF con nombre confirmado; Planilla también admite vista imprimible. Comprobante individual de Tesorería en PDF y XLSX con nombre opcional confirmado. Ficha individual de persona en XLSX y PDF A4 sin notas; PDF admite anexo opcional de las tres fotos privadas. Faltan logo, PDF de otros listados y lotes extensos.",
+      "evidence": "Ver docs/EXPORTACION-PERSONAS.md, docs/PLANILLAS.md, docs/AUDITORIA.md, docs/INVENTARIO.md, docs/TESORERIA.md y docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
       "id": "RF-033",
@@ -332,9 +332,9 @@
       "case": "CU-12",
       "interface": "UI-09",
       "acceptance": "CA-RF-033",
-      "state": "Pendiente",
-      "detail": "Conservado en alcance; no implementado.",
-      "evidence": "Sin evidencia de ejecución."
+      "state": "Parcial",
+      "detail": "Cinco columnas fijas y hasta cinco opcionales existentes, con contador, aviso de sexta y límite backend; firma última y vacía. Columnas disponibles persistentes por junta, con edición delegable y revocable. Faltan PDF y validación integral.",
+      "evidence": "Ver docs/PLANILLAS.md y docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
       "id": "RF-034",
@@ -342,9 +342,9 @@
       "case": "CU-12",
       "interface": "UI-09",
       "acceptance": "CA-RF-034",
-      "state": "Pendiente",
-      "detail": "Conservado en alcance; no implementado.",
-      "evidence": "Sin evidencia de ejecución."
+      "state": "Parcial",
+      "detail": "H1/H2/H3 persistentes por junta y editables por descarga, fecha de Colombia y líneas PRESIDENTE/SECRETARIO en XLSX y vista imprimible. Faltan logo, descarga PDF directa y validación de cortes de página.",
+      "evidence": "Ver docs/PLANILLAS.md y docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
       "id": "RF-035",
@@ -352,9 +352,9 @@
       "case": "CU-12",
       "interface": "UI-09",
       "acceptance": "CA-RF-035",
-      "state": "Pendiente",
-      "detail": "Conservado en alcance; no implementado.",
-      "evidence": "Sin evidencia de ejecución."
+      "state": "Parcial",
+      "detail": "Nombre opcional confirmado también en XLSX/PDF del historial individual de Inventario. Nombre opcional confirmado en XLSX de Personas y su ficha individual, Planilla, Auditoría, Inventario, historial y comprobante individual de Tesorería, y PDF de Personas, su ficha individual, Planilla, Auditoría, Inventario, historial y comprobante individual de Tesorería; saneamiento del servidor. Los listados usan fecha de Colombia y el comprobante conserva su número por defecto. Faltan PDF de otros listados y otras exportaciones.",
+      "evidence": "Ver docs/EXPORTACION-PERSONAS.md, docs/PLANILLAS.md, docs/AUDITORIA.md, docs/INVENTARIO.md, docs/TESORERIA.md y docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
       "id": "RF-036",
@@ -382,9 +382,9 @@
       "case": "CU-13",
       "interface": "UI-12",
       "acceptance": "CA-RF-038",
-      "state": "Pendiente",
-      "detail": "Conservado en alcance; no implementado.",
-      "evidence": "Sin evidencia de ejecución."
+      "state": "Parcial",
+      "detail": "Carpetas: creación, navegación, renombrado, movimiento y eliminación de carpetas vacías por SA/AD, con confirmación, versión vigente, protección de contenido y outbox. Documentos DOCX/XLSX privados: carga, listado, descarga, renombrado y movimiento con versión, referencias y contenido conservados, antivirus y cuota compartida. Faltan otros formatos, vista previa, eliminación de documentos/carpetas con contenido, delegaciones e integración con comprobantes/chat. Ver docs/CARPETAS.md y docs/DOCUMENTOS-PRIVADOS.md.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación integral."
     },
     {
       "id": "RF-039",
@@ -393,7 +393,7 @@
       "interface": "UI-12",
       "acceptance": "CA-RF-039",
       "state": "Parcial",
-      "detail": "Fotos conectadas al gateway y al detalle de fichas, con MySQL y volumen privados, permisos, ClamAV, actualización de firmas, limpieza y outbox programados. Nuevos borrados de personas con orden durable, reintentos y protección contra cargas concurrentes. Copia local cifrada con fotos y verificación de metadatos. Otros tipos de archivo, conciliación histórica y operación integral pendientes.",
+      "detail": "Fotos conectadas al gateway y al detalle de fichas, con MySQL y volumen privados, permisos, ClamAV, actualización de firmas, limpieza y outbox programados. Borrados de personas con orden durable, reintentos y protección contra cargas concurrentes. Documentos pasivos DOCX/XLSX hasta 20 MiB con antivirus, staging durable, recolector de cargas incompletas y respaldo binario con integridad/cuotas compartidas. Faltan otros tipos, conciliación histórica y aceptación integral.",
       "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
@@ -452,9 +452,9 @@
       "case": "CU-16",
       "interface": "UI-03",
       "acceptance": "CA-RF-045",
-      "state": "Pendiente",
-      "detail": "Conservado en alcance; no implementado.",
-      "evidence": "Sin evidencia de ejecución."
+      "state": "Parcial",
+      "detail": "Bandeja personal de avisos de Calendario con contador sin leer, acceso al evento, lectura y descarte. Preferencias por usuario y junta para cambios y recordatorios; No molestar oculta el distintivo sin perder avisos. Actor/foto, horarios de silencio, otros dominios y clientes móviles pendientes. Ver NOTIFICACIONES.md.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
       "id": "RF-046",
@@ -462,9 +462,9 @@
       "case": "CU-16",
       "interface": "UI-03",
       "acceptance": "CA-RF-046",
-      "state": "Pendiente",
-      "detail": "Conservado en alcance; no implementado.",
-      "evidence": "Sin evidencia de ejecución."
+      "state": "Parcial",
+      "detail": "Avisos internos de Calendario con trabajos durables, reintentos y deduplicación; preferencias de categorías opcionales. Correo de avisos de dominio, push y canales externos pendientes. El correo de seguridad de Identidad es independiente. Ver NOTIFICACIONES.md.",
+      "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
       "id": "RF-047",
@@ -473,7 +473,7 @@
       "interface": "UI-11",
       "acceptance": "CA-RF-047",
       "state": "Parcial",
-      "detail": "Perfil, nombre/color, términos y delegación independiente de campos adicionales y filtros. Política común/personal de accesos rápidos reservada a SA; AD edita accesos comunes. Resto de configuración/delegaciones pendiente.",
+      "detail": "Perfil, nombre/color, términos y delegación independiente de campos adicionales, filtros y edición del calendario. Política común/personal de accesos rápidos reservada a SA; AD edita accesos comunes. Resto de configuración/delegaciones pendiente.",
       "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
@@ -503,7 +503,7 @@
       "interface": "UI-13",
       "acceptance": "CA-RF-050",
       "state": "Parcial",
-      "detail": "Bitácora de solo lectura con filtros combinables por fecha UTC, actor, módulo, acción y resultado, paginación y detalle. Estado de entregas por junta y consulta de agotados. Exportación y supervisión global pendientes.",
+      "detail": "Bitácora de solo lectura con filtros combinables por fecha UTC, actor, módulo (incluidos Archivos y Calendario), acción y resultado, paginación y detalle. Estado de entregas por junta en cinco servicios. Exportación XLSX de hasta 2000 eventos filtrados por SA/AD/AU; PDF, lotes extensos y supervisión global pendientes.",
       "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
     },
     {
@@ -563,7 +563,7 @@
       "interface": "UI-11",
       "acceptance": "CA-RF-056",
       "state": "Parcial",
-      "detail": "Copia manual local cifrada de seis bases, .env y fotografías con pausa de escritores; autenticación y simulacro aislado de SQL y objetos con tablas, claves foráneas, hashes y cuotas. Compatibilidad con copias anteriores sin fotos. Programación diaria, retención, copia externa, recuperación operativa, permisos, supresiones posteriores y conciliación pendientes.",
+      "detail": "Copia manual local cifrada de las bases de servicio, .env y fotografías con pausa de escritores; autenticación y simulacro aislado de SQL y objetos con tablas, claves foráneas, hashes y cuotas. Compatibilidad con copias anteriores sin fotos ni Calendario. Programación diaria, retención, copia externa, recuperación operativa, permisos, supresiones posteriores y conciliación pendientes.",
       "evidence": "Ver docs/VALIDACION.md; no equivale a aceptación final."
     }
   ],
