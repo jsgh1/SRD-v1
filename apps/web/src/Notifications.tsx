@@ -3,8 +3,9 @@ import { Bell, BellOff } from 'lucide-react';
 import { api } from './api';
 import { ErrorBox } from './ui';
 import { notificationQuietHoursActive, type QuietHours } from './NotificationQuietHours';
+import { formatLocale, t, useLanguage } from './i18n';
 
-type Notice = { id: string; event_id: string | null; conversation_id: string | null; kind: 'invitation' | 'event_changed' | 'event_cancelled' | 'reminder_24h' | 'reminder_1h' | 'chat_message'; title: string; created_at: string; read_at: string | null };
+type Notice = { id: string; event_id: string | null; conversation_id: string | null; kind: 'invitation' | 'event_changed' | 'event_cancelled' | 'reminder_24h' | 'reminder_1h' | 'chat_message'; title: string; title_en?: string | null; created_at: string; read_at: string | null };
 type Inbox = { items: Notice[]; page: number; page_size: number; total: number; unread: number };
 type Preferences = QuietHours & { event_changes: boolean; reminders: boolean; chat_messages: boolean };
 const messages: Record<Notice['kind'], string> = {
@@ -13,13 +14,14 @@ const messages: Record<Notice['kind'], string> = {
 };
 function relativeTime(value: string): string {
   const minutes = Math.round((new Date(value).getTime() - Date.now()) / 60000);
-  const format = new Intl.RelativeTimeFormat('es-CO', { numeric: 'auto' });
+  const format = new Intl.RelativeTimeFormat(formatLocale(), { numeric: 'auto' });
   if (Math.abs(minutes) < 60) return format.format(minutes, 'minute');
   const hours = Math.round(minutes / 60);
   return Math.abs(hours) < 24 ? format.format(hours, 'hour') : format.format(Math.round(hours / 24), 'day');
 }
 
 export function Notifications({ organizationId, doNotDisturb, onEvent, onChat }: { organizationId: string; doNotDisturb: boolean; onEvent: (id: string) => void; onChat: (id: string) => void }) {
+  const language = useLanguage();
   const anchor = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null), closeButton = useRef<HTMLButtonElement>(null);
   const panelId = useId();
   const [open, setOpen] = useState(false), [page, setPage] = useState(1);
@@ -103,44 +105,44 @@ export function Notifications({ organizationId, doNotDisturb, onEvent, onChat }:
     } catch (value) { setError(value); } finally { setBusy(false); }
   }
   return <div className="notification-anchor" ref={anchor}>
-    <button type="button" ref={trigger} className="notification-trigger" aria-controls={open ? panelId : undefined} aria-label={`Notificaciones${doNotDisturb ? ', No molestar' : quiet ? ', Horario de silencio' : inbox?.unread ? `, ${inbox.unread} sin leer` : ''}`} aria-expanded={open} onClick={() => setOpen(value => !value)}>
+    <button type="button" ref={trigger} className="notification-trigger" aria-controls={open ? panelId : undefined} aria-label={`${t('Notificaciones')}${doNotDisturb ? `, ${t('No molestar')}` : quiet ? `, ${t('Horario de silencio')}` : inbox?.unread ? `, ${t('{count} sin leer', { count: inbox.unread })}` : ''}`} aria-expanded={open} onClick={() => setOpen(value => !value)}>
       {silent ? <BellOff size={20} /> : <Bell size={20} />}{!silent && !!inbox?.unread && <span className="notification-count">{inbox.unread > 99 ? '99+' : inbox.unread}</span>}
     </button>
-    {open && <section id={panelId} className="notification-popover" aria-label="Bandeja de notificaciones">
-      <div className="section-heading"><h2>Notificaciones</h2><button ref={closeButton} type="button" onClick={closeInbox}>Cerrar</button></div>
-      <button type="button" onClick={() => setRefresh(value => value + 1)}>Actualizar</button>
-      {doNotDisturb && <p className="muted">No molestar está activo: tus avisos siguen aquí, sin distintivo en la campana.</p>}
-      {quiet && <p className="muted">Horario de silencio activo: tus avisos siguen aquí, sin distintivo en la campana.</p>}
+    {open && <section id={panelId} className="notification-popover" aria-label={t('Bandeja de notificaciones')}>
+      <div className="section-heading"><h2>{t('Notificaciones')}</h2><button ref={closeButton} type="button" onClick={closeInbox}>{t('Cerrar')}</button></div>
+      <button type="button" onClick={() => setRefresh(value => value + 1)}>{t('Actualizar')}</button>
+      {doNotDisturb && <p className="muted">{t('No molestar está activo: tus avisos siguen aquí, sin distintivo en la campana.')}</p>}
+      {quiet && <p className="muted">{t('Horario de silencio activo: tus avisos siguen aquí, sin distintivo en la campana.')}</p>}
       <ErrorBox error={error} />
-      {!inbox && !error && <p className="muted">Cargando avisos…</p>}
-      {inbox && <><p className="muted">{inbox.unread} sin leer</p>
+      {!inbox && !error && <p className="muted">{t('Cargando avisos…')}</p>}
+      {inbox && <><p className="muted">{t('{count} sin leer', { count: inbox.unread })}</p>
         {inbox.items.length ? <ul className="notification-list">{inbox.items.map(item => <li key={item.id} className={item.read_at ? '' : 'unread'}>
           <button type="button" className="notification-link" onClick={() => { if (item.kind === 'chat_message' && item.conversation_id) onChat(item.conversation_id); else if (item.event_id) onEvent(item.event_id); setOpen(false); if (!item.read_at) void change(item.id, 'read'); }}>
-            <strong>{messages[item.kind]}: {item.title}</strong><small>{relativeTime(item.created_at)}</small>
+            <strong>{t(messages[item.kind])}: {language === 'en' && item.title_en ? item.title_en : item.title}</strong><small>{relativeTime(item.created_at)}</small>
           </button>
-          <div className="pagination">{!item.read_at && <button type="button" disabled={busy} onClick={() => change(item.id, 'read')}>Marcar leído</button>}
-            <button type="button" disabled={busy} onClick={() => change(item.id, 'dismiss')}>Descartar</button></div>
-        </li>)}</ul> : <p className="muted">No tienes avisos.</p>}
-        {inbox.total > inbox.page_size && <div className="pagination"><button disabled={page === 1} onClick={() => setPage(value => value - 1)}>Anterior</button>
-          <span>Página {page}</span><button disabled={page * inbox.page_size >= inbox.total} onClick={() => setPage(value => value + 1)}>Siguiente</button></div>}
+          <div className="pagination">{!item.read_at && <button type="button" disabled={busy} onClick={() => change(item.id, 'read')}>{t('Marcar leído')}</button>}
+            <button type="button" disabled={busy} onClick={() => change(item.id, 'dismiss')}>{t('Descartar')}</button></div>
+        </li>)}</ul> : <p className="muted">{t('No tienes avisos.')}</p>}
+        {inbox.total > inbox.page_size && <div className="pagination"><button disabled={page === 1} onClick={() => setPage(value => value - 1)}>{t('Anterior')}</button>
+          <span>{t('Página {page}', { page })}</span><button disabled={page * inbox.page_size >= inbox.total} onClick={() => setPage(value => value + 1)}>{t('Siguiente')}</button></div>}
       </>}
       <div className="notification-preferences">
-        <h3>Preferencias de avisos</h3>
+        <h3>{t('Preferencias de avisos')}</h3>
         {draft ? <>
-          <label><input type="checkbox" checked={draft.event_changes} onChange={event => setDraft({ ...draft, event_changes: event.target.checked })} /> Avisos de cambios de eventos</label>
-          <label><input type="checkbox" checked={draft.reminders} onChange={event => setDraft({ ...draft, reminders: event.target.checked })} /> Recordatorios de 24 horas y 1 hora</label>
-          <label><input type="checkbox" checked={draft.chat_messages} onChange={event => setDraft({ ...draft, chat_messages: event.target.checked })} /> Avisos de mensajes de Chat</label>
-          <p className="muted">Las invitaciones y cancelaciones siempre llegan a esta bandeja.</p>
+          <label><input type="checkbox" checked={draft.event_changes} onChange={event => setDraft({ ...draft, event_changes: event.target.checked })} /> {t('Avisos de cambios de eventos')}</label>
+          <label><input type="checkbox" checked={draft.reminders} onChange={event => setDraft({ ...draft, reminders: event.target.checked })} /> {t('Recordatorios de 24 horas y 1 hora')}</label>
+          <label><input type="checkbox" checked={draft.chat_messages} onChange={event => setDraft({ ...draft, chat_messages: event.target.checked })} /> {t('Avisos de mensajes de Chat')}</label>
+          <p className="muted">{t('Las invitaciones y cancelaciones siempre llegan a esta bandeja.')}</p>
           <label><input type="checkbox" checked={draft.quiet_start !== null} onChange={event => setDraft({ ...draft,
-            quiet_start: event.target.checked ? '22:00' : null, quiet_end: event.target.checked ? '07:00' : null })} /> Activar horario de silencio</label>
+            quiet_start: event.target.checked ? '22:00' : null, quiet_end: event.target.checked ? '07:00' : null })} /> {t('Activar horario de silencio')}</label>
           {draft.quiet_start !== null && <div className="form-grid">
-            <label>Silencio desde<input type="time" value={draft.quiet_start} onChange={event => setDraft({ ...draft, quiet_start: event.target.value })} /></label>
-            <label>Silencio hasta<input type="time" value={draft.quiet_end ?? ''} onChange={event => setDraft({ ...draft, quiet_end: event.target.value })} /></label>
+            <label>{t('Silencio desde')}<input type="time" value={draft.quiet_start} onChange={event => setDraft({ ...draft, quiet_start: event.target.value })} /></label>
+            <label>{t('Silencio hasta')}<input type="time" value={draft.quiet_end ?? ''} onChange={event => setDraft({ ...draft, quiet_end: event.target.value })} /></label>
           </div>}
-          <p className="muted">Horario diario de Colombia, según el reloj de este dispositivo. Puede cruzar medianoche. Oculta el distintivo y conserva los avisos; no cambia tu presencia ni los correos de seguridad.</p>
+          <p className="muted">{t('Horario diario de Colombia, según el reloj de este dispositivo. Puede cruzar medianoche. Oculta el distintivo y conserva los avisos; no cambia tu presencia ni los correos de seguridad.')}</p>
           <button type="button" disabled={busy || (preferences?.event_changes === draft.event_changes && preferences?.reminders === draft.reminders && preferences?.chat_messages === draft.chat_messages
-            && preferences?.quiet_start === draft.quiet_start && preferences?.quiet_end === draft.quiet_end)} onClick={savePreferences}>Guardar preferencias</button>
-        </> : <p className="muted">Cargando preferencias…</p>}
+            && preferences?.quiet_start === draft.quiet_start && preferences?.quiet_end === draft.quiet_end)} onClick={savePreferences}>{t('Guardar preferencias')}</button>
+        </> : <p className="muted">{t('Cargando preferencias…')}</p>}
       </div>
     </section>}
   </div>;

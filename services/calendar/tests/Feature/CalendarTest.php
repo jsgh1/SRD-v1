@@ -22,6 +22,25 @@ final class CalendarTest extends TestCase
         return array_replace(['type' => 'meeting', 'title' => 'Reunion de junta', 'starts_at' => '2026-09-24T09:00:00-05:00', 'ends_at' => '2026-09-24T10:00:00-05:00'], $changes);
     }
 
+    public function test_event_text_versions_are_saved_searched_and_preserved_for_legacy_updates(): void
+    {
+        $admin = $this->principal();
+        $created = $this->internal('POST', 'events', $this->event([
+            'title_en' => 'Council meeting', 'location' => 'Salon comunal', 'location_en' => 'Community hall',
+            'description' => 'Orden del dia', 'description_en' => 'Agenda',
+        ]), $admin)->assertOk()->assertJsonPath('data.title_en', 'Council meeting')
+            ->assertJsonPath('data.location_en', 'Community hall')->json('data');
+        $this->internal('GET', 'events/search', [], $admin, 'gateway', ['q' => 'Council meeting'])
+            ->assertOk()->assertJsonPath('data.items.0.id', $created['id']);
+        $this->internal('GET', 'events/search', [], $admin, 'gateway', ['q' => 'Community hall'])
+            ->assertOk()->assertJsonPath('data.items.0.id', $created['id']);
+        $this->internal('PATCH', 'events/'.$created['id'], $this->event(['version' => 1, 'title' => 'Reunion editada']), $admin)
+            ->assertOk()->assertJsonPath('data.title_en', 'Council meeting');
+        $this->internal('GET', 'events/'.$created['id'], [], $admin)
+            ->assertOk()->assertJsonPath('data.description_en', 'Agenda');
+        $this->internal('POST', 'events', $this->event(['title_en' => 'x']), $admin)->assertUnprocessable();
+    }
+
     public function test_delegation_is_immediate_and_only_managers_can_change_it(): void
     {
         $admin = $this->principal();

@@ -3,13 +3,14 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
-use SrdFiles\{AssetPhotoStorage, ImageGate, PhotoStorage};
+use SrdFiles\{AssetPhotoStorage, ImageGate, PhotoStorage, UserPhotoStorage};
 
 final class PhotoController
 {
     private function storage(Request $request): PhotoStorage
     {
-        return $request->is('internal/v1/assets/*') ? app(AssetPhotoStorage::class) : app(PhotoStorage::class);
+        return $request->is('internal/v1/assets/*') ? app(AssetPhotoStorage::class)
+            : ($request->is('internal/v1/users/*') ? app(UserPhotoStorage::class) : app(PhotoStorage::class));
     }
     private function principal(Request $request): array
     {

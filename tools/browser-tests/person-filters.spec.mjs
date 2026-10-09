@@ -32,7 +32,7 @@ async function mutation(page, method, url, data) {
 
 test('person filters combine exact values and affiliation, paginate and reset', async ({ page }) => {
   await login(page, 'admin');
-  const field = { id: crypto.randomUUID(), label: 'Referencia de prueba', type: 'text', active: true, required: false, options: [] };
+  const field = { id: crypto.randomUUID(), label: 'Referencia de prueba', label_en: 'Test reference', type: 'text', active: true, required: false, options: [] };
   expect((await mutation(page, 'PUT', '/api/v1/person-fields', { version: 0, fields: [field] })).ok()).toBeTruthy();
   const ids=[];
   for (let i=0;i<12;i++) {

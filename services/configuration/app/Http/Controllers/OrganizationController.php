@@ -51,14 +51,14 @@ final class OrganizationController
     public function terms(Request $r): array
     {
         $p = Access::require('organization.manage');
-        $data = $r->validate(['body' => 'required|string|min:20|max:50000', 'version' => 'required|integer|min:1']);
+        $data = $r->validate(['body' => 'required|string|min:20|max:50000', 'body_en' => 'required|string|min:20|max:50000', 'version' => 'required|integer|min:1']);
 
         return DB::transaction(function () use ($data, $p) {
             DB::table('organizations')->where('id', $p['organization_id'])->lockForUpdate()->firstOrFail();
             $current = DB::table('terms_versions')->where('organization_id', $p['organization_id'])->max('version');
             abort_unless($current === $data['version'], 409);
             $id = (string) Str::uuid();
-            DB::table('terms_versions')->insert(['id' => $id, 'organization_id' => $p['organization_id'], 'version' => $current + 1, 'body' => $data['body'], 'published_at' => now()]);
+            DB::table('terms_versions')->insert(['id' => $id, 'organization_id' => $p['organization_id'], 'version' => $current + 1, 'body' => $data['body'], 'body_en' => $data['body_en'], 'published_at' => now()]);
             Outbox::record('terms.published', $p['organization_id'], $p['user_id'], $id);
 
             return ['data' => ['id' => $id, 'version' => $current + 1]];

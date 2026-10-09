@@ -18,9 +18,9 @@ final class QuickLinkService
         'downloads' => ['label' => 'Descargas', 'permission' => 'downloads.read'],
     ];
     private const DEFAULTS = [
-        ['function' => 'register', 'label' => 'Nuevo registro'],
-        ['function' => 'list', 'label' => 'Ver personas'],
-        ['function' => 'lookup', 'label' => 'Consultar'],
+        ['function' => 'register', 'label' => 'Nuevo registro', 'label_en' => 'New record'],
+        ['function' => 'list', 'label' => 'Ver personas', 'label_en' => 'View people'],
+        ['function' => 'lookup', 'label' => 'Consultar', 'label_en' => 'Search'],
     ];
 
     private function allowed(array $item, array $p): bool

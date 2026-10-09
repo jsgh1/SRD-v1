@@ -47,6 +47,7 @@ test('quick links persist, filter roles and allow isolated personal preferences'
     await expect(admin.getByText(/Solo el superadministrador puede cambiarla/)).toBeVisible();
     expect((await patch(admin, 'organization', {version: initial.common_version, mode: 'personal', items: initial.common_items})).status()).toBe(403);
     await admin.getByLabel('Común · Etiqueta 1').fill('Alta comunitaria');
+    await admin.getByLabel('Común · Etiqueta en inglés 1').fill('Community enrollment');
     await admin.getByRole('button', {name:'Guardar accesos de la junta',exact:true}).click();
     await expect(admin.getByRole('status').filter({hasText:'Accesos rápidos guardados'})).toBeVisible();
     expect((await read(admin)).mode).toBe('common');
@@ -65,9 +66,10 @@ test('quick links persist, filter roles and allow isolated personal preferences'
       // Clear existing slots first so distinct selections can be reordered.
       await page.getByLabel(`Común · Función ${i}`).selectOption('');
     }
-    for (const [i, key, label] of [[1, 'list', 'Censo comunitario'], [2, 'lookup', 'Buscar vecino'], [3, 'audit', 'Actividad de la junta']]) {
+    for (const [i, key, label, english] of [[1, 'list', 'Censo comunitario', 'Community census'], [2, 'lookup', 'Buscar vecino', 'Find a neighbor'], [3, 'audit', 'Actividad de la junta', 'Council activity']]) {
       await page.getByLabel(`Común · Función ${i}`).selectOption(key);
       await page.getByLabel(`Común · Etiqueta ${i}`).fill(label);
+      await page.getByLabel(`Común · Etiqueta en inglés ${i}`).fill(english);
     }
     await page.getByRole('button', { name: 'Guardar accesos de la junta' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Accesos rápidos guardados' })).toBeVisible();
@@ -82,6 +84,7 @@ test('quick links persist, filter roles and allow isolated personal preferences'
     const policy = await read(admin);
     expect((await patch(admin, 'organization', {version: policy.common_version, mode: 'common', items: policy.common_items})).status()).toBe(403);
     await admin.getByLabel('Común · Etiqueta 1').fill('Edición antigua');
+    await admin.getByLabel('Común · Etiqueta en inglés 1').fill('Outdated edit');
     const stale = admin.waitForResponse(r=>r.request().method()==='PATCH'&&r.url().endsWith('/quick-links/organization'));
     await admin.getByRole('button', {name:'Guardar accesos de la junta',exact:true}).click();
     expect((await stale).status()).toBe(409);
@@ -99,6 +102,7 @@ test('quick links persist, filter roles and allow isolated personal preferences'
     for (let i = 1; i <= 3; i++) await guest.getByLabel(`Personal · Función ${i}`).selectOption('');
     await guest.getByLabel('Personal · Función 1').selectOption('list');
     await guest.getByLabel('Personal · Etiqueta 1').fill('Mis personas');
+    await guest.getByLabel('Personal · Etiqueta en inglés 1').fill('My people');
     await guest.getByRole('button', { name: 'Guardar mis accesos' }).click();
     await expect(guest.getByRole('status').filter({ hasText: 'Accesos rápidos guardados' })).toBeVisible();
     await home(guest);

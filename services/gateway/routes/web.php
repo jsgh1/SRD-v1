@@ -38,6 +38,8 @@ Route::prefix('api/v1')->middleware('throttle:srd-global')->group(function () {
     Route::get('assets/export-pdf', fn (Request $r, GatewayController $g) => $g->forward($r, 'inventory', 'assets/export-pdf'))->middleware('throttle:5,1,srd-export:');
     Route::match(['GET', 'PUT', 'DELETE'], 'assets/{id}/photos/{slot}', fn (Request $r, GatewayController $g, string $id, string $slot) => $g->forward($r, 'files', 'assets/'.$id.'/photos/'.$slot))->whereUuid('id')->whereIn('slot', ['front','side','detail']);
     Route::get('persons/{id}/photos', fn (Request $r, GatewayController $g, string $id) => $g->forward($r, 'files', 'persons/'.$id.'/photos'))->whereUuid('id');
+    Route::get('users/{id}/photos', fn (Request $r, GatewayController $g, string $id) => $g->forward($r, 'files', 'users/'.$id.'/photos'))->whereUuid('id');
+    Route::match(['GET', 'PUT', 'DELETE'], 'users/{id}/photos/avatar', fn (Request $r, GatewayController $g, string $id) => $g->forward($r, 'files', 'users/'.$id.'/photos/avatar'))->whereUuid('id');
     Route::match(['GET', 'PUT', 'DELETE'], 'persons/{id}/photos/{slot}', fn (Request $r, GatewayController $g, string $id, string $slot) => $g->forward($r, 'files', 'persons/'.$id.'/photos/'.$slot))->whereUuid('id')->whereIn('slot', ['person','document','property']);
     Route::match(['GET', 'PUT'], 'person-fields', fn (Request $r, GatewayController $g) => $g->forward($r, 'records', 'person-fields'));
     Route::match(['GET', 'PUT'], 'person-filter-settings', fn (Request $r, GatewayController $g) => $g->forward($r, 'records', 'person-filter-settings'));

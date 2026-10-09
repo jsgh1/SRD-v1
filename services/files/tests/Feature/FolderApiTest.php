@@ -17,6 +17,7 @@ final class FolderApiTest extends TestCase
     {
         parent::setUp();
         (require database_path('migrations/2026_09_27_000001_create_internal_folders.php'))->up();
+        (require database_path('migrations/2026_10_08_000001_add_folder_name_en.php'))->up();
         (require database_path('migrations/2026_09_27_000002_create_folder_documents.php'))->up();
         (require database_path('migrations/2026_09_27_000005_create_folder_access.php'))->up();
         Schema::create('file_quotas', function (Blueprint $t) { $t->uuid('organization_id')->primary(); $t->unsignedBigInteger('reserved_bytes')->default(0); });
@@ -113,6 +114,26 @@ final class FolderApiTest extends TestCase
         $this->internal('PATCH', 'folders/'.$id, ['name' => 'informes', 'version' => 2], $this->p)->assertConflict();
         $this->assertSame('Reuniones', DB::table('internal_folders')->where('id', $id)->value('name'));
         $this->assertSame(3, DB::table('outbox_events')->count());
+    }
+    public function test_english_name_is_saved_in_list_and_breadcrumbs_without_changing_legacy_clients(): void
+    {
+        $id = (string) Str::uuid();
+        $body = ['id' => $id, 'parent_id' => null, 'name' => 'Actas', 'name_en' => 'Minutes'];
+        $this->internal('POST', 'folders', $body, $this->p)->assertOk()->assertJsonPath('data.name_en', 'Minutes');
+        $this->internal('POST', 'folders', $body, $this->p)->assertOk();
+        $this->internal('POST', 'folders', ['id' => $id, 'parent_id' => null, 'name' => 'Actas'], $this->p)->assertOk();
+        $this->internal('POST', 'folders', array_replace($body, ['name_en' => 'Records']), $this->p)->assertConflict();
+        $this->internal('GET', 'folders', [], $this->p)->assertJsonPath('data.items.0.name_en', 'Minutes');
+        $this->internal('GET', 'folders', [], $this->p, 'gateway', ['parent_id' => $id])
+            ->assertJsonPath('data.breadcrumbs.0.name_en', 'Minutes');
+        $this->internal('PATCH', 'folders/'.$id, ['name' => 'Actas', 'name_en' => 'Meeting minutes', 'version' => 1], $this->p)
+            ->assertOk()->assertJsonPath('data.version', 2)->assertJsonPath('data.name_en', 'Meeting minutes');
+        $this->internal('PATCH', 'folders/'.$id, ['name' => 'Actas 2026', 'version' => 2], $this->p)
+            ->assertOk()->assertJsonPath('data.name_en', 'Meeting minutes');
+        $this->internal('POST', 'folders', ['id' => (string) Str::uuid(), 'name' => 'Histórico'], $this->p)
+            ->assertOk()->assertJsonPath('data.name_en', null);
+        $this->internal('PATCH', 'folders/'.$id, ['name' => 'Actas 2026', 'name_en' => 'Bad/Name', 'version' => 3], $this->p)
+            ->assertUnprocessable();
     }
     public function test_move_preserves_descendants_versions_and_rejects_cycles_foreign_destinations_and_names(): void
     {

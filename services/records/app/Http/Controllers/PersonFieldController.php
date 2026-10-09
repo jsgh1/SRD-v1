@@ -17,14 +17,16 @@ final class PersonFieldController
         $d = $r->validate([
             'delegated_roles' => 'sometimes|array|list|max:4', 'delegated_roles.*' => 'required|string|distinct:strict|in:registrar,treasurer,auditor,viewer',
             'version' => 'required|integer|min:0', 'fields' => 'present|array|list|max:20',
-            'fields.*' => 'required|array:id,label,type,active,required,options',
+            'fields.*' => 'required|array:id,label,label_en,type,active,required,options',
             'fields.*.id' => 'required|uuid|distinct:strict', 'fields.*.label' => 'required|string|max:80',
+            'fields.*.label_en' => 'required|string|max:80',
             'fields.*.type' => 'required|in:text,date,number,select',
             'fields.*.active' => 'required|boolean', 'fields.*.required' => 'required|boolean',
             'fields.*.options' => 'present|array|list|max:50',
-            'fields.*.options.*' => 'required|array:id,label,active',
+            'fields.*.options.*' => 'required|array:id,label,label_en,active',
             'fields.*.options.*.id' => 'required|uuid',
             'fields.*.options.*.label' => 'required|string|max:80',
+            'fields.*.options.*.label_en' => 'required|string|max:80',
             'fields.*.options.*.active' => 'required|boolean',
         ]);
         $d['version'] = (int) $d['version'];

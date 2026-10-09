@@ -33,7 +33,8 @@ test('calendar month, week and agenda with editable events and revocable delegat
   await expect(page.getByRole('heading', { name: 'Calendario', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Quién puede editar el calendario' })).toBeVisible();
   await page.getByRole('button', { name: 'Crear evento' }).click();
-  await page.getByRole('dialog').getByLabel('Título').fill(title);
+  await page.getByRole('dialog').getByLabel('Título', { exact: true }).fill(title);
+  await page.getByRole('dialog').getByLabel('Título (EN)').fill(`Test meeting ${Date.now()}`);
   const start = await page.getByRole('dialog').getByLabel('Inicio').inputValue();
   const tomorrow = new Date(start.slice(0, 10) + 'T12:00:00Z');
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
@@ -91,7 +92,7 @@ test('calendar month, week and agenda with editable events and revocable delegat
   await page.locator('.calendar-agenda').getByRole('button', { name: new RegExp(title) }).click();
   await expect(page.getByRole('dialog', { name: 'Detalle del evento' }).getByText('Participantes: Prueba Viewer (Aceptada)')).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Editar' }).click();
-  await page.getByRole('dialog').getByLabel('Título').fill(title + ' editada');
+  await page.getByRole('dialog').getByLabel('Título', { exact: true }).fill(title + ' editada');
   await page.getByRole('dialog').getByRole('button', { name: 'Quitar a Prueba Viewer' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Guardar evento' }).click();
   await expect(page.getByRole('dialog', { name: 'Detalle del evento' }).getByText(title + ' editada')).toBeVisible();

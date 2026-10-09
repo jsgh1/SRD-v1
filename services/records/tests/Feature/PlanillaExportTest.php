@@ -43,6 +43,36 @@ final class PlanillaExportTest extends TestCase
         return $files;
     }
 
+    public function test_english_sheet_preview_and_pdf_data_use_bilingual_headings_and_position(): void
+    {
+        $p = $this->principal();
+        $this->internal('PUT', 'planilla-settings', [
+            'version' => 0, 'allowed_columns' => ['position_label', 'status'],
+            'h1' => 'JUNTA DE PRUEBA', 'h2' => 'Sector norte', 'h3' => 'FIRMAS',
+            'h1_en' => 'TEST COUNCIL', 'h2_en' => 'North area', 'h3_en' => 'SIGNATURES',
+        ], $p)->assertOk();
+        $this->internal('POST', 'persons', [
+            'document_type' => 'CC', 'document_number' => 'ENGLISH-SHEET-1',
+            'first_names' => 'Synthetic person', 'status' => 'pending', 'position_code' => 'president',
+            'authorization_basis' => 'Local test', 'authorization_purpose' => 'English sheet',
+        ], $p)->assertOk();
+        $params = ['language' => 'en', 'columns' => ['position_label', 'status']];
+        $preview = $this->internal('GET', 'persons/planilla-preview', $params, $p)->assertOk();
+        $preview->assertJsonPath('data.language', 'en')->assertJsonPath('data.headings.h1', 'TEST COUNCIL')
+            ->assertJsonPath('data.headings.h2', 'North area')->assertJsonPath('data.headers.4', 'Position')
+            ->assertJsonPath('data.headers.5', 'Record status')->assertJsonPath('data.headers.6', 'Signature')
+            ->assertJsonPath('data.rows.0.4', 'President')->assertJsonPath('data.rows.0.5', 'Pending');
+        $this->internal('GET', 'persons/planilla-pdf', $params, $p)->assertOk()
+            ->assertJsonPath('data.language', 'en')->assertJsonPath('data.rows.0.4', 'President');
+        $bytes = base64_decode($this->internal('GET', 'persons/planilla', $params, $p)->assertOk()->json('data.content'), true);
+        $this->assertIsString($bytes);
+        foreach (['TEST COUNCIL', 'North area', 'SIGNATURES', 'MONTH:', 'Full name', 'Position', 'President', 'Pending', 'PRESIDENT', 'SECRETARY'] as $text) {
+            $this->assertStringContainsString($text, $bytes);
+        }
+        $this->assertStringNotContainsString('JUNTA DE PRUEBA', $bytes);
+        $this->internal('GET', 'persons/planilla', ['language' => 'fr'], $p)->assertUnprocessable();
+    }
+
     public function test_planilla_has_five_fixed_columns_and_empty_last_signature(): void
     {
         $this->create('00000012', '=1+1 & < prueba', $this->principal());

@@ -12,7 +12,7 @@ final class PlatformTest extends TestCase
     use RefreshDatabase, SignedRequests;
 
     private array $p = ['organization_id' => '11111111-1111-4111-8111-111111111111', 'user_id' => '22222222-2222-4222-8222-222222222222', 'role' => 'superadmin'];
-    private array $data = ['code' => 'junta-nueva', 'name' => 'Junta nueva', 'terms' => 'Términos iniciales sintéticos de la junta.'];
+    private array $data = ['code' => 'junta-nueva', 'name' => 'Junta nueva', 'terms' => 'Términos iniciales sintéticos de la junta.', 'terms_en' => 'Synthetic initial terms for the council.'];
 
     public function test_platform_permissions_and_creation_are_atomic(): void
     {
@@ -22,9 +22,10 @@ final class PlatformTest extends TestCase
             $this->internal('POST', 'platform/organizations', $this->data, $p)->assertForbidden();
         }
         $this->internal('POST', 'platform/organizations', array_replace($this->data, ['terms' => '']), $this->p)->assertUnprocessable();
+        $this->internal('POST', 'platform/organizations', array_diff_key($this->data, ['terms_en' => true]), $this->p)->assertUnprocessable();
         $this->assertDatabaseCount('organizations', 0);
         $id = $this->internal('POST', 'platform/organizations', $this->data, $this->p)->assertOk()->json('data.id');
-        $this->assertDatabaseHas('terms_versions', ['organization_id' => $id, 'version' => 1]);
+        $this->assertDatabaseHas('terms_versions', ['organization_id' => $id, 'version' => 1, 'body_en' => $this->data['terms_en']]);
         $this->assertDatabaseHas('outbox_events', ['organization_id' => $id, 'action' => 'organization.created']);
         $this->internal('POST', 'platform/organizations', $this->data, $this->p)->assertUnprocessable();
         $this->internal('GET', 'platform/organizations', [], $this->p)->assertOk()->assertJsonPath('data.total', 1);

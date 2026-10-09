@@ -29,7 +29,8 @@ test('superadmin creates a junta, invites its administrator, suspends and reacti
   const panel = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Administración de juntas', exact: true }) });
   await panel.getByLabel('Nombre de la junta', { exact: true }).fill(code);
   await panel.getByLabel('Código de junta', { exact: true }).fill(code);
-  await panel.getByLabel('Términos de uso iniciales').fill('Términos sintéticos para probar la administración de juntas.');
+  await panel.getByLabel('Términos de uso iniciales en español').fill('Términos sintéticos para probar la administración de juntas.');
+  await panel.getByLabel('Términos de uso iniciales en inglés').fill('Synthetic terms to test council administration.');
   await panel.getByRole('button', { name: 'Crear junta', exact: true }).click();
   await expect(panel.getByRole('status')).toContainText('creada');
   await expect(panel.getByRole('button', { name: 'Crear junta', exact: true })).toBeEnabled();

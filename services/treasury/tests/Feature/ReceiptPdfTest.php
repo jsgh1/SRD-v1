@@ -81,6 +81,14 @@ final class ReceiptPdfTest extends TestCase
         }
         $this->internal('GET', $path, ['filename' => '../Reunión?.pdf.xlsx', 'confirm_filename' => 1], $p)
             ->assertOk()->assertJsonPath('data.filename', 'Reunion.xlsx');
+        $english = $this->internal('GET', $path, ['lang' => 'en'], $p)->assertOk();
+        $englishBytes = base64_decode($english->json('data.content'), true);
+        $this->assertStringContainsString('Supporting reference', $englishBytes);
+        $this->assertStringContainsString('Income', $englishBytes);
+        $this->assertStringContainsString('name="Treasury"', $englishBytes);
+        $this->assertStringContainsString('=SUM(A1) &amp; &lt; prueba', $englishBytes);
+        $this->assertStringNotContainsString('Referencia del soporte', $englishBytes);
+        $this->internal('GET', $path, ['lang' => 'fr'], $p)->assertUnprocessable();
         $this->internal('GET', $path, ['filename' => 'Mi archivo'], $p)->assertUnprocessable();
         foreach (['viewer', 'registrar', 'auditor'] as $role) $this->internal('GET', $path, [], $this->principal($role))->assertForbidden();
         $this->internal('GET', $path, [], $this->principal(org: '33333333-3333-4333-8333-333333333333'))->assertNotFound();

@@ -105,8 +105,8 @@ final class PersonBaseFiltersTest extends TestCase
     {
         $id=$this->create('HISTORY');
         $items=app(\App\Application\PersonPositions::class)->defaults();
-        $items[0]['active']=false; $items[0]['label']='Presidencia anterior';
-        $items[]=['code'=>'vocal-local','label'=>'Vocal local','active'=>true];
+        $items[0]['active']=false; $items[0]['label']='Presidencia anterior'; $items[0]['label_en']='Former presidency';
+        $items[]=['code'=>'vocal-local','label'=>'Vocal local','label_en'=>'Local committee member','active'=>true];
         $this->internal('PUT','person-positions',['version'=>0,'items'=>$items],$this->p)->assertOk();
         $this->internal('GET','persons',['position_code'=>'president'],$this->p)->assertOk()->assertJsonPath('data.total',1)->assertJsonPath('data.items.0.id',$id)->assertJsonPath('data.items.0.position_label','Presidente');
         $other=array_replace($this->p,['organization_id'=>'33333333-3333-4333-8333-333333333333']);

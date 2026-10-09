@@ -54,7 +54,8 @@ export function Organizations({ principal }: { principal: Principal }) {
     <form onSubmit={create}><div className="form-grid">
       <label>Nombre de la junta<input name="name" required maxLength={160} /></label>
       <label>Código de junta<input name="code" required minLength={3} maxLength={40} pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="junta-ejemplo" /></label>
-      <label style={{ gridColumn: '1 / -1' }}>Términos de uso iniciales<textarea name="terms" required minLength={20} maxLength={50000} /></label>
+      <label style={{ gridColumn: '1 / -1' }}>Términos de uso iniciales en español<textarea name="terms" required minLength={20} maxLength={50000} /></label>
+      <label style={{ gridColumn: '1 / -1' }}>Términos de uso iniciales en inglés<textarea name="terms_en" required minLength={20} maxLength={50000} /></label>
       </div>
       <button className="primary" disabled={busy}>Crear junta</button>
     </form>

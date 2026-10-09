@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { Empty, ErrorBox, Loading } from './ui';
+import { t, useLanguage } from './i18n';
 
-type FileResult = { id: string; folder_id: string | null; folder_name: string | null; folder_path: string; name: string;
+type FileResult = { id: string; folder_id: string | null; folder_name: string | null; folder_name_en?: string | null;
+  folder_path: string; folder_path_en?: string | null; name: string;
   mime: string; bytes: number; sha256: string; version: number };
 type Listing = { items: FileResult[]; total: number; page_size: number };
 
 export function FolderSearch({ query, onOpenFolder }: { query: string; onOpenFolder: (id?: string) => void }) {
+  const language = useLanguage();
   const [page, setPage] = useState(1), [retry, setRetry] = useState(0);
   const [data, setData] = useState<Listing>(), [error, setError] = useState<unknown>();
   const [downloading, setDownloading] = useState<string>();
@@ -36,18 +39,18 @@ export function FolderSearch({ query, onOpenFolder }: { query: string; onOpenFol
     } catch (reason) { if (active.current) setError(reason); }
     finally { if (active.current) setDownloading(undefined); }
   }
-  return <section className="panel" aria-label="Resultados de archivos">
-    <h2>Archivos de Carpeta</h2><p className="muted">Busca por nombre. Cada descarga vuelve a comprobar tu permiso y la integridad del archivo.</p>
+  return <section className="panel" aria-label={t('Resultados de archivos')}>
+    <h2>{t('Archivos de Carpeta')}</h2><p className="muted">{t('Busca por nombre. Cada descarga vuelve a comprobar tu permiso y la integridad del archivo.')}</p>
     <ErrorBox error={error} />
-    {error ? <button onClick={() => setRetry(value => value + 1)}>Reintentar archivos</button> : !data && <Loading />}
-    {data && <><p role="status">{data.total} coincidencias en archivos</p>
-      {data.items.length ? <div className="table-wrap"><table><thead><tr><th>Archivo</th><th>Ubicación</th><th>Acciones</th></tr></thead><tbody>
-        {data.items.map(item => <tr key={item.id}><td>{item.name}</td><td>{item.folder_path}</td><td><div className="actions">
-          <button onClick={() => onOpenFolder(item.folder_id ?? undefined)} aria-label={`Abrir ubicación de ${item.name}`}>Abrir ubicación</button>
-          <button disabled={!!downloading} onClick={() => void download(item)} aria-label={`Descargar ${item.name}`}>
-            {downloading === item.id ? 'Descargando…' : 'Descargar'}</button></div></td></tr>)}</tbody></table></div>
-        : <Empty title="Sin coincidencias en archivos">Prueba otro nombre de archivo.</Empty>}
-      <div className="pagination"><button disabled={page === 1} onClick={() => setPage(value => value - 1)}>Anterior</button>
-        <span>Página {page}</span><button disabled={page * data.page_size >= data.total} onClick={() => setPage(value => value + 1)}>Siguiente</button></div></>}
+    {error ? <button onClick={() => setRetry(value => value + 1)}>{t('Reintentar archivos')}</button> : !data && <Loading />}
+    {data && <><p role="status">{t('{count} coincidencias en archivos', { count: data.total })}</p>
+      {data.items.length ? <div className="table-wrap"><table><thead><tr><th>{t('Archivo')}</th><th>{t('Ubicación')}</th><th>{t('Acciones')}</th></tr></thead><tbody>
+        {data.items.map(item => <tr key={item.id}><td>{item.name}</td><td>{language === 'en' && item.folder_path_en ? item.folder_path_en : item.folder_path}</td><td><div className="actions">
+          <button onClick={() => onOpenFolder(item.folder_id ?? undefined)} aria-label={t('Abrir ubicación de {name}', { name: item.name })}>{t('Abrir ubicación')}</button>
+          <button disabled={!!downloading} onClick={() => void download(item)} aria-label={t('Descargar {name}', { name: item.name })}>
+            {t(downloading === item.id ? 'Descargando…' : 'Descargar')}</button></div></td></tr>)}</tbody></table></div>
+        : <Empty title={t('Sin coincidencias en archivos')}>{t('Prueba otro nombre de archivo.')}</Empty>}
+      <div className="pagination"><button disabled={page === 1} onClick={() => setPage(value => value - 1)}>{t('Anterior')}</button>
+        <span>{t('Página {page}', { page })}</span><button disabled={page * data.page_size >= data.total} onClick={() => setPage(value => value + 1)}>{t('Siguiente')}</button></div></>}
   </section>;
 }

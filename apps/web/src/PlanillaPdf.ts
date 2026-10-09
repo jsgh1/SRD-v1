@@ -22,7 +22,9 @@ export function planillaPdfDefinition(data: PlanillaPdfData) {
   const body = [
     heading(data.headings.h1, 15, true),
     heading(data.headings.h2, 10),
-    heading(`MES: ${data.date.month}    DÍA: ${data.date.day}    AÑO: ${data.date.year}`, 10),
+    heading(data.language === 'en'
+      ? `MONTH: ${data.date.month}    DAY: ${data.date.day}    YEAR: ${data.date.year}`
+      : `MES: ${data.date.month}    DÍA: ${data.date.day}    AÑO: ${data.date.year}`, 10),
     heading(data.headings.h3, 12, true),
     data.headers.map(text => ({ text, bold: true, alignment: 'center', fillColor: '#edf4fa' })),
     ...data.rows.map(row => row.map(value => ({ text: value ?? '' }))),
@@ -35,9 +37,11 @@ export function planillaPdfDefinition(data: PlanillaPdfData) {
   });
   return {
     pageSize: 'A4', pageOrientation: 'landscape', pageMargins: [30, 30, 30, 36],
-    info: { title: data.filename.slice(0, -4), subject: 'Planilla de firmas SRD' },
+    info: { title: data.filename.slice(0, -4), subject: data.language === 'en' ? 'SRD signature sheet' : 'Planilla de firmas SRD' },
     defaultStyle: { font: 'Roboto', fontSize: 8, color: '#111827' },
     content: [
+      ...(data.logo_data?.startsWith('data:image/png;base64,')
+        ? [{ image: data.logo_data, fit: [64, 64], absolutePosition: { x: 34, y: 30 } }] : []),
       { table: { headerRows: 5, dontBreakRows: true, widths, body },
         layout: {
           hLineWidth: (index: number) => index < 4 ? 0 : 0.6,
@@ -48,7 +52,7 @@ export function planillaPdfDefinition(data: PlanillaPdfData) {
           paddingBottom: (index: number) => index < 4 ? 1 : 5,
         } },
       { unbreakable: true, margin: [35, 42, 35, 0],
-        columns: [signature('PRESIDENTE'), signature('SECRETARIO')], columnGap: 60 },
+        columns: (data.language === 'en' ? ['PRESIDENT', 'SECRETARY'] : ['PRESIDENTE', 'SECRETARIO']).map(signature), columnGap: 60 },
     ],
   };
 }

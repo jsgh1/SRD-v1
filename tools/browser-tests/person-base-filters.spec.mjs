@@ -24,19 +24,21 @@ async function login(page, role) {
   await expect(page.locator('.sidebar').getByRole('button', { name: 'Home', exact: true })).toBeVisible();
 }
 async function navigate(page, name) { await page.locator('.sidebar').getByRole('button', { name, exact: true }).click(); }
+const csrfTokens=new WeakMap();
 async function mutation(page, method, url, data) {
-  const token = (await (await page.request.get('/api/v1/csrf')).json()).data.token;
+  let token=csrfTokens.get(page);
+  if(!token){token=(await (await page.request.get('/api/v1/csrf')).json()).data.token;csrfTokens.set(page,token);}
   return page.request.fetch(url, { method, data, headers: { 'X-CSRF-TOKEN': token } });
 }
 
 test('base filters combine with custom fields, recover catalog and preserve historical cargos', async ({ page }) => {
   await login(page, 'admin');
   const ids=[];
-  const field={id:crypto.randomUUID(),label:'Sector sintético',type:'text',active:true,required:false,options:[]};
+  const field={id:crypto.randomUUID(),label:'Sector sintético',label_en:'Synthetic sector',type:'text',active:true,required:false,options:[]};
   expect((await mutation(page,'PUT','/api/v1/person-fields',{version:0,fields:[field]})).status()).toBe(200);
   const catalog=(await (await page.request.get('/api/v1/person-positions')).json()).data;
   const code=crypto.randomUUID();
-  catalog.items.push({code,label:'Vocal de prueba',active:true});
+  catalog.items.push({code,label:'Vocal de prueba',label_en:'Test committee member',active:true});
   expect((await mutation(page,'PUT','/api/v1/person-positions',{version:0,items:catalog.items})).status()).toBe(200);
   async function create(extra={}) {
     const result=await mutation(page,'POST','/api/v1/persons',{
@@ -47,6 +49,7 @@ test('base filters combine with custom fields, recover catalog and preserve hist
     });
     expect(result.status()).toBe(200); ids.push((await result.json()).data.id);
   }
+  let testFailure;
   try {
     for(let i=0;i<11;i++) await create();
     await create({gender:'male'});
@@ -94,7 +97,34 @@ test('base filters combine with custom fields, recover catalog and preserve hist
     await expect(page.getByText('16 registros encontrados',{exact:true})).toBeVisible();
     for(const name of ['Cargo','Género','Tipo de documento','Rol descriptivo']) await expect(form.getByRole('combobox',{name,exact:true})).toHaveValue('');
     await expect(page.getByLabel('Valor del filtro 1')).toHaveCount(0);
+    await page.locator('.profile-trigger').click();
+    await page.getByLabel('Idioma', { exact: true }).selectOption('en');
+    await page.locator('.profile-trigger').click();
+    await expect(page.getByRole('heading', { name: 'People' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Registration date' })).toBeVisible();
+    await expect(page.getByText('16 records found', { exact: true })).toBeVisible();
+    await expect(page.getByText('Additional field filters', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Add additional filter' }).click();
+    await expect(page.getByRole('combobox', { name: 'Additional field 1' })).toContainText('Synthetic sector');
+    await page.getByRole('button', { name: 'Remove filter 1' }).click();
+    await page.getByRole('form',{name:'People filters'}).getByRole('combobox',{name:'Position',exact:true}).selectOption(code);
+    await page.getByRole('button',{name:'Apply filters'}).click();
+    await expect(page.getByText('15 records found',{exact:true})).toBeVisible();
+    await page.getByRole('button', { name: 'View Persona filtro base' }).first().click();
+    const detail = page.getByRole('dialog', { name: 'Person details' });
+    await expect(detail.getByText('Test committee member')).toBeVisible();
+    await expect(detail.getByText('Download record', { exact: true })).toBeVisible();
+    const photos = detail.getByRole('region', { name: 'Record photos' });
+    await expect(photos.getByRole('heading', { name: 'Photos' })).toBeVisible();
+    await expect(photos.getByRole('article', { name: 'Person photo' }).getByText('No photo')).toBeVisible();
+    await detail.getByRole('button', { name: 'Close' }).click();
+  } catch(error) {
+    testFailure=error;
+    throw error;
   } finally {
-    for(const id of ids) expect((await mutation(page,'DELETE','/api/v1/persons/'+id,{version:1,confirmed:true})).status()).toBe(200);
+    try {
+      const token=csrfTokens.get(page);
+      for(const id of ids) expect((await page.request.delete('/api/v1/persons/'+id,{data:{version:1,confirmed:true},headers:{'X-CSRF-TOKEN':token},timeout:10000})).status()).toBe(200);
+    } catch(error) { if(!testFailure) throw error; }
   }
 });

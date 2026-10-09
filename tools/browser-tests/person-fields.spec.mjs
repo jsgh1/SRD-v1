@@ -36,27 +36,30 @@ test('additional fields persist, validate, preserve inactive history and reject 
   await navigate(page, 'Configuración');
   const panel = page.getByRole('region', { name: 'Configuración de campos adicionales' });
   await expect(panel.getByRole('button', { name: 'Agregar campo', exact: true })).toBeVisible();
-  for (const [index, type, label] of [[1, 'date', 'Fecha de vinculación'], [2, 'text', 'Referencia comunitaria'], [3, 'number', 'Medida declarada'], [4, 'select', 'Sector comunitario']]) {
+  for (const [index, type, label, english] of [[1, 'date', 'Fecha de vinculación', 'Joining date'], [2, 'text', 'Referencia comunitaria', 'Community reference'], [3, 'number', 'Medida declarada', 'Declared measurement'], [4, 'select', 'Sector comunitario', 'Community sector']]) {
     await panel.getByRole('button', { name: 'Agregar campo', exact: true }).click();
     const card = panel.getByRole('group', { name: `Campo ${index}`, exact: true });
     await card.getByLabel('Etiqueta del campo').fill(label);
+    await card.getByLabel('Etiqueta en inglés').fill(english);
     await card.getByRole('combobox', { name: 'Tipo del campo' }).selectOption(type);
     if (index === 1) await card.getByLabel('Obligatorio al completar').check();
     if (type === 'select') {
       for (const [n, name] of [[1, 'Sector original'], [2, 'Sector vigente']]) {
         await card.getByRole('button', { name: 'Agregar opción' }).click();
         await card.getByRole('textbox', { name: `Opción ${n}`, exact: true }).fill(name);
+        await card.getByRole('textbox', { name: `Opción ${n} en inglés`, exact: true }).fill(n === 1 ? 'Original sector' : 'Current sector');
       }
     }
   }
   expect((await page.request.put('/api/v1/person-fields', { data: { version: 0, fields: [] } })).status()).toBe(419);
   await panel.getByRole('button', { name: 'Guardar campos adicionales' }).click();
-  await expect(panel.getByRole('status')).toHaveText('Campos adicionales guardados.');
+  await expect(panel.getByRole('status').filter({ hasText: 'Campos adicionales guardados.' })).toBeVisible();
   const schema = (await (await page.request.get('/api/v1/person-fields')).json()).data;
   expect(schema.fields).toHaveLength(4);
   expect(schema.version).toBe(1);
   await page.reload();
   await navigate(page, 'Configuración');
+  await expect(panel).toHaveCount(1);
   await expect(panel.getByRole('textbox', { name: 'Etiqueta del campo' }).first()).toHaveValue('Fecha de vinculación');
   await panel.evaluate(el => window.scrollTo(0, scrollY + el.getBoundingClientRect().top - 90));
   await page.screenshot({ path: path.join(root, '.local/person-fields-settings-desktop.png'), animations: 'disabled' });
@@ -89,13 +92,14 @@ test('additional fields persist, validate, preserve inactive history and reject 
   await navigate(page, 'Configuración');
   const select = panel.getByRole('group', { name: 'Campo 4', exact: true });
   await select.getByRole('textbox', { name: 'Opción 1', exact: true }).fill('Sector renombrado');
+  await select.getByRole('textbox', { name: 'Opción 1 en inglés', exact: true }).fill('Renamed sector');
   await select.getByLabel('Opción 1 activa', { exact: true }).uncheck();
   await panel.getByRole('button', { name: 'Guardar campos adicionales' }).click();
-  await expect(panel.getByRole('status')).toHaveText('Campos adicionales guardados.');
+  await expect(panel.getByRole('status').filter({ hasText: 'Campos adicionales guardados.' })).toBeVisible();
   const stale = editor.waitForResponse(r => new URL(r.url()).pathname === `/api/v1/persons/${personId}` && r.request().method() === 'PATCH');
   await editor.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
   expect((await stale).status()).toBe(409);
-  await expect(editor.getByRole('alert')).toBeVisible();
+  await expect(editor.locator('.error[role="alert"]')).toBeVisible();
   await editor.getByRole('button', { name: 'Recargar configuración de campos' }).click();
   await expect(editor.getByRole('option', { name: 'Sector original (inactiva)' })).toHaveCount(1);
   const updated = editor.waitForResponse(r => new URL(r.url()).pathname === `/api/v1/persons/${personId}` && r.request().method() === 'PATCH');

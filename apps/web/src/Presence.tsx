@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError, type Principal } from './api';
+import { t } from './i18n';
 
 const labels: Record<string, string> = { online: 'En línea', away: 'Ausente', dnd: 'No molestar', invisible: 'Invisible', offline: 'Desconectado' };
 type Heartbeat = { effective: string; preference: string; ttl_seconds: number };
@@ -26,6 +27,6 @@ export function Presence({ principal }: { principal: Principal }) {
     document.addEventListener('visibilitychange', resume);
     return () => { active = false; stopped = true; clearInterval(interval); window.removeEventListener('online', resume); document.removeEventListener('visibilitychange', resume); };
   }, [principal.user_id, principal.organization.id, principal.user.presence]);
-  const label = labels[state] ?? ({ connecting: 'Conectando', unconfirmed: 'Conexión sin confirmar', expired: 'Sesión sin acceso' }[state]);
-  return <span className="presence-status" data-state={state} role="status" aria-label={`Tu presencia: ${label}`} title={state === 'invisible' ? 'Tu estado público es Desconectado.' : 'La conexión se confirma cada 30 segundos; no prolonga tu sesión.'}><span aria-hidden="true">●</span> {label}</span>;
+  const label = t(labels[state] ?? ({ connecting: 'Conectando', unconfirmed: 'Conexión sin confirmar', expired: 'Sesión sin acceso' }[state]));
+  return <span className="presence-status" data-state={state} role="status" aria-label={t('Tu presencia: {status}', {status: label})} title={t(state === 'invisible' ? 'Tu estado público es Desconectado.' : 'La conexión se confirma cada 30 segundos; no prolonga tu sesión.')}><span aria-hidden="true">●</span> {label}</span>;
 }

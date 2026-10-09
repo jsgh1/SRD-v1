@@ -32,7 +32,7 @@ async function mutation(page, method, url, data) {
 test('junta filter selection persists, delegates cannot grant and revocation rejects an open form',async({page,browser})=>{
   test.setTimeout(240000);
   await login(page,'admin');
-  const fields=['Sector visible','Referencia oculta'].map(label=>({id:crypto.randomUUID(),label,type:'text',active:true,required:false,options:[]}));
+  const fields=[['Sector visible','Visible sector'],['Referencia oculta','Hidden reference']].map(([label,label_en])=>({id:crypto.randomUUID(),label,label_en,type:'text',active:true,required:false,options:[]}));
   expect((await mutation(page,'PUT','/api/v1/person-fields',{version:0,fields})).status()).toBe(200);
   const created=await mutation(page,'POST','/api/v1/persons',{document_type:'CC',document_number:'VISIBLE-1',first_names:'Persona sintética',status:'pending',gender:'female',zone:'urban',schema_version:1,custom_values:{[fields[0].id]:'Norte'},authorization_basis:'Prueba',authorization_purpose:'Filtros visibles'});
   expect(created.status()).toBe(200);const id=(await created.json()).data.id;
@@ -103,6 +103,15 @@ test('junta filter selection persists, delegates cannot grant and revocation rej
     await navigate(page,'Lista');
     await expect(form.getByRole('combobox',{name:'Género',exact:true})).toBeVisible();
     await expect(form.getByRole('combobox',{name:'Cargo',exact:true})).toHaveCount(0);
+    await navigate(page,'Configuración');
+    await page.locator('.profile-trigger').click();
+    await page.getByLabel('Idioma', { exact: true }).selectOption('en');
+    await page.locator('.profile-trigger').click();
+    const englishPanel=page.getByRole('region',{name:'People filter settings'});
+    await expect(englishPanel.getByRole('heading',{name:'Visible people filters'})).toBeVisible();
+    await expect(englishPanel.getByRole('checkbox',{name:'Gender',exact:true})).toBeChecked();
+    await expect(englishPanel.getByRole('checkbox',{name:'Visible sector',exact:true})).toBeVisible();
+    await expect(englishPanel.getByRole('button',{name:'Save visible filters'})).toBeVisible();
   } finally {
     await stale.close(); await viewerContext.close();
     expect((await mutation(page,'DELETE','/api/v1/persons/'+id,{version:1,confirmed:true})).status()).toBe(200);

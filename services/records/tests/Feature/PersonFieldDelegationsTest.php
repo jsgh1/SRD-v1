@@ -16,7 +16,7 @@ final class PersonFieldDelegationsTest extends TestCase {
             $this->internal('PUT','person-fields',['version'=>$version,'fields'=>$fields,'delegated_roles'=>[$role]],$this->p)->assertOk(); $version++;
             $this->internal('GET','person-fields',[],$delegate)->assertOk()->assertJsonPath('data.can_manage',true)->assertJsonPath('data.can_delegate',false);
             $this->internal('PUT','person-fields',['version'=>$version,'fields'=>$fields,'delegated_roles'=>[$role]],$delegate)->assertForbidden();
-            $fields[]=['id'=>(string)Str::uuid(),'label'=>'Campo sintético','type'=>'text','active'=>true,'required'=>false,'options'=>[]];
+            $fields[]=['id'=>(string)Str::uuid(),'label'=>'Campo sintético','label_en'=>'Synthetic field','type'=>'text','active'=>true,'required'=>false,'options'=>[]];
             $this->internal('PUT','person-fields',['version'=>$version,'fields'=>$fields],$delegate)->assertOk()->assertJsonPath('data.delegated_roles',[$role]); $version++;
             $this->internal('PUT','person-fields',['version'=>$version,'fields'=>[]],$delegate)->assertUnprocessable();
             $altered=$fields; $altered[0]['type']='date';

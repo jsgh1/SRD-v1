@@ -23,9 +23,10 @@ final class QuickLinkController
         $rules = [
             'version' => 'required|integer|min:0',
             'items' => 'present|array|list|max:3',
-            'items.*' => 'required|array:function,label',
+            'items.*' => 'required|array:function,label,label_en',
             'items.*.function' => ['required', 'string', 'distinct:strict', Rule::in(array_keys(QuickLinkService::FUNCTIONS))],
             'items.*.label' => 'required|string|min:1|max:40',
+            'items.*.label_en' => 'required|string|min:1|max:40',
         ];
         if ($common) {
             $rules['mode'] = 'sometimes|required|in:common,personal';

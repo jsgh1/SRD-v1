@@ -5,7 +5,7 @@ use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use Srd\InternalClient;
-use SrdFiles\{AssetPhotoStorage, ClamdScanner, ImageGate, InventoryPhotoAuthorizer, PhotoStorage, PhotoStore, RecordsPhotoAuthorizer};
+use SrdFiles\{AssetPhotoStorage, ClamdScanner, IdentityPhotoAuthorizer, ImageGate, InventoryPhotoAuthorizer, PhotoStorage, PhotoStore, RecordsPhotoAuthorizer, UserPhotoStorage};
 
 final class AppServiceProvider extends ServiceProvider
 {
@@ -38,6 +38,16 @@ final class AppServiceProvider extends ServiceProvider
                 Closure::fromCallable(new InventoryPhotoAuthorizer(new InternalClient)),
                 config('photos.quota'),
                 'asset',
+            );
+        });
+        $this->app->bind(UserPhotoStorage::class, function () {
+            return new PhotoStore(
+                DB::connection()->getPdo(),
+                config('photos.objects'),
+                new ImageGate(config('photos.quarantine'), new \SrdFiles\UpdatedScanner(new ClamdScanner(config('photos.scanner'), 15), config('photos.signature_marker'))),
+                Closure::fromCallable(new IdentityPhotoAuthorizer(new InternalClient)),
+                config('photos.quota'),
+                'user',
             );
         });
     }

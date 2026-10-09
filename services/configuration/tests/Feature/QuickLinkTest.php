@@ -27,17 +27,30 @@ final class QuickLinkTest extends TestCase
 
     private function shared(array $items, string $mode = 'personal', int $version = 0, ?array $principal = null)
     {
+        foreach ($items as &$item) $item['label_en'] ??= 'Synthetic link';
+        unset($item);
         return $this->internal('PATCH', 'quick-links/organization', compact('items', 'mode', 'version'), $principal ?? array_replace($this->admin, ['role' => 'superadmin']));
     }
 
     private function personal(array $items, int $version = 0, int $commonVersion = 1, bool $inherit = false, ?array $principal = null)
     {
+        foreach ($items as &$item) $item['label_en'] ??= 'Synthetic link';
+        unset($item);
         return $this->internal('PATCH', 'quick-links/personal', ['items' => $items, 'version' => $version, 'common_version' => $commonVersion, 'inherit' => $inherit], $principal ?? $this->viewer);
+    }
+
+    public function test_new_links_require_english_but_legacy_links_remain_readable(): void
+    {
+        $this->internal('PATCH', 'quick-links/organization', ['items' => [['function' => 'list', 'label' => 'Solo español']], 'version' => 0], $this->admin)
+            ->assertUnprocessable();
+        $this->assertDatabaseCount('organization_quick_links', 0);
+        DB::table('organization_quick_links')->insert(['organization_id' => $this->admin['organization_id'], 'mode' => 'common', 'items' => json_encode([['function' => 'list', 'label' => 'Anterior']], JSON_THROW_ON_ERROR), 'version' => 1, 'created_at' => now(), 'updated_at' => now()]);
+        $this->internal('GET', 'quick-links', [], $this->admin)->assertOk()->assertJsonPath('data.items.0.label', 'Anterior')->assertJsonMissingPath('data.items.0.label_en');
     }
 
     public function test_only_superadmin_changes_policy_while_admin_keeps_editing_common_items(): void
     {
-        $items = [['function'=>'list','label'=>'Lista común']];
+        $items = [['function'=>'list','label'=>'Lista común','label_en'=>'Common list']];
         $this->shared($items, 'personal', 0, $this->admin)->assertForbidden();
         $this->assertDatabaseCount('organization_quick_links', 0);
         $this->assertDatabaseCount('outbox_events', 0);

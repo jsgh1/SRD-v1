@@ -63,8 +63,11 @@ final class CalendarController
         return $request->validate([
             'type' => 'required|in:meeting,appointment,activity,important_date',
             'title' => 'required|string|min:2|max:160',
+            'title_en' => 'sometimes|nullable|string|min:2|max:160',
             'description' => 'nullable|string|max:4000',
+            'description_en' => 'sometimes|nullable|string|max:4000',
             'location' => 'nullable|string|max:160',
+            'location_en' => 'sometimes|nullable|string|max:160',
             'starts_at' => 'required|date_format:Y-m-d\TH:i:sP',
             'ends_at' => 'required|date_format:Y-m-d\TH:i:sP',
             'participants' => 'sometimes|array|list|max:50',

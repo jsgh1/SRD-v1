@@ -41,6 +41,7 @@ test('event reminder choices persist and the real scheduler respects each select
     await expect(form.getByRole('checkbox', { name: '24 horas antes', exact: true })).toBeChecked();
     await expect(form.getByRole('checkbox', { name: '1 hora antes', exact: true })).toBeChecked();
     await form.getByLabel('Título', { exact: true }).fill(title);
+    await form.getByLabel('Título (EN)').fill(`Reminder test ${Date.now()}`);
     const start = new Date(Date.now() + 30 * 60000), end = new Date(start.getTime() + 3600000);
     await form.getByLabel('Inicio', { exact: true }).fill(inputDate(start));
     await form.getByLabel('Final', { exact: true }).fill(inputDate(end));

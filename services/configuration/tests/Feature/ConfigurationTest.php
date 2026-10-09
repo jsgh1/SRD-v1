@@ -20,9 +20,11 @@ final class ConfigurationTest extends TestCase
         $p = ['organization_id' => $org, 'user_id' => '33333333-3333-4333-8333-333333333333', 'role' => 'viewer'];
         $this->internal('POST', 'organization/terms', ['body' => 'Nueva versión de los términos.', 'version' => 1], $p)->assertForbidden();
         $p['role'] = 'admin';
-        $this->internal('POST', 'organization/terms', ['body' => 'Nueva versión de los términos.', 'version' => 1], $p)->assertOk();
+        $this->internal('POST', 'organization/terms', ['body' => 'Nueva versión de los términos.', 'version' => 1], $p)->assertUnprocessable();
+        $this->internal('POST', 'organization/terms', ['body' => 'Nueva versión de los términos.', 'body_en' => 'New version of the council terms.', 'version' => 1], $p)->assertOk();
         $this->assertDatabaseCount('terms_versions', 2);
-        $this->internal('POST', 'organization/terms', ['body' => 'Escritura desde versión vieja.', 'version' => 1], $p)->assertConflict();
+        $this->assertDatabaseHas('terms_versions', ['organization_id' => $org, 'version' => 2, 'body_en' => 'New version of the council terms.']);
+        $this->internal('POST', 'organization/terms', ['body' => 'Escritura desde versión vieja.', 'body_en' => 'Writing from an outdated version.', 'version' => 1], $p)->assertConflict();
         $this->internal('GET', 'organizations/code/prueba')->assertJsonPath('data.terms.version', 2);
         DB::table('organizations')->update(['active' => false]);
         $this->internal('GET', 'organizations/code/prueba')->assertNotFound();

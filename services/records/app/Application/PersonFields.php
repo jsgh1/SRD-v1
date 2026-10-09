@@ -85,6 +85,8 @@ final class PersonFields
             // Preserve captured labels when a value has not changed.
             if ($value === $old) continue;
             $values[$id] = ['value' => $value, 'display' => $display, 'label' => $field['label'], 'type' => $field['type']];
+            if (isset($field['label_en'])) $values[$id]['label_en'] = $field['label_en'];
+            if ($field['type'] === 'select' && isset($option['label_en'])) $values[$id]['display_en'] = $option['label_en'];
         }
         if ($complete) foreach ($fields as $id => $field) {
             if ($field['active'] && $field['required'] && !isset($values[$id])) $this->fail('custom_values.'.$id, $field['label'].': obligatorio para completar el registro.');

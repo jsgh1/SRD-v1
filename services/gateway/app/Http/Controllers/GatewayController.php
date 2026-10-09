@@ -27,7 +27,15 @@ final class GatewayController
     {
         abort_unless(preg_match('/^[a-z0-9-]{3,40}$/', $code), 404);
 
-        return ['data' => $this->client->call('configuration', 'GET', 'organizations/code/'.$code)];
+        $organization = $this->client->call('configuration', 'GET', 'organizations/code/'.$code);
+        $logo = null;
+        try {
+            $logo = $this->client->call('records', 'GET', 'public-logo/'.$organization['id'], [], [], 2)['logo_data'] ?? null;
+        } catch (\Throwable) {
+            // A Records outage must not prevent access to the council login.
+        }
+
+        return ['data' => $organization + ['logo_data' => $logo]];
     }
 
     public function terminateChatSession(Request $r): array

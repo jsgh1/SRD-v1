@@ -14,9 +14,9 @@ final class CalendarService
 {
     public function __construct(private InternalClient $identity, private DeliveryService $deliveries) {}
 
-    private function reminder(string $organizationId, string $eventId, string $userId, string $title, CarbonImmutable $start, bool $remind24h = true, bool $remind1h = true): void
+    private function reminder(string $organizationId, string $eventId, string $userId, string $title, CarbonImmutable $start, bool $remind24h = true, bool $remind1h = true, ?string $titleEn = null): void
     {
-        $this->deliveries->enqueueReminders($organizationId, $eventId, $userId, $title, $start, $remind24h, $remind1h);
+        $this->deliveries->enqueueReminders($organizationId, $eventId, $userId, $title, $start, $remind24h, $remind1h, $titleEn);
     }
 
     private const TZ = 'America/Bogota';
@@ -132,7 +132,9 @@ final class CalendarService
         $term = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $text).'%';
         $query = DB::table('calendar_events')->where('organization_id', $principal['organization_id'])
             ->where(fn ($q) => $q->whereRaw("title LIKE ? ESCAPE '!'", [$term])
-                ->orWhereRaw("location LIKE ? ESCAPE '!'", [$term]));
+                ->orWhereRaw("title_en LIKE ? ESCAPE '!'", [$term])
+                ->orWhereRaw("location LIKE ? ESCAPE '!'", [$term])
+                ->orWhereRaw("location_en LIKE ? ESCAPE '!'", [$term]));
         $total = (clone $query)->count();
         $events = (clone $query)->orderByDesc('starts_at')->orderByDesc('id')->forPage($page, 25)->get();
         $now = CarbonImmutable::now('UTC');
@@ -161,13 +163,13 @@ final class CalendarService
             ->whereNull('e.cancelled_at')->where('e.starts_at', '>', CarbonImmutable::now('UTC'));
         $total = (clone $query)->count();
         $items = $query->orderBy('e.starts_at')->orderBy('e.id')->forPage($page, 25)
-            ->get(['e.id as event_id', 'e.title', 'e.starts_at', 'e.ends_at', 'e.location', 'p.response', 'p.response_version']);
+            ->get(['e.id as event_id', 'e.title', 'e.title_en', 'e.starts_at', 'e.ends_at', 'e.location', 'e.location_en', 'p.response', 'p.response_version']);
 
         return ['data' => ['items' => $items->map(fn ($item) => [
-            'event_id' => $item->event_id, 'title' => $item->title,
+            'event_id' => $item->event_id, 'title' => $item->title, 'title_en' => $item->title_en,
             'starts_at' => CarbonImmutable::parse($item->starts_at, 'UTC')->toIso8601String(),
             'ends_at' => CarbonImmutable::parse($item->ends_at, 'UTC')->toIso8601String(),
-            'location' => $item->location, 'response' => $item->response,
+            'location' => $item->location, 'location_en' => $item->location_en, 'response' => $item->response,
             'response_version' => (int) $item->response_version,
         ])->all(), 'page' => $page, 'page_size' => 25, 'total' => $total]];
     }
@@ -192,7 +194,7 @@ final class CalendarService
                 $this->deliveries->clearPending($id, $principal['user_id'], ['reminder_24h', 'reminder_1h']);
             } else {
                 $this->reminder($principal['organization_id'], $id, $principal['user_id'], $event->title,
-                    CarbonImmutable::parse($event->starts_at, 'UTC'), (bool) $event->remind_24h, (bool) $event->remind_1h);
+                    CarbonImmutable::parse($event->starts_at, 'UTC'), (bool) $event->remind_24h, (bool) $event->remind_1h, $event->title_en);
             }
             Outbox::record('calendar.invitation_responded', $principal['organization_id'], $principal['user_id'], $id);
 
@@ -228,7 +230,11 @@ final class CalendarService
             $eventId = $id ?? (string) Str::uuid();
             $values = [
                 'type' => $data['type'], 'title' => $data['title'],
-                'description' => $data['description'] ?? null, 'location' => $data['location'] ?? null,
+                'title_en' => array_key_exists('title_en', $data) ? $data['title_en'] : $existing?->title_en,
+                'description' => $data['description'] ?? null,
+                'description_en' => array_key_exists('description_en', $data) ? $data['description_en'] : $existing?->description_en,
+                'location' => $data['location'] ?? null,
+                'location_en' => array_key_exists('location_en', $data) ? $data['location_en'] : $existing?->location_en,
                 'starts_at' => $start, 'ends_at' => $end,
                 'remind_24h' => array_key_exists('remind_24h', $data) ? (bool) $data['remind_24h'] : (bool) ($existing->remind_24h ?? true),
                 'remind_1h' => array_key_exists('remind_1h', $data) ? (bool) $data['remind_1h'] : (bool) ($existing->remind_1h ?? true),
@@ -263,9 +269,9 @@ final class CalendarService
                 foreach ($assignedNow as $participant) {
                     $kind = !$existing || in_array($participant->user_id, $newIds, true) ? 'invitation' : 'event_changed';
                     $this->deliveries->enqueue($principal['organization_id'], $eventId, $participant->user_id,
-                        $kind, $data['title'], (string) $values['version'], CarbonImmutable::now('UTC'));
+                        $kind, $data['title'], (string) $values['version'], CarbonImmutable::now('UTC'), null, $values['title_en']);
                     if ($participant->response !== 'declined') $this->reminder($principal['organization_id'], $eventId,
-                        $participant->user_id, $data['title'], $start, $values['remind_24h'], $values['remind_1h']);
+                        $participant->user_id, $data['title'], $start, $values['remind_24h'], $values['remind_1h'], $values['title_en']);
                 }
             }
             Outbox::record($existing ? 'calendar.event_updated' : 'calendar.event_created', $principal['organization_id'], $principal['user_id'], $eventId);
@@ -289,7 +295,7 @@ final class CalendarService
             $assigned = DB::table('calendar_participants')->where('organization_id', $principal['organization_id'])
                 ->where('event_id', $id)->pluck('user_id');
             foreach ($assigned as $userId) $this->deliveries->enqueue($principal['organization_id'], $id, $userId,
-                'event_cancelled', $event->title, (string) ($version + 1), CarbonImmutable::now('UTC'));
+                'event_cancelled', $event->title, (string) ($version + 1), CarbonImmutable::now('UTC'), null, $event->title_en);
             Outbox::record('calendar.event_cancelled', $principal['organization_id'], $principal['user_id'], $id);
 
             return $this->show($principal, $id);

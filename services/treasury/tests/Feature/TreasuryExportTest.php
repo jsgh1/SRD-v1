@@ -63,6 +63,14 @@ final class TreasuryExportTest extends TestCase
         foreach (['viewer', 'registrar', 'auditor'] as $role) {
             $this->internal('GET', 'treasury/export', $filters, $this->principal($role))->assertForbidden();
         }
+        $english = $this->internal('GET', 'treasury/export', $filters + ['lang' => 'en'], $p)->assertOk();
+        $englishBytes = base64_decode($english->json('data.content'), true);
+        $this->assertStringContainsString('Effective date', $englishBytes);
+        $this->assertStringContainsString('Income', $englishBytes);
+        $this->assertStringContainsString('name="Treasury"', $englishBytes);
+        $this->assertStringContainsString('=2+2 &amp; &lt; 50%_!', $englishBytes);
+        $this->assertStringNotContainsString('Fecha efectiva', $englishBytes);
+        $this->internal('GET', 'treasury/export', $filters + ['lang' => 'fr'], $p)->assertUnprocessable();
         $this->internal('GET', 'treasury/export', $filters, $p, 'calendar')->assertUnauthorized();
         $this->internal('GET', 'treasury/export', [], $this->principal(org: self::OTHER))->assertJsonPath('data.count', 1);
         $this->internal('GET', 'treasury/export', ['from' => '2026-01-04', 'to' => '2026-01-03'], $p)->assertUnprocessable();

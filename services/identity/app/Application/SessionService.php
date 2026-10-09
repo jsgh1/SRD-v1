@@ -55,6 +55,6 @@ final class SessionService
 
         return ['user_id' => $user->id, 'session_id' => $s->id, 'organization_id' => $org['id'], 'role' => $role,
             'membership_id' => $membership?->id, 'membership_version' => $membership ? (int)$membership->version : null,
-            'user' => ['name' => $user->name, 'email' => $user->email, 'theme' => $user->theme, 'presence' => $user->presence], 'organization' => $org, 'terms_required' => ! $accepted];
+            'user' => ['name' => $user->name, 'email' => $user->email, 'theme' => $user->theme, 'presence' => $user->presence, 'language' => $user->language], 'organization' => $org, 'terms_required' => ! $accepted];
     }
 }

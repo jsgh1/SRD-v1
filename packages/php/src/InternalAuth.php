@@ -30,6 +30,10 @@ final class InternalAuth
             && config('srd.service') === 'inventory'
             && $request->method() === 'POST'
             && preg_match('#^/internal/v1/assets/[0-9a-fA-F-]{36}/photo-access$#D', $request->getPathInfo()) === 1;
+        $filesUserProbe = ($claims['iss'] ?? '') === 'files'
+            && config('srd.service') === 'identity'
+            && $request->method() === 'POST'
+            && preg_match('#^/internal/v1/users/[0-9a-fA-F-]{36}/photo-access$#D', $request->getPathInfo()) === 1;
         $filesAudit = ($claims['iss'] ?? '') === 'files' && config('srd.service') === 'audit'
             && $request->method() === 'POST' && $request->getPathInfo() === '/internal/v1/events';
         $calendarAudit = ($claims['iss'] ?? '') === 'calendar' && ($claims['aud'] ?? '') === 'audit' && ($claims['method'] ?? '') === 'POST' && ($claims['path'] ?? '') === '/internal/v1/events';
@@ -49,7 +53,7 @@ final class InternalAuth
             && ($claims['method'] ?? '') === 'POST' && ($claims['path'] ?? '') === '/internal/v1/events';
         $inventoryAudit = ($claims['iss'] ?? '') === 'inventory' && ($claims['aud'] ?? '') === 'audit'
             && ($claims['method'] ?? '') === 'POST' && ($claims['path'] ?? '') === '/internal/v1/events';
-        abort_unless($filesProbe || $filesAssetProbe || $filesAudit || $calendarAudit || $calendarMembers || $calendarDelivery || $chatDelivery || $chatContact || $chatAudit || $notificationsAudit || $treasuryAudit || $inventoryAudit || in_array($claims['iss'] ?? '', ['gateway', 'identity', 'configuration', 'records', 'audit'], true), 401);
+        abort_unless($filesProbe || $filesAssetProbe || $filesUserProbe || $filesAudit || $calendarAudit || $calendarMembers || $calendarDelivery || $chatDelivery || $chatContact || $chatAudit || $notificationsAudit || $treasuryAudit || $inventoryAudit || in_array($claims['iss'] ?? '', ['gateway', 'identity', 'configuration', 'records', 'audit'], true), 401);
         abort_unless(Cache::add('internal-nonce:'.hash('sha256', $claims['iss'].($claims['nonce'] ?? '')), true, 65), 401);
         $request->attributes->set('principal', $claims['context'] ?? []);
         $request->attributes->set('issuer', $claims['iss']);

@@ -8,13 +8,13 @@ use Illuminate\Validation\ValidationException;
 
 final class InternalClient
 {
-    public function call(string $service, string $method, string $path, array $data = [], array $context = []): array
+    public function call(string $service, string $method, string $path, array $data = [], array $context = [], ?int $timeout = null): array
     {
         $body = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         $uri = '/internal/v1/'.$path;
         $headers = $this->signedHeaders($service, $method, $uri, $body, $context);
         try {
-            $response = Http::timeout($service === 'files' ? 75 : 15)->connectTimeout(3)->acceptJson()
+            $response = Http::timeout($timeout ?? ($service === 'files' ? 75 : 15))->connectTimeout($timeout === null ? 3 : min(3, $timeout))->acceptJson()
                 ->withHeaders($headers)
                 ->withBody($body, 'application/json')->send($method, config('srd.urls.'.$service).$uri);
         } catch (\Throwable) {

@@ -27,6 +27,45 @@ final class InventoryExportTest extends TestCase
             'quantity' => 2, 'idempotency_key' => $key];
     }
 
+    public function test_bilingual_asset_and_movement_text_persist_and_export_in_selected_language(): void
+    {
+        $p = $this->principal();
+        $input = $this->asset('BILINGUAL-1', 'Sillas comunitarias', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa') + [
+            'name_en' => 'Community chairs', 'category_en' => 'Furniture', 'unit_en' => 'chair',
+            'description_en' => 'For shared events', 'location_en' => 'Community hall', 'condition_en' => 'Good',
+        ];
+        $input['description'] = 'Para eventos comunitarios';
+        $asset = $this->internal('POST', 'assets', $input, $p)->assertOk()
+            ->assertJsonPath('data.asset.name_en', 'Community chairs')->json('data.asset');
+        $id = $asset['id'];
+        $this->internal('GET', 'assets', ['q' => 'Community chairs'], $p)->assertOk()->assertJsonPath('data.total', 1);
+        $this->internal('POST', "assets/$id/movements", [
+            'type' => 'in', 'quantity' => 1, 'reason' => 'Ingreso por donación',
+            'reason_en' => 'Donation received', 'idempotency_key' => 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        ], $p)->assertOk()->assertJsonPath('data.movement.reason_en', 'Donation received');
+        $this->internal('GET', "assets/$id", ['movement_q' => 'Donation received'], $p)
+            ->assertOk()->assertJsonPath('data.movement_total', 1);
+
+        $en = $this->internal('GET', 'assets/export-pdf', ['q' => 'Community chairs', 'lang' => 'en'], $p)->assertOk();
+        $en->assertJsonPath('data.rows.0.2', 'Community chairs')
+            ->assertJsonPath('data.rows.0.3', 'Furniture')
+            ->assertJsonPath('data.rows.0.4', 'chair')
+            ->assertJsonPath('data.rows.0.6', 'Community hall')
+            ->assertJsonPath('data.rows.0.7', 'Good')
+            ->assertJsonPath('data.rows.0.10', 'For shared events');
+        $es = $this->internal('GET', 'assets/export-pdf', ['q' => 'Community chairs', 'lang' => 'es'], $p)->assertOk();
+        $es->assertJsonPath('data.rows.0.2', 'Sillas comunitarias')
+            ->assertJsonPath('data.rows.0.10', 'Para eventos comunitarios');
+        $history = $this->internal('GET', "assets/$id/movements/export-pdf", ['lang' => 'en', 'movement_type' => 'in'], $p)->assertOk();
+        $history->assertJsonPath('data.rows.0.1', 'Community chairs')
+            ->assertJsonPath('data.rows.0.8', 'Donation received');
+        $opening = $this->internal('GET', "assets/$id/movements/export-pdf", ['lang' => 'en', 'movement_type' => 'opening'], $p)->assertOk();
+        $opening->assertJsonPath('data.rows.0.8', 'Initial record');
+        $xlsx = $this->internal('GET', 'assets/export', ['lang' => 'en'], $p)->assertOk();
+        $this->assertStringContainsString('Community chairs', base64_decode($xlsx->json('data.content'), true));
+        $this->assertStringNotContainsString('Sillas comunitarias', base64_decode($xlsx->json('data.content'), true));
+    }
+
     public function test_export_filters_tenant_and_roles_and_keeps_cells_as_text(): void
     {
         $p = $this->principal();
@@ -55,6 +94,19 @@ final class InventoryExportTest extends TestCase
         foreach (['viewer', 'registrar', 'auditor'] as $role) {
             $this->internal('GET', 'assets/export', $filters, $this->principal($role))->assertForbidden();
         }
+        $pdf = $this->internal('GET', 'assets/export-pdf', $filters + ['lang' => 'en'], $p)->assertOk();
+        $this->assertSame('Quantity on hand', $pdf->json('data.headers.5'));
+        $this->assertSame('Movable asset', $pdf->json('data.rows.0.1'));
+        $this->assertSame('=2+2 & < 50%_!', $pdf->json('data.rows.0.2'));
+        $this->internal('GET', 'assets/export-pdf', $filters + ['lang' => 'fr'], $p)->assertUnprocessable();
+        $english = $this->internal('GET', 'assets/export', $filters + ['lang' => 'en'], $p)->assertOk();
+        $englishBytes = base64_decode($english->json('data.content'), true);
+        $this->assertStringContainsString('Quantity on hand', $englishBytes);
+        $this->assertStringContainsString('Movable asset', $englishBytes);
+        $this->assertStringContainsString('name="Inventory"', $englishBytes);
+        $this->assertStringContainsString('=2+2 &amp; &lt; 50%_!', $englishBytes);
+        $this->assertStringNotContainsString('Existencia', $englishBytes);
+        $this->internal('GET', 'assets/export', $filters + ['lang' => 'fr'], $p)->assertUnprocessable();
         $this->internal('GET', 'assets/export', $filters, $p, 'calendar')->assertUnauthorized();
         $this->internal('GET', 'assets/export', [], $this->principal(org: self::OTHER))->assertJsonPath('data.count', 1);
         $this->internal('GET', 'assets/export', ['type' => 'unknown'], $p)->assertUnprocessable();
@@ -84,6 +136,19 @@ final class InventoryExportTest extends TestCase
             $this->assertSame('movimientos_inventario_'.now('America/Bogota')->format('Y-m-d').'.xlsx', $response->json('data.filename'));
         }
         foreach (['viewer', 'registrar', 'auditor'] as $role) $this->internal('GET', "assets/$id/movements/export", [], $this->principal($role))->assertForbidden();
+        $english = $this->internal('GET', "assets/$id/movements/export", $filters + ['lang' => 'en'], $p)->assertOk();
+        $englishBytes = base64_decode($english->json('data.content'), true);
+        $this->assertStringContainsString('Previous quantity', $englishBytes);
+        $this->assertStringContainsString('Stock in', $englishBytes);
+        $this->assertStringContainsString('name="Inventory"', $englishBytes);
+        $this->assertStringContainsString('=SUM(1) &amp; &lt;50%_!&gt;', $englishBytes);
+        $this->assertStringNotContainsString('Existencia anterior', $englishBytes);
+        $this->internal('GET', "assets/$id/movements/export", $filters + ['lang' => 'fr'], $p)->assertUnprocessable();
+        $englishPdf = $this->internal('GET', "assets/$id/movements/export-pdf", $filters + ['lang' => 'en'], $p)->assertOk();
+        $this->assertSame('Previous quantity', $englishPdf->json('data.headers.6'));
+        $this->assertSame('Stock in', $englishPdf->json('data.rows.0.4'));
+        $this->assertSame('=SUM(1) & <50%_!>', $englishPdf->json('data.rows.0.8'));
+        $this->internal('GET', "assets/$id/movements/export-pdf", $filters + ['lang' => 'fr'], $p)->assertUnprocessable();
         $this->internal('GET', "assets/$id/movements/export", [], $this->principal(org: self::OTHER))->assertNotFound();
         $this->internal('GET', "assets/$id/movements/export", [], $p, 'calendar')->assertUnauthorized();
         $this->internal('GET', "assets/$id/movements/export", ['filename' => 'Historia'], $p)->assertUnprocessable();
@@ -94,7 +159,7 @@ final class InventoryExportTest extends TestCase
         $this->assertEquals($before, DB::table('assets')->where('id', $id)->first());
         $this->assertSame(2, DB::table('asset_movements')->where('asset_id', $id)->count());
         $audit = DB::table('outbox_events')->where('action', 'inventory.export')->get();
-        $this->assertCount(5, $audit);
+        $this->assertCount(7, $audit);
         $this->assertStringNotContainsString('SUM', json_encode($audit));
     }
 

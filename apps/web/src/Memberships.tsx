@@ -9,6 +9,7 @@ import {
 } from "./api";
 import { ErrorBox, Loading, Modal } from "./ui";
 import { privateLink } from "./privateLink";
+import { localizedTerms } from './i18n';
 
 type Member = {
   id: string;
@@ -516,7 +517,7 @@ export function InvitationAcceptance() {
         )}
         {terms && details && (
           <Modal title="Términos de la junta" onClose={() => setTerms(false)}>
-            <div className="terms-body">{details.organization.terms.body}</div>
+            <div className="terms-body">{localizedTerms(details.organization.terms)}</div>
             <button
               onClick={() => {
                 setAccepted(true);

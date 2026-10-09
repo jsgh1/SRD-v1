@@ -15,6 +15,7 @@ Route::middleware('internal')->group(function () {
     Route::post('calendar-participants/resolve', \App\Http\Controllers\CalendarParticipantsController::class);
     Route::post('chat-contacts/resolve', \App\Http\Controllers\ChatContactController::class);
     Route::get('contacts', \App\Http\Controllers\ContactController::class);
+    Route::post('users/{id}/photo-access', \App\Http\Controllers\UserPhotoAccessController::class)->whereUuid('id');
     Route::post('auth/presence', function (\Illuminate\Http\Request $r, \App\Application\PresenceService $presence) {
         $d = $r->validate(['token' => 'required|string|max:256']);
         return ['data' => $presence->heartbeat($d['token'])];

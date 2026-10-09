@@ -24,12 +24,13 @@ final class PlatformController
             'code' => ['required', 'string', 'min:3', 'max:40', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', 'unique:organizations,code'],
             'name' => 'required|string|max:160',
             'terms' => 'required|string|min:20|max:50000',
+            'terms_en' => 'required|string|min:20|max:50000',
         ]);
         return DB::transaction(function () use ($data, $p) {
             $id = (string) Str::uuid();
             $created = DB::table('organizations')->insertOrIgnore(['id' => $id, 'code' => $data['code'], 'name' => $data['name'], 'created_at' => now(), 'updated_at' => now()]);
             abort_unless($created, 409);
-            DB::table('terms_versions')->insert(['id' => (string) Str::uuid(), 'organization_id' => $id, 'version' => 1, 'body' => $data['terms'], 'published_at' => now()]);
+            DB::table('terms_versions')->insert(['id' => (string) Str::uuid(), 'organization_id' => $id, 'version' => 1, 'body' => $data['terms'], 'body_en' => $data['terms_en'], 'published_at' => now()]);
             Outbox::record('organization.created', $id, $p['user_id'], $id);
             return ['data' => DB::table('organizations')->where('id', $id)->first()];
         });

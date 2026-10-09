@@ -102,8 +102,8 @@ test('inventory movement download uses applied filters and all pages', async ({ 
       version, reason: 'Cierre de prueba sintética de exportación', idempotency_key: crypto.randomUUID(),
     } });
     expect(retired.status()).toBe(200);
-    const history = await page.request.get(`/api/v1/assets/${id}/movements/export`);
+    const history = await page.request.get(`/api/v1/assets/${id}`);
     expect(history.status()).toBe(200);
-    expect((await history.json()).data.count).toBe(29);
+    expect((await history.json()).data.movement_total).toBe(29);
   }
 });

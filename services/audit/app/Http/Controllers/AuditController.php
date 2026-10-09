@@ -79,7 +79,9 @@ final class AuditController
         $fileOptions = $r->validate([
             'filename' => 'sometimes|nullable|string|max:100',
             'confirm_filename' => 'sometimes|boolean',
+            'lang' => 'sometimes|in:es,en',
         ]);
+        $language = $fileOptions['lang'] ?? 'es';
         $filename = $pdf
             ? ExportFilename::pdf('auditoria', $fileOptions['filename'] ?? null, (bool) ($fileOptions['confirm_filename'] ?? false))
             : ExportFilename::xlsx('auditoria', $fileOptions['filename'] ?? null, (bool) ($fileOptions['confirm_filename'] ?? false));
@@ -91,12 +93,12 @@ final class AuditController
         }
 
         if ($pdf) return ['data' => ['filename' => $filename, 'date' => now('America/Bogota')->toDateString(),
-            'count' => $events->count()] + AuditWorkbook::table($events)];
+            'count' => $events->count()] + AuditWorkbook::table($events, $language)];
 
         return ['data' => [
             'filename' => $filename,
             'mime' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'content' => base64_encode(AuditWorkbook::create($events)),
+            'content' => base64_encode(AuditWorkbook::create($events, $language)),
             'count' => $events->count(),
         ]];
     }

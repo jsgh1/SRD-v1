@@ -24,6 +24,18 @@ final class NotificationTest extends TestCase
             'delivery_key' => str_repeat('a', 64)];
     }
 
+    public function test_calendar_notice_keeps_both_authored_titles(): void
+    {
+        $principal = $this->principal();
+        $this->internal('POST', 'deliveries', $this->delivery() + ['title_en' => 'Test meeting'], $principal, 'calendar')
+            ->assertOk();
+        $this->internal('GET', 'notifications', [], $principal)->assertOk()
+            ->assertJsonPath('data.items.0.title_en', 'Test meeting')
+            ->assertJsonPath('data.items.0.title', 'Reunión de prueba');
+        $this->internal('POST', 'deliveries', $this->delivery() + ['title_en' => 'x'], $principal, 'calendar')
+            ->assertUnprocessable();
+    }
+
     public function test_delivery_is_idempotent_private_and_read_dismiss_are_scoped(): void
     {
         $principal = $this->principal();

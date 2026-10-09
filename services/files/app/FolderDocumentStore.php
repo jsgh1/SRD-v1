@@ -51,26 +51,28 @@ final class FolderDocumentStore
             ->where('d.organization_id', $org)->where('d.ready', true)->where('d.delete_pending', false)
             ->whereRaw("d.name LIKE ? ESCAPE '!'", ['%'.$escaped.'%']);
         $items = (clone $query)->select('d.id', 'd.folder_id', 'd.name', 'd.mime', 'd.bytes',
-                'd.sha256', 'd.version', 'f.name as folder_name')
+                'd.sha256', 'd.version', 'f.name as folder_name', 'f.name_en as folder_name_en')
                 ->orderBy('d.name')->orderBy('d.id')->offset(($page-1)*25)->limit(25)->get();
         $folders = []; $pending = $items->pluck('folder_id')->filter()->unique()->values()->all();
         for ($depth = 0; $pending && $depth < 20; $depth++) {
             $next = [];
             foreach (DB::table('internal_folders')->where('organization_id', $org)->whereIn('id', $pending)
-                ->get(['id', 'parent_id', 'name']) as $folder) {
+                ->get(['id', 'parent_id', 'name', 'name_en']) as $folder) {
                 $folders[$folder->id] = $folder;
                 if ($folder->parent_id !== null && !isset($folders[$folder->parent_id])) $next[] = $folder->parent_id;
             }
             $pending = array_values(array_unique($next));
         }
         foreach ($items as $item) {
-            $parts = []; $folderId = $item->folder_id; $seen = [];
+            $parts = []; $partsEn = []; $folderId = $item->folder_id; $seen = [];
             while ($folderId !== null && isset($folders[$folderId]) && !isset($seen[$folderId]) && count($parts) < 20) {
                 $seen[$folderId] = true;
                 array_unshift($parts, $folders[$folderId]->name);
+                array_unshift($partsEn, $folders[$folderId]->name_en ?: $folders[$folderId]->name);
                 $folderId = $folders[$folderId]->parent_id;
             }
             $item->folder_path = $folderId === null ? implode(' / ', ['Inicio', ...$parts]) : 'Ubicación no disponible';
+            $item->folder_path_en = $folderId === null ? implode(' / ', ['Home', ...$partsEn]) : 'Location unavailable';
         }
         return ['items' => $items,
             'total' => $query->count(), 'page_size' => 25, 'page' => $page];

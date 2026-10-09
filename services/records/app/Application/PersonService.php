@@ -63,11 +63,11 @@ final class PersonService
         return ['data' => ['items' => $q->orderByDesc('created_at')->orderByDesc('id')->forPage($page, $size)->get(), 'page' => $page, 'page_size' => $size, 'total' => $total]];
     }
 
-    public function export(array $p, array $filters, ?string $requestedFilename, bool $confirmed): array
+    public function export(array $p, array $filters, ?string $requestedFilename, bool $confirmed, string $language = 'es'): array
     {
         $filename = ExportFilename::xlsx('personas', $requestedFilename, $confirmed);
         $rows = $this->exportRows($p, $filters);
-        $content = base64_encode(PersonWorkbook::create($rows));
+        $content = base64_encode(PersonWorkbook::create($rows, $language));
         Outbox::record('person.export', $p['organization_id'], $p['user_id'], null);
         return ['data' => [
             'filename' => $filename,
@@ -77,34 +77,34 @@ final class PersonService
         ]];
     }
 
-    public function exportIndividual(array $p, string $id, ?string $requestedFilename, bool $confirmed): array
+    public function exportIndividual(array $p, string $id, ?string $requestedFilename, bool $confirmed, string $language = 'es'): array
     {
         $row = $this->query($p)->where('id', $id)->first();
         abort_unless($row, 404);
         $filename = ExportFilename::xlsx('ficha_persona', $requestedFilename, $confirmed);
-        $content = base64_encode(PersonWorkbook::individual((array) $row, $this->fields->snapshots($p['organization_id'], $id)));
+        $content = base64_encode(PersonWorkbook::individual((array) $row, $this->fields->snapshots($p['organization_id'], $id), $language));
         Outbox::record('person.individual_export', $p['organization_id'], $p['user_id'], $id);
         return ['data' => ['filename' => $filename, 'mime' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'content' => $content, 'count' => 1]];
     }
 
-    public function exportIndividualPdf(array $p, string $id, ?string $requestedFilename, bool $confirmed): array
+    public function exportIndividualPdf(array $p, string $id, ?string $requestedFilename, bool $confirmed, string $language = 'es'): array
     {
         $row = $this->query($p)->where('id', $id)->first();
         abort_unless($row, 404);
         $filename = ExportFilename::pdf('ficha_persona', $requestedFilename, $confirmed);
-        $table = PersonWorkbook::individualTable((array) $row, $this->fields->snapshots($p['organization_id'], $id));
+        $table = PersonWorkbook::individualTable((array) $row, $this->fields->snapshots($p['organization_id'], $id), $language);
         Outbox::record('person.individual_export', $p['organization_id'], $p['user_id'], $id);
-        return ['data' => ['filename' => $filename, 'date' => now('America/Bogota')->toDateString(), 'count' => 1] + $table];
+        return ['data' => ['filename' => $filename, 'date' => now('America/Bogota')->toDateString(), 'count' => 1, 'language' => $language] + $table];
     }
 
-    public function exportPdf(array $p, array $filters, ?string $requestedFilename, bool $confirmed): array
+    public function exportPdf(array $p, array $filters, ?string $requestedFilename, bool $confirmed, string $language = 'es'): array
     {
         $filename = ExportFilename::pdf('personas', $requestedFilename, $confirmed);
         $rows = $this->exportRows($p, $filters);
-        $table = PersonWorkbook::table($rows);
+        $table = PersonWorkbook::table($rows, $language);
         Outbox::record('person.export', $p['organization_id'], $p['user_id'], null);
-        return ['data' => ['filename' => $filename, 'date' => now('America/Bogota')->toDateString(),
+        return ['data' => ['filename' => $filename, 'date' => now('America/Bogota')->toDateString(), 'language' => $language,
             'headers' => $table['headers'], 'rows' => $table['rows'], 'count' => $rows->count()]];
     }
 
@@ -112,7 +112,7 @@ final class PersonService
     {
         $rows = $this->filteredQuery($p, $filters)
             ->select(['id', 'document_type', 'document_number', 'first_names', 'last_names',
-                'status', 'affiliated', 'zone', 'birth_date', 'position_label', 'created_at'])
+                'status', 'affiliated', 'zone', 'birth_date', 'position_label', 'position_label_en', 'created_at'])
             ->orderByDesc('created_at')->orderByDesc('id')->limit(2001)->get();
         if ($rows->count() > 2000) {
             throw ValidationException::withMessages(['export' => 'La consulta supera 2000 personas. Acota los filtros antes de exportar.']);
@@ -120,11 +120,11 @@ final class PersonService
         return $rows;
     }
 
-    public function exportPlanilla(array $p, array $filters, array $columns, array $headings, ?string $requestedFilename, bool $confirmed): array
+    public function exportPlanilla(array $p, array $filters, array $columns, array $headings, string $language, ?string $requestedFilename, bool $confirmed): array
     {
         $filename = ExportFilename::xlsx('planilla', $requestedFilename, $confirmed);
-        [$rows, $resolvedHeadings] = $this->planillaData($p, $filters, $columns, $headings);
-        $content = base64_encode(PlanillaWorkbook::create($rows, $columns, $resolvedHeadings));
+        [$rows, $resolvedHeadings, $logo] = $this->planillaData($p, $filters, $columns, $headings, $language);
+        $content = base64_encode(PlanillaWorkbook::create($rows, $columns, $resolvedHeadings, $language, $logo));
         Outbox::record('person.planilla_export', $p['organization_id'], $p['user_id'], null);
         return ['data' => [
             'filename' => $filename,
@@ -134,34 +134,36 @@ final class PersonService
         ]];
     }
 
-    public function previewPlanilla(array $p, array $filters, array $columns, array $headings, ?string $requestedFilename, bool $confirmed): array
+    public function previewPlanilla(array $p, array $filters, array $columns, array $headings, string $language, ?string $requestedFilename, bool $confirmed): array
     {
         $filename = ExportFilename::xlsx('planilla', $requestedFilename, $confirmed);
-        [$rows, $resolvedHeadings] = $this->planillaData($p, $filters, $columns, $headings);
+        [$rows, $resolvedHeadings, $logo] = $this->planillaData($p, $filters, $columns, $headings, $language);
         Outbox::record('person.planilla_preview', $p['organization_id'], $p['user_id'], null);
-        return ['data' => ['title' => substr($filename, 0, -5)] + $this->planillaPayload($rows, $columns, $resolvedHeadings)];
+        return ['data' => ['title' => substr($filename, 0, -5)] + $this->planillaPayload($rows, $columns, $resolvedHeadings, $language, $logo)];
     }
 
-    public function pdfPlanilla(array $p, array $filters, array $columns, array $headings, ?string $requestedFilename, bool $confirmed): array
+    public function pdfPlanilla(array $p, array $filters, array $columns, array $headings, string $language, ?string $requestedFilename, bool $confirmed): array
     {
         $filename = ExportFilename::pdf('planilla', $requestedFilename, $confirmed);
-        [$rows, $resolvedHeadings] = $this->planillaData($p, $filters, $columns, $headings);
+        [$rows, $resolvedHeadings, $logo] = $this->planillaData($p, $filters, $columns, $headings, $language);
         Outbox::record('person.planilla_export', $p['organization_id'], $p['user_id'], null);
-        return ['data' => ['filename' => $filename] + $this->planillaPayload($rows, $columns, $resolvedHeadings)];
+        return ['data' => ['filename' => $filename] + $this->planillaPayload($rows, $columns, $resolvedHeadings, $language, $logo)];
     }
 
-    private function planillaPayload($rows, array $columns, array $resolvedHeadings): array
+    private function planillaPayload($rows, array $columns, array $resolvedHeadings, string $language, ?string $logo): array
     {
-        $table = PlanillaWorkbook::table($rows, $columns);
+        $table = PlanillaWorkbook::table($rows, $columns, $language);
         $date = now('America/Bogota');
         return [
             'headings' => $resolvedHeadings,
+            'logo_data' => $logo,
+            'language' => $language,
             'date' => ['month' => $date->format('m'), 'day' => $date->format('d'), 'year' => $date->format('Y')],
             'headers' => $table['headers'], 'rows' => $table['rows'], 'count' => $rows->count(),
         ];
     }
 
-    private function planillaData(array $p, array $filters, array $columns, array $headings): array
+    private function planillaData(array $p, array $filters, array $columns, array $headings, string $language): array
     {
         $settings = app(PlanillaSettings::class)->read($p);
         $allowed = $settings['allowed_columns'];
@@ -170,14 +172,17 @@ final class PersonService
             throw ValidationException::withMessages(['columns' => 'Selecciona hasta cinco columnas adicionales distintas y disponibles.']);
         }
         $rows = $this->filteredQuery($p, $filters)
-            ->select(array_merge(['id', 'first_names', 'last_names', 'document_type', 'document_number'], $columns))
+            ->select(array_merge(['id', 'first_names', 'last_names', 'document_type', 'document_number'], $columns,
+                $language === 'en' && in_array('position_label', $columns, true) ? ['position_label_en'] : []))
             ->orderByDesc('created_at')->orderByDesc('id')->limit(2001)->get();
         if ($rows->count() > 2000) {
             throw ValidationException::withMessages(['export' => 'La consulta supera 2000 personas. Acota los filtros antes de exportar.']);
         }
         return [$rows, array_replace([
-            'h1' => $settings['h1'], 'h2' => $settings['h2'], 'h3' => $settings['h3'],
-        ], $headings)];
+            'h1' => $language === 'en' ? ($settings['h1_en'] ?: $settings['h1']) : $settings['h1'],
+            'h2' => $language === 'en' ? ($settings['h2_en'] ?: $settings['h2']) : $settings['h2'],
+            'h3' => $language === 'en' ? ($settings['h3_en'] ?: $settings['h3']) : $settings['h3'],
+        ], $headings), $settings['logo_data']];
     }
 
     private function detail(array $p, string $id): array
@@ -221,7 +226,7 @@ final class PersonService
                 abort_unless($existing->version === $d['version'], 409);
             }
             $personId = $id ?? (string) Str::uuid();
-            $d['position_label'] = $positions->label($catalog, array_key_exists('position_code', $d) ? $d['position_code'] : ($existing->position_code ?? null), $existing);
+            $d = array_replace($d, $positions->labels($catalog, array_key_exists('position_code', $d) ? $d['position_code'] : ($existing->position_code ?? null), $existing));
             unset($d['positions_version']);
             $values = $this->fields->validateValues($schema, $d['custom_values'] ?? [], $id ? $this->fields->snapshots($p['organization_id'], $id) : [], $d['status'] === 'complete');
             unset($d['custom_values'], $d['schema_version']);

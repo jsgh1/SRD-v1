@@ -50,10 +50,11 @@ final class TreasuryController
             'q' => 'sometimes|string|max:120',
             'filename' => 'sometimes|nullable|string|max:100',
             'confirm_filename' => 'sometimes|boolean',
+            'lang' => 'sometimes|in:es,en',
         ]);
         $method = $pdf ? 'exportPdf' : 'export';
         return $this->ledger->$method($principal, $data['from'] ?? null, $data['to'] ?? null, $data['q'] ?? null,
-            $data['filename'] ?? null, (bool) ($data['confirm_filename'] ?? false));
+            $data['filename'] ?? null, (bool) ($data['confirm_filename'] ?? false), $data['lang'] ?? 'es');
     }
 
     private function movementData(Request $request, bool $opening): array
@@ -89,9 +90,10 @@ final class TreasuryController
         $data = $request->validate([
             'filename' => 'sometimes|nullable|string|max:100',
             'confirm_filename' => 'sometimes|boolean',
+            'lang' => 'sometimes|in:es,en',
         ]);
         return $this->ledger->exportReceiptPdf($principal, $id, $data['filename'] ?? null,
-            (bool) ($data['confirm_filename'] ?? false));
+            (bool) ($data['confirm_filename'] ?? false), $data['lang'] ?? 'es');
     }
 
     public function reverse(Request $request, string $id): array
@@ -110,8 +112,9 @@ final class TreasuryController
         $data = $request->validate([
             'filename' => 'sometimes|nullable|string|max:100',
             'confirm_filename' => 'sometimes|boolean',
+            'lang' => 'sometimes|in:es,en',
         ]);
         return $this->ledger->exportReceiptXlsx($principal, $id, $data['filename'] ?? null,
-            (bool) ($data['confirm_filename'] ?? false));
+            (bool) ($data['confirm_filename'] ?? false), $data['lang'] ?? 'es');
     }
 }

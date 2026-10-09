@@ -1,8 +1,14 @@
 # Carpetas internas
 
+La pantalla **Acceso a Carpeta** de Configuración presenta en ES/EN la explicación, roles, búsqueda de miembros, selección individual, vigencia, paginación, acciones y resultado de guardado. Chromium verificó con una junta sintética la concesión y revocación por rol y por persona, persistencia tras recargar y ancho de 360 px. La pantalla principal de Carpeta también tiene rótulos ES/EN y permite guardar `name` (español) y `name_en` (inglés) al crear o renombrar. La migración aditiva `2026_10_08_000001_add_folder_name_en.php` conserva las carpetas antiguas y los clientes que solo envían `name`; cuando falta `name_en`, la interfaz inglesa muestra el nombre original. El listado, las migas de pan, el selector de destino y las rutas de búsqueda de archivos usan el nombre inglés cuando existe. Las vistas de archivos privados presentan en ES/EN la carga, el listado, la cuota, las acciones, las vistas previas, el movimiento, el renombrado, la eliminación y los estados vacíos. Los nombres de archivos escritos por personas se muestran tal como se guardaron.
+
 Incrementos de RF-038: creación, navegación, cambio de nombre, movimiento y eliminación de carpetas vacías desde el menú **Carpeta**. Superadministrador y Administrador gestionan carpetas en su junta. Pueden conceder lectura por rol a Registrador, Tesorero, Auditor y Consultor o individualmente a hasta 20 membresías activas de la junta; sin concesión, ninguno de esos roles accede. La concesión permite navegar, listar, previsualizar y descargar archivos, pero no crear, cargar, renombrar, mover ni eliminar.
 
 La web consume exclusivamente el gateway. El servicio Archivos exige firma interna emitida por el gateway y contexto válido de junta, usuario, sesión y rol. La persistencia está en `srd_files.internal_folders`, sin consultas a bases de otros servicios. El padre se resuelve dentro de la junta autorizada; los identificadores de otra junta no permiten listar, crear hijos ni renombrar.
+
+La ampliación ES/EN pasó 32 pruebas PHP de Archivos (778 aserciones), compilación web e imágenes Docker. La migración MySQL se aplicó con éxito. Chromium aprobó `folder-language.spec.mjs` con alta ES/EN, perfil, recarga, rótulos ingleses de archivos y 360 px; también aprobó `folders.spec.mjs` con auditoría, movimiento, versiones y paginación. El primer intento se había aplazado por memoria; la validación integrada se completó después con servicios mínimos y todos quedaron detenidos al terminar.
+
+El selector de archivos muestra texto ES/EN propio del sistema en lugar del idioma nativo del navegador. El input de tipo `file` sigue asociado a su etiqueta y se puede enfocar con teclado; la última prueba Chromium verificó ambos idiomas y una captura móvil de viewport. La vista previa y las operaciones continúan autorizándose en el servidor al solicitarlas.
 
 ## Reglas
 

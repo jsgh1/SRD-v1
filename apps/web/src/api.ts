@@ -74,13 +74,14 @@ export type Organization = {
   code: string;
   name: string;
   accent: string;
+  logo_data?: string | null;
   version: number;
-  terms: { id: string; version: number; body: string };
+  terms: { id: string; version: number; body: string; body_en?: string | null };
 };
 export type Principal = {
   user_id: string;
   role: string;
-  user: { name: string; email: string; theme: string; presence: string };
+  user: { name: string; email: string; theme: string; presence: string; language: 'es' | 'en' };
   organization: Organization;
   terms_required: boolean;
 };

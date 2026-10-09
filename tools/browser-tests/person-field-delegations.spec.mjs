@@ -53,6 +53,7 @@ test('delegated field editor creates usable fields, preserves version conflicts 
     expect((await mutation(viewer,'PUT','/api/v1/person-fields',{version:1,fields:[],delegated_roles:['viewer']})).status()).toBe(403);
     await panel(viewer).getByRole('button',{name:'Agregar campo',exact:true}).click();
     await panel(viewer).getByLabel('Etiqueta del campo').fill('Campo comunitario');
+    await panel(viewer).getByLabel('Etiqueta en inglés').fill('Community field');
     await save(viewer);
     await save(page,409);
     await panel(page).getByRole('button',{name:'Descartar cambios y recargar campos'}).click();

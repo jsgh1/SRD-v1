@@ -48,6 +48,7 @@ final class InventoryController
             'q' => 'sometimes|string|max:120',
             'filename' => 'sometimes|nullable|string|max:100',
             'confirm_filename' => 'sometimes|boolean',
+            'lang' => 'sometimes|in:es,en',
         ]);
         return $pdf ? $this->inventory->exportPdf($principal, $data) : $this->inventory->export($principal, $data);
     }
@@ -57,9 +58,13 @@ final class InventoryController
         return $this->inventory->store($this->principal('inventory.write'), $request->validate([
             'code' => 'required|string|min:2|max:40|regex:/^[A-Za-z0-9._-]+$/',
             'type' => 'required|in:real_estate,movable', 'name' => 'required|string|min:2|max:160',
+            'name_en' => 'sometimes|nullable|string|min:2|max:160',
             'category' => 'nullable|string|max:80', 'unit' => 'nullable|string|max:40',
+            'category_en' => 'sometimes|nullable|string|max:80', 'unit_en' => 'sometimes|nullable|string|max:40',
             'description' => 'nullable|string|max:5000', 'location' => 'required|string|min:2|max:180',
+            'description_en' => 'sometimes|nullable|string|max:5000', 'location_en' => 'sometimes|nullable|string|min:2|max:180',
             'condition' => 'required|string|min:2|max:80', 'responsible_name' => 'nullable|string|max:120',
+            'condition_en' => 'sometimes|nullable|string|min:2|max:80',
             'quantity' => 'required|integer|min:0|max:1000000000', 'idempotency_key' => 'required|uuid',
         ]));
     }
@@ -86,6 +91,7 @@ final class InventoryController
         $principal = $this->principal('inventory.export');
         $data = $this->movementFilters($request) + $request->validate([
             'filename' => 'sometimes|nullable|string|max:100', 'confirm_filename' => 'sometimes|boolean',
+            'lang' => 'sometimes|in:es,en',
         ]);
         return $this->inventory->exportMovements($principal, $id, $data, $pdf);
     }
@@ -109,9 +115,13 @@ final class InventoryController
     {
         return $this->inventory->update($this->principal('inventory.write'), $id, $request->validate([
             'version' => 'required|integer|min:1', 'name' => 'required|string|min:2|max:160',
+            'name_en' => 'sometimes|nullable|string|min:2|max:160',
             'category' => 'nullable|string|max:80', 'unit' => 'nullable|string|max:40',
+            'category_en' => 'sometimes|nullable|string|max:80', 'unit_en' => 'sometimes|nullable|string|max:40',
             'description' => 'nullable|string|max:5000', 'location' => 'required|string|min:2|max:180',
+            'description_en' => 'sometimes|nullable|string|max:5000', 'location_en' => 'sometimes|nullable|string|min:2|max:180',
             'condition' => 'required|string|min:2|max:80', 'responsible_name' => 'nullable|string|max:120',
+            'condition_en' => 'sometimes|nullable|string|min:2|max:80',
         ]));
     }
 
@@ -119,7 +129,8 @@ final class InventoryController
     {
         return $this->inventory->movement($this->principal('inventory.write'), $id, $request->validate([
             'type' => 'required|in:in,out,adjust', 'quantity' => 'required|integer|min:0|max:1000000000',
-            'reason' => 'required|string|min:5|max:500', 'idempotency_key' => 'required|uuid',
+            'reason' => 'required|string|min:5|max:500', 'reason_en' => 'sometimes|nullable|string|min:5|max:500',
+            'idempotency_key' => 'required|uuid',
         ]));
     }
 
@@ -127,6 +138,7 @@ final class InventoryController
     {
         return $this->inventory->retire($this->principal('inventory.write'), $id, $request->validate([
             'version' => 'required|integer|min:1', 'reason' => 'required|string|min:5|max:500',
+            'reason_en' => 'sometimes|nullable|string|min:5|max:500',
             'idempotency_key' => 'required|uuid',
         ]));
     }

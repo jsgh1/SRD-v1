@@ -20,6 +20,7 @@ import { Planilla } from './Planilla';
 import type { PersonExportPdfData } from './PersonExportPdf';
 import type { PersonIndividualPdfData } from './PersonIndividualPdf';
 import { loadPersonPdfPhotos } from './PersonPdfPhotos';
+import { formatLocale, localizedLabel, t, useLanguage } from './i18n';
 
 export const documents: Record<string, string> = {
   RC: "Registro Civil",
@@ -54,7 +55,7 @@ type Workbook = { filename: string; mime: string; content: string; count: number
 export function Status({ value }: { value: string }) {
   return (
     <span className={"status " + value}>
-      {value === "complete" ? "Completado" : "Pendiente"}
+      {t(value === 'complete' ? 'Completado' : 'Pendiente')}
     </span>
   );
 }
@@ -69,16 +70,17 @@ export function PersonTable({
   onEdit?: (p: Person) => void;
   onDelete?: (p: Person) => void;
 }) {
+  useLanguage();
   return (
     <div className="table-scroll">
       <table>
         <thead>
           <tr>
-            <th>Nombre</th>
-            <th>Documento</th>
-            <th>Fecha de registro</th>
-            <th>Estado</th>
-            <th>Acciones</th>
+            <th>{t('Nombre')}</th>
+            <th>{t('Documento')}</th>
+            <th>{t('Fecha de registro')}</th>
+            <th>{t('Estado')}</th>
+            <th>{t('Acciones')}</th>
           </tr>
         </thead>
         <tbody>
@@ -96,7 +98,7 @@ export function PersonTable({
               <td>
                 {new Date(
                   p.created_at.replace(" ", "T") + "Z",
-                ).toLocaleDateString("es-CO", { timeZone: "America/Bogota" })}
+                ).toLocaleDateString(formatLocale(), { timeZone: "America/Bogota" })}
               </td>
               <td>
                 <Status value={p.status} />
@@ -105,8 +107,8 @@ export function PersonTable({
                 <div className="actions">
                   <button
                     className="icon-button"
-                    title="Ver detalle"
-                    aria-label={`Ver ${p.first_names}`}
+                    title={t('Ver detalle')}
+                    aria-label={t('Ver {name}', {name: p.first_names})}
                     onClick={() => onView(p)}
                   >
                     <Eye size={18} />
@@ -114,7 +116,7 @@ export function PersonTable({
                   {onEdit && (
                     <button
                       className="icon-button"
-                      aria-label={`Editar ${p.first_names}`}
+                      aria-label={t('Editar {name}', {name: p.first_names})}
                       onClick={() => onEdit(p)}
                     >
                       <Pencil size={18} />
@@ -123,7 +125,7 @@ export function PersonTable({
                   {onDelete && (
                     <button
                       className="icon-button danger"
-                      aria-label={`Eliminar ${p.first_names}`}
+                      aria-label={t('Eliminar {name}', {name: p.first_names})}
                       onClick={() => onDelete(p)}
                     >
                       <Trash2 size={18} />
@@ -145,6 +147,7 @@ export function PersonDetail({
   id: string;
   onClose: () => void;
 }) {
+  const language = useLanguage();
   const [person, setPerson] = useState<Person>(),
     [error, setError] = useState<unknown>();
   const [individualName, setIndividualName] = useState<ExportFilenameChoice>({ name: '', confirmed: false });
@@ -166,6 +169,7 @@ export function PersonDetail({
     try {
       const params = new URLSearchParams();
       addExportFilename(params, individualName);
+      params.set('language', language);
       if (format === 'pdf') {
         const photos = includePdfPhotos ? await loadPersonPdfPhotos(id, api) : undefined;
         const data = await api<PersonIndividualPdfData>(`persons/${id}/pdf?${params}`);
@@ -174,7 +178,7 @@ export function PersonDetail({
         return;
       }
       const file = await api<Workbook>(`persons/${id}/xlsx?${params}`);
-      if (!safeXlsxFilename(file.filename) || file.mime !== 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') throw new Error('La exportación no tiene un formato válido.');
+      if (!safeXlsxFilename(file.filename) || file.mime !== 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') throw new Error(t('La exportación no tiene un formato válido.'));
       const bytes = Uint8Array.from(atob(file.content), char => char.charCodeAt(0));
       const url = URL.createObjectURL(new Blob([bytes], { type: file.mime }));
       const link = document.createElement('a');
@@ -200,17 +204,19 @@ export function PersonDetail({
     neighborhood: "Barrio",
   };
   function value(key: string, v: any) {
-    if (v === null || v === undefined || v === "") return "Sin registrar";
-    if (key === "affiliated") return v ? "Sí" : "No";
-    if (key === "document_type") return documents[v];
-    if (key === "gender") return genders[v];
-    if (key === "position_code") return person?.position_label || positions[v] || v;
-    if (key === "descriptive_role") return roleNames[v];
-    if (key === "zone") return v === "rural" ? "Rural" : "Urbana";
+    if (v === null || v === undefined || v === "") return t('Sin registrar');
+    if (key === "affiliated") return t(v ? 'Sí' : 'No');
+    if (key === "document_type") return t(documents[v] || v);
+    if (key === "gender") return t(genders[v] || v);
+    if (key === "position_code") return person?.position_label
+      ? localizedLabel({label: person.position_label, label_en: person.position_label_en})
+      : t(positions[v] || v);
+    if (key === "descriptive_role") return t(roleNames[v] || v);
+    if (key === "zone") return t(v === "rural" ? "Rural" : "Urbana");
     return String(v);
   }
   return (
-    <Modal title="Detalle de persona" onClose={onClose}>
+    <Modal title={t('Detalle de persona')} onClose={onClose}>
       <ErrorBox error={error} />
       {!person && !error ? (
         <Loading />
@@ -229,31 +235,30 @@ export function PersonDetail({
             <dl className="details">
               {Object.entries(labels).map(([key, label]) => (
                 <div key={key}>
-                  <dt>{label}</dt>
+                  <dt>{t(label)}</dt>
                   <dd>{value(key, person[key])}</dd>
                 </div>
               ))}
             </dl>
             {"note" in person && (
               <section className="internal-note">
-                <h3>Nota interna</h3>
-                <p>{person.note || "Sin nota interna."}</p>
+                <h3>{t('Nota interna')}</h3>
+                <p>{person.note || t('Sin nota interna.')}</p>
               </section>
             )}
             <AdditionalDetail values={person.custom_fields} />
-            <section aria-label="Exportar ficha individual">
-              <h3>Descargar ficha</h3>
-              <p className="muted">Incluye los datos base y campos adicionales guardados. No incluye notas internas ni autorizaciones. Excel contiene solo texto.</p>
-              <label className="check-label"><input type="checkbox" checked={includePdfPhotos} disabled={individualBusy} onChange={event => setIncludePdfPhotos(event.target.checked)} />Incluir fotografías en el PDF</label>
+            <section aria-label={t('Exportar ficha individual')}>
+              <h3>{t('Descargar ficha')}</h3>
+              <p className="muted">{t('Incluye los datos base y campos adicionales guardados. No incluye notas internas ni autorizaciones. Excel contiene solo texto.')}</p>
+              <label className="check-label"><input type="checkbox" checked={includePdfPhotos} disabled={individualBusy} onChange={event => setIncludePdfPhotos(event.target.checked)} />{t('Incluir fotografías en el PDF')}</label>
               <ExportFilename value={individualName} onChange={setIndividualName} type="ficha_persona" defaultDescription="Si dejas el nombre vacío, se descargará como ficha_persona_AAAA-MM-DD.xlsx o ficha_persona_AAAA-MM-DD.pdf, según el formato, con la fecha de Colombia." />
               <ErrorBox error={individualError} />
-              <button type="button" disabled={individualBusy || !exportFilenameReady(individualName)} onClick={() => void downloadIndividual()}>{individualBusy ? 'Preparando ficha…' : 'Descargar ficha Excel'}</button>
-              <button type="button" disabled={individualBusy || !exportFilenameReady(individualName)} onClick={() => void downloadIndividual('pdf')}>{individualBusy ? 'Preparando ficha…' : 'Descargar ficha PDF'}</button>
+              <button type="button" disabled={individualBusy || !exportFilenameReady(individualName)} onClick={() => void downloadIndividual()}>{t(individualBusy ? 'Preparando ficha…' : 'Descargar ficha Excel')}</button>
+              <button type="button" disabled={individualBusy || !exportFilenameReady(individualName)} onClick={() => void downloadIndividual('pdf')}>{t(individualBusy ? 'Preparando ficha…' : 'Descargar ficha PDF')}</button>
             </section>
             <PersonPhotos key={id} id={id} />
             <p className="muted">
-              Versión {person.version} · El cargo y el rol descriptivo no
-              conceden acceso al sistema.
+              {t('Versión {version} · El cargo y el rol descriptivo no conceden acceso al sistema.', {version: person.version})}
             </p>
           </>
         )
@@ -274,25 +279,25 @@ function BasePersonFilters({ value, onChange, visible }: { value: BaseFilters; o
     api<PositionCatalog>('person-positions').then(data => { if (active) setCatalog(data); }).catch(e => { if (active) setError(e); });
     return () => { active = false; };
   }, [revision, visible]);
-  const select = (key: keyof BaseFilters, label: string, options: Record<string, string>) => visible.includes(key) ? <label>{label}
+  const select = (key: keyof BaseFilters, label: string, options: Record<string, string>) => visible.includes(key) ? <label>{t(label)}
     <select value={value[key]} onChange={e => onChange({ ...value, [key]: e.target.value })}>
-      <option value="">Todos</option>{Object.entries(options).map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+      <option value="">{t('Todos')}</option>{Object.entries(options).map(([code, name]) => <option key={code} value={code}>{t(name)}</option>)}
     </select></label> : null;
   if (!Object.keys(emptyBaseFilters).some(key=>visible.includes(key)) && !visible.includes('birth_date') && !visible.includes('registered_at')) return null;
-  return <fieldset className="person-extra-filters"><legend>Más filtros de la ficha</legend>
+  return <fieldset className="person-extra-filters"><legend>{t('Más filtros de la ficha')}</legend>
     <div className="person-extra-filter">
       {select('document_type', 'Tipo de documento', documents)}
       {select('gender', 'Género', genders)}
       {select('descriptive_role', 'Rol descriptivo', Object.fromEntries(Object.entries(roleNames).filter(([code]) => code !== 'superadmin')))}
-      {visible.includes('position_code') && <label>Cargo<select value={value.position_code} disabled={!catalog} onChange={e => onChange({ ...value, position_code: e.target.value })}>
-        <option value="">{catalog ? 'Todos' : 'Cargando cargos…'}</option>
-        {catalog?.items.map(item => <option key={item.code} value={item.code}>{item.label}{item.active ? '' : ' (inactivo)'}</option>)}
+      {visible.includes('position_code') && <label>{t('Cargo')}<select value={value.position_code} disabled={!catalog} onChange={e => onChange({ ...value, position_code: e.target.value })}>
+        <option value="">{catalog ? t('Todos') : t('Cargando cargos…')}</option>
+        {catalog?.items.map(item => <option key={item.code} value={item.code}>{localizedLabel(item)}{item.active ? '' : ` ${t('(inactivo)')}`}</option>)}
       </select></label>}
-      {visible.includes('birth_date') && <><label>Nacimiento desde<input type="date" required={!!value.birth_date_to} max={value.birth_date_to || undefined} value={value.birth_date_from} onChange={e=>onChange({...value,birth_date_from:e.target.value})}/></label><label>Nacimiento hasta<input type="date" required={!!value.birth_date_from} min={value.birth_date_from || undefined} value={value.birth_date_to} onChange={e=>onChange({...value,birth_date_to:e.target.value})}/></label></>}
-      {visible.includes('registered_at') && <><label>Registro desde<input type="date" required={!!value.registered_to} max={value.registered_to || undefined} value={value.registered_from} onChange={e=>onChange({...value,registered_from:e.target.value})}/></label><label>Registro hasta<input type="date" required={!!value.registered_from} min={value.registered_from || undefined} value={value.registered_to} onChange={e=>onChange({...value,registered_to:e.target.value})}/></label></>}
+      {visible.includes('birth_date') && <><label>{t('Nacimiento desde')}<input type="date" required={!!value.birth_date_to} max={value.birth_date_to || undefined} value={value.birth_date_from} onChange={e=>onChange({...value,birth_date_from:e.target.value})}/></label><label>{t('Nacimiento hasta')}<input type="date" required={!!value.birth_date_from} min={value.birth_date_from || undefined} value={value.birth_date_to} onChange={e=>onChange({...value,birth_date_to:e.target.value})}/></label></>}
+      {visible.includes('registered_at') && <><label>{t('Registro desde')}<input type="date" required={!!value.registered_to} max={value.registered_to || undefined} value={value.registered_from} onChange={e=>onChange({...value,registered_from:e.target.value})}/></label><label>{t('Registro hasta')}<input type="date" required={!!value.registered_from} min={value.registered_from || undefined} value={value.registered_to} onChange={e=>onChange({...value,registered_to:e.target.value})}/></label></>}
     </div>
-    <p className="muted">Todos los criterios deben coincidir. Cargo y rol describen la ficha, no los permisos de una cuenta. También puedes buscar cargos inactivos.</p>
-    <ErrorBox error={error} />{!!error && <button type="button" onClick={() => setRevision(r => r + 1)}>Reintentar cargos</button>}
+    <p className="muted">{t('Todos los criterios deben coincidir. Cargo y rol describen la ficha, no los permisos de una cuenta. También puedes buscar cargos inactivos.')}</p>
+    <ErrorBox error={error} />{!!error && <button type="button" onClick={() => setRevision(r => r + 1)}>{t('Reintentar cargos')}</button>}
   </fieldset>;
 }
 
@@ -305,6 +310,7 @@ export function Persons({
   mode: "list" | "lookup";
   onCreate: () => void;
 }) {
+  const language = useLanguage();
   const [result, setResult] = useState<any>(),
     [query, setQuery] = useState(""),
     [status, setStatus] = useState(""),
@@ -352,10 +358,11 @@ export function Persons({
     try {
       const params = new URLSearchParams(applied);
       addExportFilename(params, exportName);
+      params.set('language', language);
       const file = await api<Workbook>(`persons/export?${params}`);
       if (!safeXlsxFilename(file.filename)
         || file.mime !== 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
-        throw new Error('La exportación no tiene un formato válido.');
+        throw new Error(t('La exportación no tiene un formato válido.'));
       }
       const bytes = Uint8Array.from(atob(file.content), char => char.charCodeAt(0));
       const url = URL.createObjectURL(new Blob([bytes], { type: file.mime }));
@@ -372,6 +379,7 @@ export function Persons({
     try {
       const params = new URLSearchParams(applied);
       addExportFilename(params, exportName);
+      params.set('language', language);
       const data = await api<PersonExportPdfData>(`persons/export-pdf?${params}`);
       const { downloadPersonExportPdf } = await import('./PersonExportPdf');
       await downloadPersonExportPdf(data, principal.organization.name);
@@ -463,86 +471,86 @@ export function Persons({
     <>
       <div className="page-heading">
         <div>
-          <span className="eyebrow">REGISTRO COMUNITARIO</span>
-          <h1>{mode === "list" ? "Lista de personas" : "Consultar persona"}</h1>
+          <span className="eyebrow">{t('REGISTRO COMUNITARIO')}</span>
+          <h1>{t(mode === "list" ? "Lista de personas" : "Consultar persona")}</h1>
           <p className="muted">
-            {mode === "list"
+            {t(mode === "list"
               ? "Encuentra y mantén al día los registros de tu junta."
-              : "Busca una ficha por su tipo y número de documento."}
+              : "Busca una ficha por su tipo y número de documento.")}
           </p>
         </div>
         {canWrite(principal.role) && (
           <button className="primary" onClick={onCreate}>
             <Plus size={18} />
-            Nuevo registro
+            {t('Nuevo registro')}
           </button>
         )}
       </div>
       <ErrorBox error={error} />
       <section className="panel">
-        <form className="filters" onSubmit={search} aria-label="Filtros de personas">
+        <form className="filters" onSubmit={search} aria-label={t('Filtros de personas')}>
           {mode === "list" ? (
             <>
               <label className="grow">
-                Buscar
+                {t('Buscar')}
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Nombre, apellido o documento"
+                  placeholder={t('Nombre, apellido o documento')}
                 />
               </label>
               {filterSettings?.base.includes('status') && <label>
-                Estado
+                {t('Estado')}
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
                 >
-                  <option value="">Todos</option>
-                  <option value="pending">Pendiente</option>
-                  <option value="complete">Completado</option>
+                  <option value="">{t('Todos')}</option>
+                  <option value="pending">{t('Pendiente')}</option>
+                  <option value="complete">{t('Completado')}</option>
                 </select>
               </label>}
               {filterSettings?.base.includes('zone') && <label>
-                Zona
+                {t('Zona')}
                 <select value={zone} onChange={(e) => setZone(e.target.value)}>
-                  <option value="">Todas</option>
-                  <option value="rural">Rural</option>
-                  <option value="urban">Urbana</option>
+                  <option value="">{t('Todas')}</option>
+                  <option value="rural">{t('Rural')}</option>
+                  <option value="urban">{t('Urbana')}</option>
                 </select>
               </label>}
-              {filterSettings?.base.includes('affiliated') && <label>Afiliación<select value={affiliated} onChange={e => setAffiliated(e.target.value)}><option value="">Todas</option><option value="1">Afiliados</option><option value="0">No afiliados</option></select></label>}
+              {filterSettings?.base.includes('affiliated') && <label>{t('Afiliación')}<select value={affiliated} onChange={e => setAffiliated(e.target.value)}><option value="">{t('Todas')}</option><option value="1">{t('Afiliados')}</option><option value="0">{t('No afiliados')}</option></select></label>}
               {filterSettings ? <><BasePersonFilters value={baseFilters} onChange={setBaseFilters} visible={filterSettings.base} />
-              <PersonFilters value={customFilters} onChange={setCustomFilters} allowed={filterSettings.custom} /></> : filterError ? <div className="person-extra-filters"><ErrorBox error={filterError}/><button type="button" onClick={()=>setFilterRevision(v=>v+1)}>Reintentar configuración de filtros</button></div> : <Loading/>}
+              <PersonFilters value={customFilters} onChange={setCustomFilters} allowed={filterSettings.custom} /></> : filterError ? <div className="person-extra-filters"><ErrorBox error={filterError}/><button type="button" onClick={()=>setFilterRevision(v=>v+1)}>{t('Reintentar configuración de filtros')}</button></div> : <Loading/>}
             </>
           ) : (
             <>
               <label>
-                Tipo de documento
+                {t('Tipo de documento')}
                 <select name="document_type">
                   {Object.entries(documents).map(([v, l]) => (
                     <option value={v} key={v}>
-                      {l}
+                      {t(l)}
                     </option>
                   ))}
                 </select>
               </label>
               <label className="grow">
-                Número de documento
+                {t('Número de documento')}
                 <input name="document_number" required maxLength={30} />
               </label>
             </>
           )}
           <button className="primary" disabled={busy}>
             <Search size={18} />
-            {mode === "list" ? "Aplicar filtros" : "Consultar"}
+            {t(mode === "list" ? "Aplicar filtros" : "Consultar")}
           </button>
-          {mode === 'list' && <button type="button" onClick={() => { setQuery(''); setStatus(''); setZone(''); setAffiliated(''); setBaseFilters(emptyBaseFilters); setCustomFilters([]); setPage(1); setApplied(''); setRefresh(value => value + 1); }}>Limpiar filtros</button>}
+          {mode === 'list' && <button type="button" onClick={() => { setQuery(''); setStatus(''); setZone(''); setAffiliated(''); setBaseFilters(emptyBaseFilters); setCustomFilters([]); setPage(1); setApplied(''); setRefresh(value => value + 1); }}>{t('Limpiar filtros')}</button>}
         </form>
         {mode === 'list' && <>
-          <section aria-label="Exportación de personas">
+          <section aria-label={t('Exportación de personas')}>
             <ExportFilename value={exportName} onChange={setExportName} type="personas" />
             <ErrorBox error={exportError} />
-            <div className="pagination"><button type="button" disabled={busy || exporting || exportingPdf || !result || result.total > 2000 || !exportFilenameReady(exportName)} onClick={() => void exportExcel()}>{exporting ? 'Preparando Excel…' : 'Exportar Excel'}</button><button type="button" disabled={busy || exporting || exportingPdf || !result || result.total > 2000 || !exportFilenameReady(exportName)} onClick={() => void exportPdf()}>{exportingPdf ? 'Preparando PDF…' : 'Exportar PDF'}</button><span>Usa los filtros aplicados e incluye todas las páginas, hasta 2000 personas. No incluye notas ni fotografías.</span></div>
+            <div className="pagination"><button type="button" disabled={busy || exporting || exportingPdf || !result || result.total > 2000 || !exportFilenameReady(exportName)} onClick={() => void exportExcel()}>{t(exporting ? 'Preparando Excel…' : 'Exportar Excel')}</button><button type="button" disabled={busy || exporting || exportingPdf || !result || result.total > 2000 || !exportFilenameReady(exportName)} onClick={() => void exportPdf()}>{t(exportingPdf ? 'Preparando PDF…' : 'Exportar PDF')}</button><span>{t('Usa los filtros aplicados e incluye todas las páginas, hasta 2000 personas. No incluye notas ni fotografías.')}</span></div>
           </section>
           <Planilla applied={applied} total={result?.total} busy={busy} organizationName={principal.organization.name} />
         </>}
@@ -556,19 +564,18 @@ export function Persons({
                 onDelete={canAdmin(principal.role) ? setRemove : undefined}
               />
             ) : (
-              <Empty title="No encontramos registros">
-                Prueba con otros criterios o crea el primer registro de tu
-                junta.
+              <Empty title={t('No encontramos registros')}>
+                {t('Prueba con otros criterios o crea el primer registro de tu junta.')}
               </Empty>
             )}
             <div className="pagination">
-              <span>{result.total} registros encontrados</span>
+              <span>{t('{count} registros encontrados', {count: result.total})}</span>
               {mode === "list" && (
                 <>
                   <label>
-                    Filas
+                    {t('Filas')}
                     <select
-                      aria-label="Filas por página"
+                      aria-label={t('Filas por página')}
                       value={size}
                       onChange={(e) => {
                         setSize(+e.target.value);
@@ -584,14 +591,14 @@ export function Persons({
                     disabled={page === 1}
                     onClick={() => setPage(page - 1)}
                   >
-                    Anterior
+                    {t('Anterior')}
                   </button>
-                  <span>Página {page}</span>
+                  <span>{t('Página {page}', {page})}</span>
                   <button
                     disabled={page * size >= result.total}
                     onClick={() => setPage(page + 1)}
                   >
-                    Siguiente
+                    {t('Siguiente')}
                   </button>
                 </>
               )}
@@ -600,8 +607,8 @@ export function Persons({
         ) : mode === "list" ? (
           error ? null : <Loading />
         ) : (
-          <Empty title="Consulta exacta">
-            Completa los dos campos para buscar.
+          <Empty title={t('Consulta exacta')}>
+            {t('Completa los dos campos para buscar.')}
           </Empty>
         )}
       </section>
@@ -609,22 +616,22 @@ export function Persons({
         <PersonDetail id={detail} onClose={() => setDetail(undefined)} />
       )}
       {remove && (
-        <Modal title="Eliminar registro" onClose={() => setRemove(undefined)}>
+        <Modal title={t('Eliminar registro')} onClose={() => setRemove(undefined)}>
           <p>
-            Se eliminará el registro de{" "}
+            {t('Se eliminará el registro de')} {" "}
             <strong>
               {remove.first_names} {remove.last_names}
             </strong>
-            . Esta acción no puede deshacerse desde el sistema.
+            {t('. Esta acción no puede deshacerse desde el sistema.')}
           </p>
           <div className="actions end">
-            <button onClick={() => setRemove(undefined)}>Cancelar</button>
+            <button onClick={() => setRemove(undefined)}>{t('Cancelar')}</button>
             <button
               className="danger-button"
               disabled={busy}
               onClick={deletePerson}
             >
-              Sí, eliminar
+              {t('Sí, eliminar')}
             </button>
           </div>
         </Modal>
@@ -669,7 +676,7 @@ export function PersonForm({
   ) {
     return (
       <label>
-        {label}
+        {t(label)}
         {required ? " *" : ""}
         <input
           name={name}
@@ -689,7 +696,7 @@ export function PersonForm({
   ) {
     return (
       <label>
-        {label}
+        {t(label)}
         {required ? " *" : ""}
         <select
           name={name}
@@ -698,10 +705,10 @@ export function PersonForm({
           }
           required={required}
         >
-          <option value="">Seleccionar</option>
+          <option value="">{t('Seleccionar')}</option>
           {Object.entries(options).map(([v, l]) => (
             <option key={v} value={v}>
-              {l}
+              {t(l)}
             </option>
           ))}
         </select>
@@ -738,43 +745,43 @@ export function PersonForm({
     }
   }
   if (createdId) return <>
-    <div className="page-heading"><div><span className="eyebrow">{principal.organization.name}</span><h1>Fotografías del nuevo registro</h1>
-      <p role="status">El registro ya está guardado. Puedes añadir sus fotografías ahora o hacerlo después desde la lista.</p></div></div>
+    <div className="page-heading"><div><span className="eyebrow">{principal.organization.name}</span><h1>{t('Fotografías del nuevo registro')}</h1>
+      <p role="status">{t('El registro ya está guardado. Puedes añadir sus fotografías ahora o hacerlo después desde la lista.')}</p></div></div>
     <div className="panel"><PersonPhotos id={createdId} /></div>
-    <div className="actions end"><button type="button" className="primary" onClick={onSaved}>Terminar e ir a la lista</button></div>
+    <div className="actions end"><button type="button" className="primary" onClick={onSaved}>{t('Terminar e ir a la lista')}</button></div>
   </>;
   return (
     <>
       <div className="page-heading">
         <div>
           <span className="eyebrow">{principal.organization.name}</span>
-          <h1>{initial ? "Editar persona" : "Nuevo registro"}</h1>
+          <h1>{t(initial ? 'Editar persona' : 'Nuevo registro')}</h1>
           <p className="muted">
-            Los campos con * son obligatorios para el estado elegido. {initial ? 'Puedes gestionar las fotografías desde el detalle de la persona.' : 'Puedes guardar y continuar con sus fotografías.'}
+            {t('Los campos con * son obligatorios para el estado elegido.')} {t(initial ? 'Puedes gestionar las fotografías desde el detalle de la persona.' : 'Puedes guardar y continuar con sus fotografías.')}
           </p>
         </div>
         <button onClick={onBack}>
           <ArrowLeft size={18} />
-          Volver
+          {t('Volver')}
         </button>
       </div>
       <ErrorBox error={error} />
       <form key={formKey} onSubmit={save} className="person-form">
         <ErrorBox error={schemaError} />
         {schemaBusy && <Loading />}
-        <button type="button" disabled={schemaBusy || busy} onClick={loadSchema}>Recargar configuración de campos</button>
+        <button type="button" disabled={schemaBusy || busy} onClick={loadSchema}>{t('Recargar configuración de campos')}</button>
         <section className="panel">
           <div className="section-heading">
-            <h2>01 · Identificación</h2>
+            <h2>{t('01 · Identificación')}</h2>
             <label className="inline">
-              Estado
+              {t('Estado')}
               <select
                 name="status"
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
               >
-                <option value="pending">Pendiente</option>
-                <option value="complete">Completado</option>
+                <option value="pending">{t('Pendiente')}</option>
+                <option value="complete">{t('Completado')}</option>
               </select>
             </label>
           </div>
@@ -788,7 +795,7 @@ export function PersonForm({
           </div>
         </section>
         <section className="panel">
-          <h2>02 · Comunidad y ubicación</h2>
+          <h2>{t('02 · Comunidad y ubicación')}</h2>
           <div className="form-grid">
             {select(
               "affiliated",
@@ -797,7 +804,7 @@ export function PersonForm({
               complete,
             )}
             <label>
-              Zona{complete ? " *" : ""}
+              {t('Zona')}{complete ? ' *' : ''}
               <select
                 name="zone"
                 value={zone}
@@ -808,9 +815,9 @@ export function PersonForm({
                   else setZone(e.target.value);
                 }}
               >
-                <option value="">Seleccionar</option>
-                <option value="rural">Rural</option>
-                <option value="urban">Urbana</option>
+                <option value="">{t('Seleccionar')}</option>
+                <option value="rural">{t('Rural')}</option>
+                <option value="urban">{t('Urbana')}</option>
               </select>
             </label>
             {zone === "rural" &&
@@ -827,7 +834,9 @@ export function PersonForm({
                 {field("neighborhood", "Barrio", "text", complete, 100)}
               </>
             )}
-            {catalog && select("position_code", "Cargo", Object.fromEntries(catalog.items.filter(i => i.active || i.code === initial?.position_code).map(i => [i.code, i.code === initial?.position_code ? `${initial.position_label || i.label}${i.active ? '' : ' (inactivo)'}` : i.label])), complete)}
+            {catalog && select("position_code", "Cargo", Object.fromEntries(catalog.items.filter(i => i.active || i.code === initial?.position_code).map(i => [i.code, i.code === initial?.position_code
+              ? `${localizedLabel({label: initial.position_label || i.label, label_en: initial.position_label_en})}${i.active ? '' : ` ${t('(inactivo)')}`}`
+              : localizedLabel(i)])), complete)}
             {select(
               "descriptive_role",
               "Rol descriptivo",
@@ -837,27 +846,26 @@ export function PersonForm({
               complete,
             )}
             <label>
-              Junta de pertenencia
+              {t('Junta de pertenencia')}
               <input value={principal.organization.name} readOnly />
             </label>
           </div>
           <p className="muted">
-            El cargo y el rol de esta ficha son descriptivos; no crean una
-            cuenta ni conceden permisos.
+            {t('El cargo y el rol de esta ficha son descriptivos; no crean una cuenta ni conceden permisos.')}
           </p>
         </section>
         <section className="panel">
-          <h2>03 · Contacto</h2>
+          <h2>{t('03 · Contacto')}</h2>
           <div className="form-grid">
             {field("phone", "Teléfono", "tel", complete, 20)}
             {field("email", "Correo electrónico", "email", complete, 254)}
           </div>
         </section>
         <section className="panel">
-          <h2>04 · Autorización de tratamiento</h2>
+          <h2>{t('04 · Autorización de tratamiento')}</h2>
           <div className="form-grid">
             <label>
-              Fundamento o referencia del soporte *
+              {t('Fundamento o referencia del soporte')} *
               <input
                 name="authorization_basis"
                 required
@@ -866,7 +874,7 @@ export function PersonForm({
               />
             </label>
             <label>
-              Finalidad de la captura *
+              {t('Finalidad de la captura')} *
               <input
                 name="authorization_purpose"
                 required
@@ -876,15 +884,14 @@ export function PersonForm({
             </label>
           </div>
           <p className="muted">
-            La aceptación de términos del usuario no sustituye la autorización
-            de la persona registrada.
+            {t('La aceptación de términos del usuario no sustituye la autorización de la persona registrada.')}
           </p>
         </section>
         {schema && <AdditionalInputs schema={schema} previous={initial?.custom_fields} complete={complete} />}
         <section className="panel internal-note">
-          <h2>Nota interna</h2>
+          <h2>{t('Nota interna')}</h2>
           <label>
-            Información reservada a administración y registro
+            {t('Información reservada a administración y registro')}
             <textarea
               name="note"
               rows={4}
@@ -895,24 +902,24 @@ export function PersonForm({
         </section>
         <div className="form-actions">
           <button type="button" onClick={() => setClear(true)}>
-            Vaciar formulario
+            {t('Vaciar formulario')}
           </button>
           <button className="primary" disabled={busy || schemaBusy || !schema || !!schemaError}>
             <Save size={18} />
             {busy
-              ? "Guardando…"
+              ? t('Guardando…')
               : initial
-                ? "Guardar cambios"
-                : "Guardar registro"}
+                ? t('Guardar cambios')
+                : t('Guardar registro')}
           </button>
-          {!initial && <button type="submit" data-after-save="photos" disabled={busy || schemaBusy || !schema || !!schemaError}>Guardar y añadir fotos</button>}
+          {!initial && <button type="submit" data-after-save="photos" disabled={busy || schemaBusy || !schema || !!schemaError}>{t('Guardar y añadir fotos')}</button>}
         </div>
       </form>
       {clear && (
-        <Modal title="Vaciar formulario" onClose={() => setClear(false)}>
-          <p>Se descartarán los datos que has digitado en este formulario.</p>
+        <Modal title={t('Vaciar formulario')} onClose={() => setClear(false)}>
+          <p>{t('Se descartarán los datos que has digitado en este formulario.')}</p>
           <div className="actions end">
-            <button onClick={() => setClear(false)}>Cancelar</button>
+            <button onClick={() => setClear(false)}>{t('Cancelar')}</button>
             <button
               className="primary"
               onClick={() => {
@@ -925,18 +932,18 @@ export function PersonForm({
                 setClear(false);
               }}
             >
-              Confirmar
+              {t('Confirmar')}
             </button>
           </div>
         </Modal>
       )}
       {changeZone !== null && (
-        <Modal title="Cambiar zona" onClose={() => setChangeZone(null)}>
+        <Modal title={t('Cambiar zona')} onClose={() => setChangeZone(null)}>
           <p>
-            Los datos de ubicación que dejen de aplicar se retirarán al guardar.
+            {t('Los datos de ubicación que dejen de aplicar se retirarán al guardar.')}
           </p>
           <div className="actions end">
-            <button onClick={() => setChangeZone(null)}>Cancelar</button>
+            <button onClick={() => setChangeZone(null)}>{t('Cancelar')}</button>
             <button
               className="primary"
               onClick={() => {
@@ -944,7 +951,7 @@ export function PersonForm({
                 setChangeZone(null);
               }}
             >
-              Cambiar zona
+              {t('Cambiar zona')}
             </button>
           </div>
         </Modal>

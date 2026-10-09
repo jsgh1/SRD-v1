@@ -1,5 +1,5 @@
 export type PersonIndividualPdfData = {
-  filename: string; date: string; count: number; headers: string[]; rows: string[][];
+  filename: string; date: string; count: number; headers: string[]; rows: string[][]; language?: 'es' | 'en';
 };
 
 export function personIndividualPdfDefinition(data: PersonIndividualPdfData, photos?: PersonPdfPhoto[]) {
@@ -14,13 +14,15 @@ export function personIndividualPdfDefinition(data: PersonIndividualPdfData, pho
     || photos.some(photo => !(photo.slot in personPhotoLabels) || !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(photo.dataUrl)))) {
     throw new Error('Las fotografías de la ficha no tienen un formato válido.');
   }
+  const english = data.language === 'en';
+  const photoLabels = english ? { person: 'Person photo', document: 'Document photo', property: 'Property photo' } : personPhotoLabels;
   return {
     pageSize: 'A4', pageMargins: [36, 36, 36, 42],
-    info: { title: data.filename.slice(0, -4), subject: 'Ficha individual de persona SRD' },
+    info: { title: data.filename.slice(0, -4), subject: english ? 'SRD individual person record' : 'Ficha individual de persona SRD' },
     defaultStyle: { font: 'Roboto', fontSize: 10, color: '#111827' },
     content: [
-      { text: 'Ficha individual de persona', bold: true, fontSize: 19, margin: [0, 0, 0, 6] },
-      { text: `Fecha de descarga (Colombia): ${data.date}`, margin: [0, 0, 0, 14] },
+      { text: english ? 'Individual person record' : 'Ficha individual de persona', bold: true, fontSize: 19, margin: [0, 0, 0, 6] },
+      { text: english ? `Download date (Colombia): ${data.date}` : `Fecha de descarga (Colombia): ${data.date}`, margin: [0, 0, 0, 14] },
       { table: {
         headerRows: 1, dontBreakRows: true, widths: [150, '*'],
         body: [data.headers.map(text => ({ text, bold: true, fillColor: '#edf4fa' })),
@@ -30,17 +32,17 @@ export function personIndividualPdfDefinition(data: PersonIndividualPdfData, pho
         hLineWidth: () => 0.5, vLineWidth: () => 0.5,
         paddingLeft: () => 6, paddingRight: () => 6, paddingTop: () => 5, paddingBottom: () => 5,
       } },
-      { text: 'El cargo y el rol descriptivo no conceden acceso al sistema.', fontSize: 9, color: '#475569', margin: [0, 12, 0, 0] },
+      { text: english ? 'Position and descriptive role do not grant system access.' : 'El cargo y el rol descriptivo no conceden acceso al sistema.', fontSize: 9, color: '#475569', margin: [0, 12, 0, 0] },
       ...(photos?.length ? [
-        { text: 'Fotografías de la ficha', pageBreak: 'before', bold: true, fontSize: 18, margin: [0, 0, 0, 16] },
+        { text: english ? 'Record photos' : 'Fotografías de la ficha', pageBreak: 'before', bold: true, fontSize: 18, margin: [0, 0, 0, 16] },
         ...photos.map((photo, index) => ({ unbreakable: true, stack: [
-          { text: personPhotoLabels[photo.slot], bold: true, fontSize: 12, margin: [0, 0, 0, 8] },
+          { text: photoLabels[photo.slot], bold: true, fontSize: 12, margin: [0, 0, 0, 8] },
           { image: photo.dataUrl, fit: [480, 570], alignment: 'center' },
-          { text: `Versión de la fotografía: ${photo.version}`, fontSize: 9, color: '#475569', margin: [0, 8, 0, 0] },
+          { text: english ? `Photo version: ${photo.version}` : `Versión de la fotografía: ${photo.version}`, fontSize: 9, color: '#475569', margin: [0, 8, 0, 0] },
         ], ...(index > 0 ? { pageBreak: 'before' } : {}) })),
-      ] : photos ? [{ text: 'No hay fotografías guardadas para esta persona.', margin: [0, 12, 0, 0], color: '#475569' }] : []),
+      ] : photos ? [{ text: english ? 'No photos are saved for this person.' : 'No hay fotografías guardadas para esta persona.', margin: [0, 12, 0, 0], color: '#475569' }] : []),
     ],
-    footer: (page: number, pages: number) => ({ text: `Página ${page} de ${pages}`, alignment: 'right', margin: [36, 10, 36, 0], fontSize: 8 }),
+    footer: (page: number, pages: number) => ({ text: english ? `Page ${page} of ${pages}` : `Página ${page} de ${pages}`, alignment: 'right', margin: [36, 10, 36, 0], fontSize: 8 }),
   };
 }
 

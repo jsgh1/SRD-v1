@@ -24,23 +24,44 @@ async function login(page) {
   await expect(page.locator('.sidebar').getByRole('button', { name: 'Home', exact: true })).toBeVisible();
 }
 
-test('planilla configuration persists headings and limits optional columns', async ({ page }) => {
+test('planilla configuration persists headings and limits optional columns', async ({ page, browser }) => {
   test.setTimeout(240000);
   await login(page);
   await page.locator('.sidebar').getByRole('button', { name: 'Configuración', exact: true }).click();
   const settings = page.getByRole('region', { name: 'Configuración de planilla' });
-  await expect(settings.getByLabel('H2 de la planilla')).not.toHaveValue('');
-  await settings.getByLabel('H1 de la planilla').fill('JUNTA & COMUNIDAD');
-  await settings.getByLabel('H2 de la planilla').fill('Sector <norte>');
-  await settings.getByLabel('H3 de la planilla').fill('ASISTENCIA');
+  await expect(settings.getByLabel('H2 de la planilla', { exact: true })).not.toHaveValue('');
+  await settings.getByLabel('H1 de la planilla', { exact: true }).fill('JUNTA & COMUNIDAD');
+  await settings.getByLabel('H1 de la planilla en inglés').fill('COUNCIL & COMMUNITY');
+  await settings.getByLabel('H2 de la planilla', { exact: true }).fill('Sector <norte>');
+  await settings.getByLabel('H2 de la planilla en inglés').fill('North <area>');
+  await settings.getByLabel('H3 de la planilla', { exact: true }).fill('ASISTENCIA');
+  await settings.getByLabel('H3 de la planilla en inglés').fill('ATTENDANCE');
+  const logo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lZkAAAAASUVORK5CYII=', 'base64');
+  await settings.getByLabel('Logo de la junta para la planilla (PNG, máximo 128 KB)').setInputFiles({ name: 'junta.png', mimeType: 'image/png', buffer: logo });
+  await expect(settings.getByRole('img', { name: 'Vista previa del logo de la junta' })).toBeVisible();
   for (const name of ['Correo electrónico', 'Teléfono', 'Nombre del predio', 'Cargo', 'Rol descriptivo', 'Estado del registro', 'Afiliado']) {
     await settings.getByLabel(name, { exact: true }).uncheck();
   }
   await settings.getByRole('button', { name: 'Guardar configuración de planilla' }).click();
   await expect(settings.getByRole('status')).toContainText('guardada');
+  await expect(page.locator('.app-header .brand-mark img')).toBeVisible();
+  const publicContext = await browser.newContext();
+  try {
+    const publicPage = await publicContext.newPage();
+    await publicPage.goto(`/j/${fixture.codeA}/login`);
+    await expect(publicPage.locator('.access-top .brand-mark img')).toBeVisible();
+    await publicPage.reload();
+    await expect(publicPage.locator('.access-top .brand-mark img')).toBeVisible();
+    await publicPage.goto(`/j/${fixture.codeB}/login`);
+    await expect(publicPage.locator('.access-top .brand-mark img')).toHaveCount(0);
+  } finally { await publicContext.close(); }
   const response = await page.request.get('/api/v1/planilla-settings');
   expect(response.status()).toBe(200);
   expect((await response.json()).data.allowed_columns).toEqual(['zone']);
+  expect((await (await page.request.get('/api/v1/planilla-settings')).json()).data.h1_en).toBe('COUNCIL & COMMUNITY');
+  expect((await (await page.request.get('/api/v1/planilla-settings')).json()).data.logo_data).toContain('data:image/png;base64,');
+  await page.reload();
+  await expect(page.locator('.app-header .brand-mark img')).toBeVisible();
   await page.locator('.sidebar').getByRole('button', { name: 'Lista', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Planilla de firmas' });
   await expect(panel.getByLabel('Encabezado principal')).toHaveValue('JUNTA & COMUNIDAD');
@@ -56,6 +77,28 @@ test('planilla configuration persists headings and limits optional columns', asy
   const bytes = fs.readFileSync(await download.path());
   expect(bytes.includes(Buffer.from('JUNTA &amp; COMUNIDAD'))).toBe(true);
   expect(bytes.includes(Buffer.from('Sector &lt;norte&gt;'))).toBe(true);
+  expect(bytes.includes(logo)).toBe(true);
+  await page.locator('.profile-trigger').click();
+  await page.getByLabel('Idioma', { exact: true }).selectOption('en');
+  const englishPanel = page.getByRole('region', { name: 'Signature sheet' });
+  await expect(englishPanel.getByLabel('First heading')).toHaveValue('COUNCIL & COMMUNITY');
+  await expect(englishPanel.getByLabel('Second heading')).toHaveValue('North <area>');
+  const popupPromise = page.waitForEvent('popup');
+  await englishPanel.getByRole('button', { name: 'Print or save as PDF' }).click();
+  const popup = await popupPromise;
+  await expect(popup.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(popup.getByRole('button', { name: 'Print or save as PDF' })).toBeVisible();
+  await expect(popup.locator('thead')).toContainText('COUNCIL & COMMUNITY');
+  await expect(popup.locator('thead')).toContainText('MONTH:');
+  await expect(popup.locator('thead')).toContainText('Signature');
+  await expect(popup.getByRole('img', { name: 'Council logo' })).toBeVisible();
+  await expect(popup.locator('.signatures')).toContainText('PRESIDENT');
+  await popup.close();
+  const pdfPromise = page.waitForEvent('download');
+  await englishPanel.getByRole('button', { name: 'Download PDF sheet' }).click();
+  const pdf = await pdfPromise;
+  expect(fs.readFileSync(await pdf.path()).subarray(0, 4).toString()).toBe('%PDF');
   await page.setViewportSize({ width: 360, height: 800 });
+  await expect(page.locator('.app-header .brand-mark img')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
 });

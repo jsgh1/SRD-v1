@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 const fixture = JSON.parse(fs.readFileSync(process.env.SRD_BROWSER_FIXTURE));
 const mailUrl = process.env.SRD_MAILPIT_URL || 'http://localhost:8025';
 
@@ -25,16 +26,17 @@ async function login(page, role) {
 
 test('audit Excel and PDF use applied filters and deny viewers', async ({ page, browser }) => {
   test.setTimeout(240000);
+  const action = 'test.audit_export';
   await login(page, 'admin');
   await expect.poll(async () => {
-    const body = await (await page.request.get(`/api/v1/audit-events?action=auth.login&actor_id=${fixture.users.admin.id}`)).json();
+    const body = await (await page.request.get(`/api/v1/audit-events?action=${action}&actor_id=${fixture.users.admin.id}`)).json();
     return body.data?.total;
   }, { timeout: 85000, intervals: [1000,3000,5000] }).toBe(1);
   await page.locator('.sidebar').getByRole('button', { name: 'Auditoría', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Consulta de auditoría' });
   await panel.getByLabel('Actor (identificador)').fill(fixture.users.admin.id);
   await panel.getByRole('combobox', { name: 'Módulo', exact: true }).selectOption('identity');
-  await panel.getByLabel('Acción', { exact: true }).fill('auth.login');
+  await panel.getByLabel('Acción', { exact: true }).fill(action);
   await panel.getByRole('combobox', { name: 'Resultado', exact: true }).selectOption('success');
   await panel.getByRole('button', { name: 'Aplicar filtros' }).click();
   await expect(panel.getByRole('status')).toHaveText('1 eventos encontrados');
@@ -43,12 +45,14 @@ test('audit Excel and PDF use applied filters and deny viewers', async ({ page, 
   await panel.getByLabel('Nombre del archivo (opcional)').fill('Auditoría/Junta?.xlsx');
   for (const name of ['Exportar Excel','Exportar PDF']) await expect(panel.getByRole('button', {name})).toBeDisabled();
   await panel.getByLabel('Confirmo el nombre del archivo').check();
+  const excelResponsePromise = page.waitForResponse(r => r.url().includes('/api/v1/audit-events/export?'));
   const excelPromise = page.waitForEvent('download');
   await panel.getByRole('button', { name: 'Exportar Excel' }).click();
+  expect((await excelResponsePromise).status()).toBe(200);
   const excel = await excelPromise;
   expect(excel.suggestedFilename()).toBe('Auditoria-Junta.xlsx');
   const bytes = fs.readFileSync(await excel.path());
-  expect(bytes.includes(Buffer.from('auth.login'))).toBe(true);
+  expect(bytes.includes(Buffer.from(action))).toBe(true);
   expect(bytes.includes(Buffer.from('auth.challenge_sent'))).toBe(false);
   const responsePromise = page.waitForResponse(r => r.url().includes('/api/v1/audit-events/export-pdf'));
   const pdfPromise = page.waitForEvent('download');
@@ -57,7 +61,7 @@ test('audit Excel and PDF use applied filters and deny viewers', async ({ page, 
   expect(response.status()).toBe(200);
   const data = (await response.json()).data;
   expect(data.count).toBe(1);
-  expect(data.rows[0][2]).toBe('auth.login');
+  expect(data.rows[0][2]).toBe(action);
   const pdf = await pdfPromise;
   expect(pdf.suggestedFilename()).toBe('Auditoria-Junta.pdf');
   const pdfBytes = fs.readFileSync(await pdf.path());
@@ -68,6 +72,36 @@ test('audit Excel and PDF use applied filters and deny viewers', async ({ page, 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   await panel.getByRole('button',{name:'Exportar PDF'}).scrollIntoViewIfNeeded();
   await page.screenshot({path:'.local/audit-export-mobile.png'});
+  await page.locator('.profile-trigger').click();
+  await page.getByLabel('Idioma', { exact: true }).selectOption('en');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  const englishPanel = page.getByRole('region', { name: 'Audit search' });
+  await expect(page.getByRole('region', { name: 'Audit delivery status' }).getByRole('heading', { name: 'Audit delivery' })).toBeVisible();
+  await expect(englishPanel.getByLabel('Actor (identifier)')).toHaveValue(fixture.users.admin.id);
+  await expect(englishPanel.getByRole('status')).toHaveText('1 events found');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+  const englishExcelResponsePromise = page.waitForResponse(r => r.url().includes('/api/v1/audit-events/export?'));
+  const englishExcelPromise = page.waitForEvent('download');
+  await englishPanel.getByRole('button', { name: 'Export Excel' }).click();
+  expect((await englishExcelResponsePromise).status()).toBe(200);
+  const englishExcel = await englishExcelPromise;
+  const englishBytes = fs.readFileSync(await englishExcel.path());
+  for (const value of ['name="Audit"', 'Date UTC', 'Module', 'Identity', 'Success', action]) {
+    expect(englishBytes.includes(Buffer.from(value))).toBe(true);
+  }
+  expect(englishBytes.includes(Buffer.from('Fecha UTC'))).toBe(false);
+  const englishPdfPromise = page.waitForEvent('download');
+  await englishPanel.getByRole('button', { name: 'Export PDF' }).click();
+  const englishPdf = await englishPdfPromise;
+  const englishPdfBytes = fs.readFileSync(await englishPdf.path());
+  const parsed = await getDocument({ data: new Uint8Array(englishPdfBytes), useSystemFonts: true }).promise;
+  const firstPage = await parsed.getPage(1);
+  const englishText = (await firstPage.getTextContent()).items.map(item => 'str' in item ? item.str : '').join(' ').replace(/\s+/g, ' ');
+  expect(englishText).toContain('Council audit');
+  expect(englishText).toContain('Identity');
+  expect(englishText).toContain('Success');
+  expect(englishText).toContain(action);
+  await parsed.destroy();
   const context = await browser.newContext({baseURL:process.env.SRD_TEST_URL || 'http://localhost:8080'});
   try {
     const viewer = await context.newPage();

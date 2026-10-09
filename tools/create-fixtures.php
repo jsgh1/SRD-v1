@@ -1,7 +1,7 @@
 <?php
 // Synthetic local fixtures only. No input document or ZIP data is used.
 $root=getenv('SRD_ROOT') ?: dirname(__DIR__);$service=$argv[1]??'';
-if(!in_array($service,['identity','configuration','calendar'],true))exit(1);
+if(!in_array($service,['identity','configuration','calendar','audit'],true))exit(1);
 require "$root/services/$service/vendor/autoload.php";
 $app=require "$root/services/$service/bootstrap/app.php";
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
@@ -21,7 +21,7 @@ Illuminate\Support\Facades\DB::transaction(function()use($service,$fixture){
  }elseif($service==='identity')foreach($fixture['users']as $role=>$user){
   Illuminate\Support\Facades\DB::table('users')->insertOrIgnore(['id'=>$user['id'],'email'=>$user['email'],'name'=>'Prueba '.ucfirst($role),'password'=>Illuminate\Support\Facades\Hash::make($fixture['password']),'superadmin'=>$role==='superadmin','created_at'=>now(),'updated_at'=>now()]);
   Illuminate\Support\Facades\DB::table('memberships')->insertOrIgnore(['id'=>(string)Illuminate\Support\Str::uuid(),'user_id'=>$user['id'],'organization_id'=>$fixture['orgA'],'role'=>$role]);
-  if($role==='viewer' && in_array(getenv('SRD_BROWSER_SPEC'),['chat-switch-organization.spec.mjs','platform-accounts.spec.mjs'],true))
+  if($role==='viewer' && in_array(getenv('SRD_BROWSER_SPEC'),['chat-switch-organization.spec.mjs','platform-accounts.spec.mjs','profile-photo.spec.mjs'],true))
    Illuminate\Support\Facades\DB::table('memberships')->insertOrIgnore(['id'=>(string)Illuminate\Support\Str::uuid(),'user_id'=>$user['id'],'organization_id'=>$fixture['orgB'],'role'=>'viewer']);
  }
  if($service==='identity' && getenv('SRD_BROWSER_SPEC')==='chat-conversations-pagination.spec.mjs'){
@@ -70,6 +70,14 @@ Illuminate\Support\Facades\DB::transaction(function()use($service,$fixture){
    'kind'=>'event_changed','title'=>'Aviso sintético de prueba','delivery_key'=>hash('sha256',$job),
    'due_at'=>now()->subMinutes(2),'next_attempt_at'=>now()->subMinute(),'attempts'=>8,
    'created_at'=>now(),'updated_at'=>now(),
+  ]);
+ }
+ if($service==='audit' && getenv('SRD_BROWSER_SPEC')==='audit-export.spec.mjs'){
+  Illuminate\Support\Facades\DB::table('audit_events')->insertOrIgnore([
+   'id'=>(string)Illuminate\Support\Str::uuid(), 'organization_id'=>$fixture['orgA'],
+   'actor_id'=>$fixture['users']['admin']['id'], 'service'=>'identity',
+   'action'=>'test.audit_export', 'resource_id'=>null, 'result'=>'success',
+   'correlation_id'=>(string)Illuminate\Support\Str::uuid(), 'occurred_at'=>now(), 'event_version'=>1,
   ]);
  }
 });

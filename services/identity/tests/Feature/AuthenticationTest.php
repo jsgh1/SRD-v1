@@ -44,6 +44,25 @@ final class AuthenticationTest extends TestCase
         return [$r->json('data.challenge_id'), $matches[1]];
     }
 
+    public function test_profile_language_is_persisted_per_user_and_rejects_unknown_codes(): void
+    {
+        $sessions = app(\App\Application\SessionService::class);
+        $token = $sessions->create(DB::table('users')->where('id', $this->user)->first(), $this->org, $this->terms)['token'];
+        $principal = $sessions->resolve($token);
+        $this->assertSame('es', $principal['user']['language']);
+
+        $this->internal('PATCH', 'profile', [
+            'name' => 'Cuenta de prueba', 'theme' => 'light', 'presence' => 'online', 'language' => 'en',
+        ], $principal)->assertOk()->assertJsonPath('data.language', 'en');
+        $this->assertSame('en', $sessions->resolve($token)['user']['language']);
+        $this->assertDatabaseHas('users', ['id' => $this->user, 'language' => 'en']);
+
+        $this->internal('PATCH', 'profile', [
+            'name' => 'Cuenta de prueba', 'theme' => 'light', 'presence' => 'online', 'language' => 'fr',
+        ], $principal)->assertUnprocessable();
+        $this->assertDatabaseHas('users', ['id' => $this->user, 'language' => 'en']);
+    }
+
     public function test_passive_principal_checks_do_not_extend_idle_session(): void
     {
         $sessions = app(\App\Application\SessionService::class);

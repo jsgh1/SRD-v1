@@ -43,7 +43,7 @@ final class PersonFilterSettingsTest extends TestCase {
     }
     public function test_custom_fields_must_belong_to_junta_and_inactive_fields_remain_selectable(): void {
         $id='44444444-4444-4444-8444-444444444444';
-        $field=['id'=>$id,'label'=>'Campo histórico','type'=>'text','active'=>false,'required'=>false,'options'=>[]];
+        $field=['id'=>$id,'label'=>'Campo histórico','label_en'=>'Historical field','type'=>'text','active'=>false,'required'=>false,'options'=>[]];
         $this->internal('PUT','person-fields',['version'=>0,'fields'=>[$field]],$this->p)->assertOk();
         $data=array_replace($this->data(),['base'=>[],'custom'=>[$id]]);
         $this->internal('PUT','person-filter-settings',$data,$this->p)->assertOk()->assertJsonPath('data.base',[])->assertJsonPath('data.custom',[$id]);

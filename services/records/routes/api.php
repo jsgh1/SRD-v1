@@ -4,6 +4,7 @@ use App\Http\Controllers\PersonController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('internal')->group(function () {
+    Route::get('public-logo/{id}', [\App\Http\Controllers\PlanillaSettingsController::class, 'publicLogo'])->whereUuid('id');
     Route::get('planilla-settings', [\App\Http\Controllers\PlanillaSettingsController::class, 'index']);
     Route::put('planilla-settings', [\App\Http\Controllers\PlanillaSettingsController::class, 'update']);
     Route::get('person-filter-settings', [\App\Http\Controllers\PersonFilterSettingsController::class, 'index']);

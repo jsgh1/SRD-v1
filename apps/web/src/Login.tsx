@@ -13,6 +13,7 @@ import {
 import { api, type Organization, type Principal } from "./api";
 import { ErrorBox, Modal } from "./ui";
 import { privateLink } from './privateLink';
+import { localizedTerms, t } from './i18n';
 
 export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
   const initialCode =
@@ -91,7 +92,7 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
         });
         setStep("login");
         setNotice(
-          "Contraseña actualizada. Inicia sesión con tu nueva contraseña.",
+          t('Contraseña actualizada. Inicia sesión con tu nueva contraseña.'),
         );
       }
     } catch (e) {
@@ -107,7 +108,7 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
       const r = await api("auth/resend", "POST", { challenge_id: challenge });
       setChallenge(r.challenge_id);
       setWait(r.resend_after);
-      setNotice("Enviamos un nuevo código. El anterior ya no funciona.");
+      setNotice(t('Enviamos un nuevo código. El anterior ya no funciona.'));
     } catch (e) {
       setError(e);
     } finally {
@@ -135,32 +136,32 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
     <main className="access-page">
       <div className="access-top">
         <a className="brand" href="/">
-          <span className="brand-mark">
-            <Building2 size={22} />
+          <span className={org?.logo_data ? 'brand-mark brand-mark-logo' : 'brand-mark'}>
+            {org?.logo_data ? <img src={org.logo_data} alt="" /> : <Building2 size={22} />}
           </span>{" "}
-          SRD <span className="brand-sub">Sistema de Registro Digital</span>
+          SRD <span className="brand-sub">{t('Sistema de Registro Digital')}</span>
         </a>
         <span className="internal-label">
-          <LockKeyhole size={14} /> Espacio de acceso interno
+          <LockKeyhole size={14} /> {t('Espacio de acceso interno')}
         </span>
       </div>
       <div className="access-card">
         <section className="access-intro">
-          <span className="eyebrow">COMUNIDAD · ORGANIZACIÓN · CONFIANZA</span>
+          <span className="eyebrow">{t('COMUNIDAD · ORGANIZACIÓN · CONFIANZA')}</span>
           <h1>
             {step === "verify"
-              ? "Un paso más para cuidar tu información."
-              : "Una comunidad conectada. Una gestión más clara."}
+              ? t('Un paso más para cuidar tu información.')
+              : t('Una comunidad conectada. Una gestión más clara.')}
           </h1>
           <p>
             {step === "verify"
-              ? "Verifica tu correo para acceder a los registros de tu junta. Solo tú debes conocer este código."
-              : "El espacio de tu junta para organizar registros, trabajar en equipo y dar seguimiento a lo que importa."}
+              ? t('Verifica tu correo para acceder a los registros de tu junta. Solo tú debes conocer este código.')
+              : t('El espacio de tu junta para organizar registros, trabajar en equipo y dar seguimiento a lo que importa.')}
           </p>
           <button
             className="community-scene"
             type="button"
-            aria-label="Girar la ilustración de la comunidad"
+            aria-label={t('Girar la ilustración de la comunidad')}
             onClick={(e) => e.currentTarget.classList.toggle("turned")}
           >
             <div className="scene-ground" />
@@ -178,37 +179,32 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
             </span>
             <span className="scene-dot d1" />
             <span className="scene-dot d2" />
-            <span className="scene-caption">Juntos, mejor organizados</span>
+            <span className="scene-caption">{t('Juntos, mejor organizados')}</span>
           </button>
           <div className="intro-foot">
             <ShieldCheck size={20} />
             <span>
-              Información protegida.
+              {t('Información protegida.')}
               <br />
-              <strong>Acceso exclusivo para tu equipo.</strong>
+              <strong>{t('Acceso exclusivo para tu equipo.')}</strong>
             </span>
           </div>
         </section>
         <section className="access-form">
-          <span className="small-label">{org?.name || "BIENVENIDO A SRD"}</span>
+          <span className="small-label">{org?.name || t('BIENVENIDO A SRD')}</span>
           <h2>
             {!org && step !== "reset"
-              ? "Encuentra tu junta"
-              : {
-                  login: "Iniciar sesión",
-                  verify: "Ingresa tu código",
-                  recover: "Recuperar acceso",
-                  reset: "Nueva contraseña",
-                }[step]}
+              ? t('Encuentra tu junta')
+              : t({ login: 'Iniciar sesión', verify: 'Ingresa tu código', recover: 'Recuperar acceso', reset: 'Nueva contraseña' }[step])}
           </h2>
           <p className="muted">
             {!org && step !== "reset"
-              ? "Escribe el código de junta que te dio el administrador."
+              ? t('Escribe el código de junta que te dio el administrador.')
               : step === "verify"
-                ? "Revisa tu bandeja de entrada y escribe los seis dígitos."
+                ? t('Revisa tu bandeja de entrada y escribe los seis dígitos.')
                 : step === "login"
-                  ? "Ingresa con tu correo y contraseña."
-                  : "Te ayudamos a volver a tu espacio de trabajo."}
+                  ? t('Ingresa con tu correo y contraseña.')
+                  : t('Te ayudamos a volver a tu espacio de trabajo.')}
           </p>
           <ErrorBox error={error} />
           {notice && (
@@ -219,7 +215,7 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
           <form onSubmit={submit}>
             {!org && step !== "reset" ? (
               <label>
-                Código de la junta
+                {t('Código de la junta')}
                 <input
                   value={code}
                   onChange={(e) => {
@@ -236,7 +232,7 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
               <>
                 {(step === "login" || step === "recover") && (
                   <label>
-                    Correo electrónico
+                    {t('Correo electrónico')}
                     <span className="input-icon">
                       <Mail size={18} />
                       <input
@@ -252,7 +248,7 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
                 )}
                 {(step === "login" || step === "reset") && (
                   <label>
-                    {step === "reset" ? "Nueva contraseña" : "Contraseña"}
+                    {t(step === 'reset' ? 'Nueva contraseña' : 'Contraseña')}
                     <span className="input-icon">
                       <LockKeyhole size={18} />
                       <input
@@ -260,8 +256,8 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
                         type={visible ? "text" : "password"}
                         placeholder={
                           step === "reset"
-                            ? "Al menos 12 caracteres"
-                            : "Escribe tu contraseña"
+                            ? t('Mínimo 12 caracteres')
+                            : undefined
                         }
                         autoComplete={
                           step === "reset" ? "new-password" : "current-password"
@@ -273,7 +269,7 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
                         type="button"
                         className="icon-button"
                         aria-label={
-                          visible ? "Ocultar contraseña" : "Mostrar contraseña"
+                          t(visible ? 'Ocultar contraseña' : 'Mostrar contraseña')
                         }
                         onClick={() => setVisible(!visible)}
                       >
@@ -284,7 +280,7 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
                 )}
                 {step === "reset" && (
                   <label>
-                    Repetir contraseña
+                    {t('Repetir contraseña')}
                     <input
                       name="password_confirmation"
                       type="password"
@@ -303,13 +299,13 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
                         onChange={(e) => setAccepted(e.target.checked)}
                         required
                       />
-                      Acepto los{" "}
+                      {t('Acepto los')}{' '}
                       <button
                         className="text-button"
                         type="button"
                         onClick={() => setTerms(true)}
                       >
-                        términos y condiciones
+                        {t('términos y condiciones')}
                       </button>
                     </label>
                     <button
@@ -320,14 +316,14 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
                         setError(null);
                       }}
                     >
-                      Olvidé mi contraseña
+                      {t('Olvidé mi contraseña')}
                     </button>
                   </div>
                 )}
                 {step === "verify" && (
                   <>
                     <label>
-                      Código de verificación
+                      {t('Código de verificación')}
                       <input
                         className="code-input"
                         name="code"
@@ -348,7 +344,7 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
                       onClick={resend}
                     >
                       <RotateCw size={16} />
-                      {wait ? `Reenviar en ${wait} s` : "Reenviar código"}
+                      {wait ? t('Reenviar en {seconds} s', {seconds: wait}) : t('Reenviar código')}
                     </button>
                   </>
                 )}
@@ -359,21 +355,16 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
               disabled={busy || (step === "login" && !!org && !accepted)}
             >
               {busy
-                ? "Procesando…"
+                ? t('Procesando…')
                 : !org && step !== "reset"
-                  ? "Continuar"
-                  : {
-                      login: "Ingresar",
-                      verify: "Confirmar código",
-                      recover: "Enviar instrucciones",
-                      reset: "Guardar contraseña",
-                    }[step]}
+                  ? t('Continuar')
+                  : t({ login: 'Ingresar', verify: 'Confirmar código', recover: 'Enviar instrucciones', reset: 'Guardar contraseña' }[step])}
               <ArrowRight size={18} />
             </button>
           </form>
           {step !== "login" && (
             <button className="text-button back" onClick={back} disabled={busy}>
-              ← Volver al inicio de sesión
+              {t('← Volver al inicio de sesión')}
             </button>
           )}
           {step === "login" && org && (
@@ -385,24 +376,23 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
                 history.replaceState(null, "", "/");
               }}
             >
-              Ingresar a otra junta
+              {t('Ingresar a otra junta')}
             </button>
           )}
           <div className="form-foot">
-            <Check size={15} /> Tu cuenta es personal. No compartas tus
-            credenciales.
+            <Check size={15} /> {t('Tu cuenta es personal. No compartas tus credenciales.')}
           </div>
         </section>
       </div>
       <footer>
-        © {new Date().getFullYear()} · Sistema de Registro Digital
+        © {new Date().getFullYear()} · {t('Sistema de Registro Digital')}
       </footer>
       {terms && org && (
         <Modal
-          title={`Términos y condiciones · Versión ${org.terms.version}`}
+          title={t('Términos y condiciones · Versión {version}', {version: org.terms.version})}
           onClose={() => setTerms(false)}
         >
-          <p className="terms-text">{org.terms.body}</p>
+          <p className="terms-text">{localizedTerms(org.terms)}</p>
           <button
             className="primary"
             onClick={() => {
@@ -410,7 +400,7 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
               setTerms(false);
             }}
           >
-            Aceptar términos
+            {t('Aceptar términos')}
           </button>
         </Modal>
       )}

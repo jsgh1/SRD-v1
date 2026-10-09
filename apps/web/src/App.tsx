@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import {
   Building2,
   Home,
@@ -34,6 +34,7 @@ import {
 } from "./api";
 import { Login } from "./Login";
 import { EmailChange } from "./EmailChange";
+import { ProfilePhoto } from "./ProfilePhoto";
 import { Organizations } from "./Organizations";
 import { PlatformAccounts } from "./PlatformAccounts";
 import { QuickLinks, QuickLinkSettings } from "./QuickLinks";
@@ -42,6 +43,7 @@ import { PersonPositionSettings } from './PersonPositions';
 import { PersonFilterSettings } from './PersonFilterSettings';
 import { PlanillaSettings } from './PlanillaSettings';
 import { Presence } from './Presence';
+import { broadcastLanguage, formatLocale, localizedTerms, setLanguage, t, useLanguage } from './i18n';
 import { Contacts } from './Contacts';
 import { Chat } from './Chat';
 import { GlobalSearch } from './GlobalSearch';
@@ -68,11 +70,16 @@ import {
 } from "./Persons";
 
 export function App() {
+  useLanguage();
   const [principal, setPrincipal] = useState<Principal | null>(null),
+    [organizationLogo, setOrganizationLogo] = useState<string | null>(null),
+    [profilePhoto, setProfilePhoto] = useState<string | null>(null),
     [loading, setLoading] = useState(true),
     [page, setPage] = useState("home"),
     [menu, setMenu] = useState(false),
     [profile, setProfile] = useState(false),
+    [presenceSaving, setPresenceSaving] = useState(false),
+    [languageSaving, setLanguageSaving] = useState(false),
     [calendarTarget, setCalendarTarget] = useState<string>(),
     [chatTarget, setChatTarget] = useState<string>(),
     [chatConversationTarget, setChatConversationTarget] = useState<string>(),
@@ -81,10 +88,19 @@ export function App() {
     [themeSaving, setThemeSaving] = useState(false),
     [theme, setTheme] = useState(localStorage.getItem("srd-theme") || "light"),
     [error, setError] = useState<unknown>();
+  const profileAnchor = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!profile) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!profileAnchor.current?.contains(event.target as Node)) setProfile(false);
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, [profile]);
   useEffect(() => {
     if (location.pathname === '/invite') { setLoading(false); return; }
     api<Principal>("me")
-      .then(setPrincipal)
+      .then(p => { setPrincipal(p); setLanguage(p.user.language, p.user_id); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -104,6 +120,37 @@ export function App() {
     return () => { active = false; document.removeEventListener('visibilitychange', visible); window.removeEventListener('focus', refresh); };
   }, [principal?.organization.id, principal?.user_id, principal?.role, principal?.terms_required]);
   useEffect(() => {
+    if (!principal || principal.terms_required) { setOrganizationLogo(null); return; }
+    let active = true;
+    let latest = 0;
+    setOrganizationLogo(null);
+    const refresh = () => {
+      const request = ++latest;
+      void api<{logo_data: string | null}>('planilla-settings')
+        .then(value => { if (active && request === latest) setOrganizationLogo(value.logo_data); })
+        .catch(() => { if (active && request === latest) setOrganizationLogo(null); });
+    };
+    refresh();
+    window.addEventListener('srd-planilla-logo-updated', refresh);
+    return () => { active = false; window.removeEventListener('srd-planilla-logo-updated', refresh); };
+  }, [principal?.organization.id, principal?.terms_required]);
+  useEffect(() => {
+    if (!principal || principal.terms_required) { setProfilePhoto(null); return; }
+    let active = true;
+    let latest = 0;
+    setProfilePhoto(null);
+    const refresh = () => {
+      const request = ++latest;
+      void api<{items: {present: boolean}[]}>(`users/${principal.user_id}/photos`)
+        .then(data => data.items[0]?.present ? api<{content: string; mime: string}>(`users/${principal.user_id}/photos/avatar`) : null)
+        .then(data => { if (active && request === latest) setProfilePhoto(data?.mime === 'image/png' ? `data:image/png;base64,${data.content}` : null); })
+        .catch(() => { if (active && request === latest) setProfilePhoto(null); });
+    };
+    refresh();
+    window.addEventListener('srd-profile-photo-updated', refresh);
+    return () => { active = false; window.removeEventListener('srd-profile-photo-updated', refresh); };
+  }, [principal?.organization.id, principal?.user_id, principal?.terms_required]);
+  useEffect(() => {
     const fn = (e: StorageEvent) => {
       if (e.key === "srd-theme") setTheme(e.newValue || "light");
     };
@@ -113,9 +160,10 @@ export function App() {
   async function reload() {
     const p = await api<Principal>("me");
     setPrincipal(p);
+    setLanguage(p.user.language, p.user_id);
   }
   async function toggleTheme() {
-    if (themeSaving) return;
+    if (themeSaving || presenceSaving) return;
     const next = theme === "light" ? "dark" : "light";
     if (principal) {
       setThemeSaving(true);
@@ -133,6 +181,40 @@ export function App() {
         setThemeSaving(false);
       }
     } else setTheme(next);
+  }
+  async function changePresence(value: string) {
+    if (!principal || presenceSaving || themeSaving || value === principal.user.presence) return;
+    setPresenceSaving(true);
+    try {
+      await api('profile', 'PATCH', {
+        name: principal.user.name,
+        theme: principal.user.theme,
+        presence: value,
+      });
+      await reload();
+    } catch (cause) {
+      setError(cause);
+    } finally {
+      setPresenceSaving(false);
+    }
+  }
+  async function changeLanguage(value: 'es' | 'en') {
+    if (!principal || languageSaving || value === principal.user.language) return;
+    setLanguageSaving(true);
+    try {
+      await api('profile', 'PATCH', {
+        name: principal.user.name,
+        theme: principal.user.theme,
+        presence: principal.user.presence,
+        language: value,
+      });
+      broadcastLanguage(value, principal.user_id);
+      await reload();
+    } catch (cause) {
+      setError(cause);
+    } finally {
+      setLanguageSaving(false);
+    }
   }
   async function logout() {
     try {
@@ -166,6 +248,7 @@ export function App() {
       <Login
         onLogin={(p) => {
           setPrincipal(p);
+          setLanguage(p.user.language, p.user_id);
           setTheme(p.user.theme);
         }}
       />
@@ -174,9 +257,9 @@ export function App() {
     return (
       <main className="boot">
         <div className="panel">
-          <h1>Los términos de tu junta cambiaron</h1>
-          <p>Lee la versión vigente para continuar.</p>
-          <p className="terms-text">{principal.organization.terms.body}</p>
+          <h1>{t('Los términos de tu junta cambiaron')}</h1>
+          <p>{t('Lee la versión vigente para continuar.')}</p>
+          <p className="terms-text">{localizedTerms(principal.organization.terms)}</p>
           <ErrorBox error={error} />
           <button
             className="primary"
@@ -193,9 +276,9 @@ export function App() {
               }
             }}
           >
-            Aceptar y continuar
+            {t('Aceptar y continuar')}
           </button>
-          <button onClick={logout}>Cerrar sesión</button>
+          <button onClick={logout}>{t('Cerrar sesión')}</button>
         </div>
       </main>
     );
@@ -234,7 +317,7 @@ export function App() {
       <header className="app-header">
         <button
           className="icon-button hamburger"
-          aria-label="Abrir menú"
+          aria-label={t('Abrir menú')}
           onClick={() => setMenu(!menu)}
         >
           <Menu />
@@ -247,38 +330,40 @@ export function App() {
             navigate("home");
           }}
         >
-          <span className="brand-mark">
-            <Building2 size={22} />
+          <span className={organizationLogo ? 'brand-mark brand-mark-logo' : 'brand-mark'}>
+            {organizationLogo ? <img src={organizationLogo} alt="" /> : <Building2 size={22} />}
           </span>
           <span>
             {principal.organization.name}
-            <small>Sistema de Registro Digital</small>
+            <small>{t('Sistema de Registro Digital')}</small>
           </span>
         </a>
-        <button className="header-search" onClick={() => navigate("search")} aria-label="Buscar en la junta">
+        <button className="header-search" onClick={() => navigate("search")} aria-label={t('Buscar en la junta')}>
           <Search size={18} />
-          <span>Buscar en la junta</span>
+          <span>{t('Buscar en la junta')}</span>
         </button>
-        <div className="profile-anchor">
+        <div className="profile-anchor" ref={profileAnchor} onKeyDown={event => {
+          if (event.key === 'Escape') setProfile(false);
+        }}>
           <Notifications key={principal.organization.id} organizationId={principal.organization.id} doNotDisturb={principal.user.presence === 'dnd'} onEvent={id => { setCalendarTarget(id); navigate('calendar'); }} onChat={id => { setChatTarget(undefined); setChatConversationTarget(id); navigate('chat'); }} />
-          <Presence principal={principal} />
           <button
             className="profile-trigger"
-            aria-label={`Abrir perfil de ${principal.user.name}`}
+            aria-label={t('Abrir perfil de {name}', {name: principal.user.name})}
             aria-expanded={profile}
+            aria-controls="profile-menu"
             onClick={() => setProfile(!profile)}
           >
-            <span className="avatar">{principal.user.name.slice(0, 1)}</span>
+            <span className="avatar">{profilePhoto ? <img src={profilePhoto} alt="" /> : principal.user.name.slice(0, 1)}</span>
             <span className="profile-name">
               {principal.user.name}
-              <small>{roleNames[principal.role]}</small>
+              <small>{t(roleNames[principal.role])}</small>
             </span>
             <ChevronDown size={16} />
           </button>
-          {profile && (
-            <div className="profile-menu">
+            <div className="profile-menu" id="profile-menu" hidden={!profile}>
+              {profilePhoto && <img className="profile-menu-photo" src={profilePhoto} alt={t('Mi foto de perfil')} />}
               <strong>{principal.user.name}</strong>
-              <small>{roleNames[principal.role]}</small>
+              <small>{t(roleNames[principal.role])}</small>
               <button
                 className="copy-email"
                 title={principal.user.email}
@@ -286,31 +371,51 @@ export function App() {
                   try {
                     await navigator.clipboard.writeText(principal.user.email);
                   } catch {
-                    setError(new Error("No se pudo copiar el correo."));
+                    setError(new Error(t('No se pudo copiar el correo.')));
                   }
                 }}
               >
                 <span>{principal.user.email}</span>
                 <Copy size={14} />
               </button>
-              <button onClick={toggleTheme} disabled={themeSaving}>
+              <div className="profile-presence">
+                <label htmlFor="profile-presence-choice">{t('Estado')}</label>
+                <select id="profile-presence-choice" value={principal.user.presence}
+                  disabled={presenceSaving || themeSaving}
+                  onChange={event => void changePresence(event.target.value)}>
+                  <option value="online">{t('En línea')}</option>
+                  <option value="away">{t('Ausente')}</option>
+                  <option value="dnd">{t('No molestar')}</option>
+                  <option value="invisible">{t('Invisible')}</option>
+                </select>
+                <Presence principal={principal} />
+              </div>
+              <div className="profile-presence">
+                <label htmlFor="profile-language-choice">{t('Idioma')}</label>
+                <select id="profile-language-choice" value={principal.user.language}
+                  disabled={languageSaving}
+                  onChange={event => void changeLanguage(event.target.value as 'es' | 'en')}>
+                  <option value="es">{t('Español')}</option>
+                  <option value="en">{t('Inglés')}</option>
+                </select>
+              </div>
+              <button onClick={toggleTheme} disabled={themeSaving || presenceSaving}>
                 {theme === "light" ? <Sun size={18} /> : <Moon size={18} />}
-                Cambiar a tema {theme === "light" ? "oscuro" : "claro"}
+                {t(theme === 'light' ? 'Cambiar a tema oscuro' : 'Cambiar a tema claro')}
               </button>
               <button onClick={() => navigate("settings")}>
                 <Settings size={18} />
-                Editar perfil
+                {t('Editar perfil')}
               </button>
               <button onClick={logout}>
                 <LogOut size={18} />
-                Cerrar sesión
+                {t('Cerrar sesión')}
               </button>
             </div>
-          )}
         </div>
       </header>
       <aside className={"sidebar " + (menu ? "open" : "")}>
-        <span className="nav-label">MI JUNTA</span>
+        <span className="nav-label">{t('MI JUNTA')}</span>
         <nav>
           {links.map(({ key, label, icon: Icon }) => (
             <button
@@ -319,25 +424,25 @@ export function App() {
               onClick={() => navigate(key)}
             >
               <Icon size={19} />
-              {label}
+              {t(label)}
             </button>
           ))}
         </nav>
         <div className="sidebar-bottom">
           <ShieldCheck size={22} />
-          <strong>Tu espacio de confianza</strong>
+          <strong>{t('Tu espacio de confianza')}</strong>
           <p>
-            Acceso según tu rol.
+            {t('Acceso según tu rol.')}
             <br />
-            Información de tu junta.
+            {t('Información de tu junta.')}
           </p>
-          <span className="version">SRD · Desarrollo 0.1</span>
+          <span className="version">{t('SRD · Desarrollo 0.1')}</span>
         </div>
       </aside>
       {menu && (
         <button
           className="menu-backdrop"
-          aria-label="Cerrar menú"
+          aria-label={t('Cerrar menú')}
           onClick={() => setMenu(false)}
         />
       )}
@@ -356,7 +461,7 @@ export function App() {
           window.scrollTo({ top: 0 });
         }} />}
         {page === "home" && (
-          <Dashboard key={principal.organization.id} principal={principal} navigate={navigate} />
+          <Dashboard key={`${principal.organization.id}:dashboard`} principal={principal} navigate={navigate} />
         )}
         {page === "register" && (
           <PersonForm
@@ -379,35 +484,34 @@ export function App() {
             setTheme={setTheme}
           />
         )}
-          {page === "audit" && <Audit key={principal.organization.id} principal={principal} />}
-          {page === 'calendar' && <Calendar key={principal.organization.id} principal={principal} openEventId={calendarTarget} onOpened={() => setCalendarTarget(undefined)} />}
-          {page === 'treasury' && <Treasury key={principal.organization.id} principal={principal} />}
-          {page === 'inventory' && <Inventory key={principal.organization.id} principal={principal} />}
-          {page === 'folders' && (canAdmin(principal.role) || folderRead) && <Folders key={`${principal.organization.id}:${folderTarget ?? 'root'}`} canManage={canAdmin(principal.role)} initialFolder={folderTarget} />}
-          {page === 'contacts' && <Contacts key={principal.organization.id} onChat={id => { setChatTarget(id); navigate('chat'); }} />}
-          {page === 'chat' && <Chat key={principal.organization.id} userId={chatTarget} conversationId={chatConversationTarget} onStarted={chatStarted} onOpened={chatOpened} selfId={principal.user_id} onContacts={() => navigate('contacts')} />}
-          {page === 'search' && <GlobalSearch key={principal.organization.id} principal={principal} folderRead={folderRead || canAdmin(principal.role)} onOpenFolder={id => { navigate('folders'); setFolderTarget(id); }} />}
+          {page === "audit" && <Audit key={`${principal.organization.id}:audit`} principal={principal} />}
+          {page === 'calendar' && <Calendar key={`${principal.organization.id}:calendar`} principal={principal} openEventId={calendarTarget} onOpened={() => setCalendarTarget(undefined)} />}
+          {page === 'treasury' && <Treasury key={`${principal.organization.id}:treasury`} principal={principal} />}
+          {page === 'inventory' && <Inventory key={`${principal.organization.id}:inventory`} principal={principal} />}
+          {page === 'folders' && (canAdmin(principal.role) || folderRead) && <Folders key={`${principal.organization.id}:folders:${folderTarget ?? 'root'}`} canManage={canAdmin(principal.role)} initialFolder={folderTarget} />}
+          {page === 'contacts' && <Contacts key={`${principal.organization.id}:contacts`} organizationId={principal.organization.id} onChat={id => { setChatTarget(id); navigate('chat'); }} />}
+          {page === 'chat' && <Chat key={`${principal.organization.id}:chat`} userId={chatTarget} conversationId={chatConversationTarget} onStarted={chatStarted} onOpened={chatOpened} selfId={principal.user_id} organizationId={principal.organization.id} onContacts={() => navigate('contacts')} />}
+          {page === 'search' && <GlobalSearch key={`${principal.organization.id}:search`} principal={principal} folderRead={folderRead || canAdmin(principal.role)} onOpenFolder={id => { navigate('folders'); setFolderTarget(id); }} />}
         {page === "downloads" && (
           <>
             <div className="page-heading">
               <div>
-                <h1>Descargas</h1>
+                <h1>{t('Descargas')}</h1>
                 <p className="muted">
-                  Aplicaciones de SRD para Windows y Android.
+                  {t('Aplicaciones de SRD para Windows y Android.')}
                 </p>
               </div>
             </div>
             <section className="panel">
-              <Empty title="Todavía no hay instaladores disponibles">
-                Los paquetes aparecerán aquí después de construirlos y verificar
-                su firma y checksum.
+              <Empty title={t('Todavía no hay instaladores disponibles')}>
+                {t('Los paquetes aparecerán aquí después de construirlos y verificar su firma y checksum.')}
               </Empty>
             </section>
           </>
         )}
         <footer>
           ©{" "}
-          {new Date().toLocaleDateString("es-CO", {
+          {new Date().toLocaleDateString(formatLocale(), {
             year: "numeric",
             timeZone: "America/Bogota",
           })}{" "}
@@ -444,31 +548,31 @@ function Dashboard({
     <>
       <section className="welcome">
         <div>
-          <span className="eyebrow">TU COMUNIDAD, EN UN SOLO LUGAR</span>
+          <span className="eyebrow">{t('TU COMUNIDAD, EN UN SOLO LUGAR')}</span>
           <h1>
-            Hola, {roleNames[principal.role]}{" "}
+            {t('Hola, {role}', {role: t(roleNames[principal.role])})}{' '}
             <Hand className="wave" size={30} />
           </h1>
-          <p>Bienvenido al panel de {principal.organization.name}.</p>
+          <p>{t('Bienvenido al panel de {organization}.', {organization: principal.organization.name})}</p>
           <QuickLinks navigate={navigate} />
         </div>
         <div className="today-card">
           <CalendarDays size={24} />
-          <span>Fecha de hoy</span>
+          <span>{t('Fecha de hoy')}</span>
           <strong>
-            {data ? new Date(data.date + 'T12:00:00-05:00').toLocaleDateString("es-CO", {
+            {data ? new Date(data.date + 'T12:00:00-05:00').toLocaleDateString(formatLocale(), {
               timeZone: "America/Bogota",
               day: "2-digit",
               month: "long",
               year: "numeric",
-            }) : busy ? 'Consultando fecha…' : 'Fecha no disponible'}
+            }) : busy ? t('Consultando fecha…') : t('Fecha no disponible')}
           </strong>
-          <small>Hora de Colombia</small>
+          <small>{t('Hora de Colombia')}</small>
         </div>
       </section>
       <div className="section-heading">
-        <p className="muted">{data ? `Datos consultados: ${new Date(data.generated_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' })} (Colombia)` : 'Los indicadores se calculan con la fecha del servidor.'}</p>
-        <button disabled={busy} onClick={() => setRefresh(value => value + 1)}>Actualizar indicadores</button>
+        <p className="muted">{data ? t('Datos consultados: {date} (Colombia)', {date: new Date(data.generated_at).toLocaleString(formatLocale(), { timeZone: 'America/Bogota' })}) : t('Los indicadores se calculan con la fecha del servidor.')}</p>
+        <button disabled={busy} onClick={() => setRefresh(value => value + 1)}>{t('Actualizar indicadores')}</button>
       </div>
       <ErrorBox error={error} />
       {!data && !error ? (
@@ -478,14 +582,14 @@ function Dashboard({
           <>
             <div className="stats-grid">
               {[
-                ["Personas registradas", data.total, "En esta junta"],
-                ["Registradas hoy", data.today, "Desde las 00:00"],
-                ["Esta semana", data.week, "Desde el lunes"],
-                ["Este mes", data.month, "Mes en curso"],
+                [t('Personas registradas'), data.total, t('En esta junta')],
+                [t('Registradas hoy'), data.today, t('Desde las 00:00')],
+                [t('Esta semana'), data.week, t('Desde el lunes')],
+                [t('Este mes'), data.month, t('Mes en curso')],
               ].map(([label, value, help]) => (
                 <article className="stat" key={label}>
                   <span>{label}</span>
-                  <strong>{value.toLocaleString("es-CO")}</strong>
+                  <strong>{value.toLocaleString(formatLocale())}</strong>
                   <small>{help}</small>
                 </article>
               ))}
@@ -494,15 +598,15 @@ function Dashboard({
               <section className="panel">
                 <div className="section-heading">
                   <div>
-                    <h2>Actividad de registro</h2>
-                    <p className="muted">Últimos siete días</p>
+                    <h2>{t('Actividad de registro')}</h2>
+                    <p className="muted">{t('Últimos siete días')}</p>
                   </div>
                   <span className="chip">
                     {data.last_seven_days.reduce(
                       (s: number, d: any) => s + d.count,
                       0,
                     )}{" "}
-                    registros
+                    {t('registros')}
                   </span>
                 </div>
                 <div
@@ -521,14 +625,14 @@ function Dashboard({
                       <small>
                         {new Date(
                           d.date + "T12:00:00-05:00",
-                        ).toLocaleDateString("es-CO", { weekday: "short" })}
+                        ).toLocaleDateString(formatLocale(), { weekday: "short" })}
                       </small>
                     </div>
                   ))}
                 </div>
               </section>
               <section className="panel">
-                <h2>Distribución de personas</h2>
+                <h2>{t('Distribución de personas')}</h2>
                 {total ? (
                   <>
                     <Distribution
@@ -536,19 +640,19 @@ function Dashboard({
                       field="gender"
                       labels={genders}
                       total={total}
-                      title="Por género"
+                      title={t('Por género')}
                     />
                     <Distribution
                       rows={data.document_types}
                       field="document_type"
                       labels={documents}
                       total={total}
-                      title="Por documento"
+                      title={t('Por documento')}
                     />
                   </>
                 ) : (
-                  <Empty title="Cada registro cuenta">
-                    Cuando agregues personas verás aquí su distribución.
+                  <Empty title={t('Cada registro cuenta')}>
+                    {t('Cuando agregues personas verás aquí su distribución.')}
                   </Empty>
                 )}
               </section>
@@ -556,16 +660,16 @@ function Dashboard({
             <section className="panel">
               <div className="section-heading">
                 <div>
-                  <h2>Últimos registros</h2>
+                  <h2>{t('Últimos registros')}</h2>
                   <p className="muted">
-                    Las diez incorporaciones más recientes
+                    {t('Las diez incorporaciones más recientes')}
                   </p>
                 </div>
                 <button
                   className="text-button"
                   onClick={() => navigate("list")}
                 >
-                  Ver lista completa <ArrowUpRight size={16} />
+                  {t('Ver lista completa')} <ArrowUpRight size={16} />
                 </button>
               </div>
               {data.latest.length ? (
@@ -574,8 +678,8 @@ function Dashboard({
                   onView={(p) => setDetail(p.id)}
                 />
               ) : (
-                <Empty title="Tu registro comunitario empieza aquí">
-                  Aún no se han guardado personas en esta junta.
+                <Empty title={t('Tu registro comunitario empieza aquí')}>
+                  {t('Aún no se han guardado personas en esta junta.')}
                 </Empty>
               )}
             </section>
@@ -633,7 +737,7 @@ function Distribution({
         {rows.map((r, i) => (
           <div className="legend" key={r[field] || "none"}>
             <i style={{ background: colors[i % colors.length] }} />
-            <span>{labels[r[field]] || "Sin registrar"}</span>
+            <span>{t(labels[r[field]] || 'Sin registrar')}</span>
             <strong>{r.count}</strong>
           </div>
         ))}
@@ -669,8 +773,9 @@ function SettingsPanel({
     try {
       await api(path, method, d);
       if (d.theme) setTheme(d.theme);
+      if (d.language) broadcastLanguage(d.language, principal.user_id);
       await reload();
-      setNotice("Cambios guardados.");
+      setNotice(t('Cambios guardados.'));
     } catch (e) {
       setError(e);
     } finally {
@@ -681,8 +786,8 @@ function SettingsPanel({
     <>
       <div className="page-heading">
         <div>
-          <h1>Configuración</h1>
-          <p className="muted">Tu perfil, la identidad y los permisos de tu junta.</p>
+          <h1>{t('Configuración')}</h1>
+          <p className="muted">{t('Tu perfil, la identidad y los permisos de tu junta.')}</p>
         </div>
       </div>
       <ErrorBox error={error} />
@@ -694,11 +799,12 @@ function SettingsPanel({
       )}
       {canAdmin(principal.role) && <div id="service-status"><ServiceStatus key={principal.organization.id} /></div>}
       <section className="panel">
-        <h2>Mi perfil</h2>
+        <h2>{t('Mi perfil')}</h2>
+        <ProfilePhoto key={`${principal.organization.id}:${principal.user_id}`} userId={principal.user_id} />
         <form onSubmit={(e) => submit(e, "profile", "PATCH")}>
           <div className="form-grid">
             <label>
-              Nombre
+              {t('Nombre')}
               <input
                 name="name"
                 defaultValue={principal.user.name}
@@ -707,65 +813,71 @@ function SettingsPanel({
               />
             </label>
             <label>
-              Correo de acceso
+              {t('Correo de acceso')}
               <input value={principal.user.email} readOnly />
             </label>
             <label>
-              Tema
+              {t('Tema')}
               <select name="theme" defaultValue={principal.user.theme}>
-                <option value="light">Claro</option>
-                <option value="dark">Oscuro</option>
+                <option value="light">{t('Claro')}</option>
+                <option value="dark">{t('Oscuro')}</option>
               </select>
             </label>
             <label>
-              Preferencia de presencia
+              {t('Preferencia de presencia')}
               <select name="presence" defaultValue={principal.user.presence}>
-                <option value="online">En línea</option>
-                <option value="away">Ausente</option>
-                <option value="dnd">No molestar</option>
-                <option value="invisible">Invisible</option>
+                <option value="online">{t('En línea')}</option>
+                <option value="away">{t('Ausente')}</option>
+                <option value="dnd">{t('No molestar')}</option>
+                <option value="invisible">{t('Invisible')}</option>
+              </select>
+            </label>
+            <label>
+              {t('Idioma')}
+              <select name="language" key={principal.user.language} defaultValue={principal.user.language}>
+                <option value="es">{t('Español')}</option>
+                <option value="en">{t('Inglés')}</option>
               </select>
             </label>
           </div>
           <p className="muted">
-            La conexión se confirma cada 30 segundos y vence tras 90 segundos sin señal. Invisible se representa como Desconectado. No molestar oculta el distintivo de la campana, pero conserva los avisos en la bandeja.
+            {t('La conexión se confirma cada 30 segundos y vence tras 90 segundos sin señal. Invisible se representa como Desconectado. No molestar oculta el distintivo de la campana, pero conserva los avisos en la bandeja.')}
           </p>
           <button className="primary" disabled={busy}>
-            Guardar perfil
+            {t('Guardar perfil')}
           </button>
         </form>
       </section>
       <EmailChange onChanged={reload} />
       <QuickLinkSettings principal={principal} />
-      <PersonFieldSettings key={principal.organization.id} />
-      {canAdmin(principal.role) && <PersonPositionSettings key={principal.organization.id} />}
-      <PersonFilterSettings key={principal.organization.id} />
-      <PlanillaSettings key={principal.organization.id} organizationName={principal.organization.name} />
-      {canAdmin(principal.role) && <FolderAccessSettings key={principal.organization.id} />}
-      {canAdmin(principal.role) && <Memberships principal={principal} />}
-      {principal.role === 'superadmin' && <Organizations principal={principal} />}
-      {principal.role === 'superadmin' && <PlatformAccounts />}
+      <PersonFieldSettings key={`${principal.organization.id}:fields`} />
+      {canAdmin(principal.role) && <PersonPositionSettings key={`${principal.organization.id}:positions`} />}
+      <PersonFilterSettings key={`${principal.organization.id}:filters`} />
+      <PlanillaSettings key={`${principal.organization.id}:planilla`} organizationName={principal.organization.name} />
+      {canAdmin(principal.role) && <FolderAccessSettings key={`${principal.organization.id}:folder-access`} />}
+      {canAdmin(principal.role) && <Memberships key={`${principal.organization.id}:memberships`} principal={principal} />}
+      {principal.role === 'superadmin' && <Organizations key={`${principal.organization.id}:organizations`} principal={principal} />}
+      {principal.role === 'superadmin' && <PlatformAccounts key={`${principal.organization.id}:platform-accounts`} />}
         <section className="panel">
-          <h2>Seguridad de la cuenta</h2>
+          <h2>{t('Seguridad de la cuenta')}</h2>
         <button
           disabled={busy}
           onClick={async () => {
             try {
               await api("auth/revokeOthers", "POST");
-              setNotice("Las demás sesiones fueron revocadas.");
+              setNotice(t('Las demás sesiones fueron revocadas.'));
             } catch (e) {
               setError(e);
             }
           }}
         >
-          Cerrar las demás sesiones
+          {t('Cerrar las demás sesiones')}
         </button>
       </section>
       <section className="panel">
-        <h2>Cambiar de junta</h2>
+        <h2>{t('Cambiar de junta')}</h2>
         <p className="muted">
-          Solo puedes entrar a una junta autorizada para tu cuenta. Debes
-          aceptar sus términos.
+          {t('Solo puedes entrar a una junta autorizada para tu cuenta. Debes aceptar sus términos.')}
         </p>
         <form
           className="filters"
@@ -779,20 +891,20 @@ function SettingsPanel({
           }}
         >
           <label className="grow">
-            Código de la junta
+            {t('Código de la junta')}
             <input
               required
               value={code}
               onChange={(e) => setCode(e.target.value)}
             />
           </label>
-          <button>Cargar términos</button>
+          <button>{t('Cargar términos')}</button>
         </form>
       </section>
       {canAdmin(principal.role) && (
         <>
           <section className="panel">
-            <h2>Identidad de la junta</h2>
+            <h2>{t('Identidad de la junta')}</h2>
             <form onSubmit={(e) => submit(e, "organization", "PATCH")}>
               <input
                 type="hidden"
@@ -801,7 +913,7 @@ function SettingsPanel({
               />
               <div className="form-grid">
                 <label>
-                  Nombre
+                  {t('Nombre')}
                   <input
                     name="name"
                     defaultValue={principal.organization.name}
@@ -810,7 +922,7 @@ function SettingsPanel({
                   />
                 </label>
                 <label>
-                  Color principal
+                  {t('Color principal')}
                   <input
                     name="accent"
                     type="color"
@@ -819,13 +931,13 @@ function SettingsPanel({
                 </label>
               </div>
               <button className="primary" disabled={busy}>
-                Guardar identidad
+                {t('Guardar identidad')}
               </button>
             </form>
           </section>
           <section className="panel">
             <h2>
-              Términos de uso · Versión {principal.organization.terms.version}
+              {t('Términos de uso · Versión {version}', {version: principal.organization.terms.version})}
             </h2>
             <form onSubmit={(e) => submit(e, "organization/terms", "POST")}>
               <input
@@ -834,7 +946,7 @@ function SettingsPanel({
                 value={principal.organization.terms.version}
               />
               <label>
-                Texto de los términos
+                {t('Texto de los términos')}
                 <textarea
                   name="body"
                   defaultValue={principal.organization.terms.body}
@@ -844,12 +956,16 @@ function SettingsPanel({
                   rows={8}
                 />
               </label>
+              <label>
+                {t('Texto de los términos en inglés')}
+                <textarea name="body_en" defaultValue={principal.organization.terms.body_en ?? ''}
+                  required minLength={20} maxLength={50000} rows={8} />
+              </label>
               <p className="muted">
-                Publicar una nueva versión exigirá que cada usuario la acepte
-                para continuar.
+                {t('Publicar una nueva versión exigirá que cada usuario la acepte para continuar.')}
               </p>
               <button className="primary" disabled={busy}>
-                Publicar nueva versión
+                {t('Publicar nueva versión')}
               </button>
             </form>
           </section>
@@ -857,10 +973,10 @@ function SettingsPanel({
       )}
       {target && (
         <Modal
-          title={`Términos de ${target.name}`}
+          title={t('Términos de {organization}', {organization: target.name})}
           onClose={() => setTarget(undefined)}
         >
-          <p className="terms-text">{target.terms.body}</p>
+          <p className="terms-text">{localizedTerms(target.terms)}</p>
           <button
             className="primary"
             onClick={async () => {
@@ -878,7 +994,7 @@ function SettingsPanel({
               }
             }}
           >
-            Aceptar y cambiar de junta
+            {t('Aceptar y cambiar de junta')}
           </button>
         </Modal>
       )}

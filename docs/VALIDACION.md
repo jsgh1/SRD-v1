@@ -1,5 +1,19 @@
 # Evidencia del incremento 0.1
 
+## Carpeta: pantalla de archivos ES/EN y aceptación de nombres — 08/10/2026
+
+- La pantalla de archivos privados presenta en ES/EN carga, listado, cuota, acciones, vista previa de imagen/audio/PDF/Office, movimiento, renombrado, eliminación, paginación y estados vacíos. Los nombres de archivo redactados por usuarios se conservan; los nombres de carpetas y destinos usan su versión guardada en el idioma elegido. `npm run build` aprobó y la imagen `srd-web` se reconstruyó.
+- Chromium con MySQL y correo local: `folder-language.spec.mjs` **1 aprobada, 0 fallidas** (31,6 s), con alta de nombre ES/EN, cambio persistente desde perfil, recarga, rótulos de archivos en inglés y ancho de 360 px. Informe en `.local/browser-runs/a82c723e-bce9-4991-a0fa-fb8d1d903f58`.
+- Regresión `folders.spec.mjs` **1 aprobada, 0 fallidas** (1,7 min): creación, navegación, renombrado, conflicto por duplicado, auditoría, movimiento, protección contra ciclos, versiones, paginación y ancho móvil. Informe en `.local/browser-runs/aa00ce99-8918-4a5d-947e-29f3b7c98cf0`. El primer intento se detuvo por un selector de alerta demasiado amplio ante avisos de planificadores apagados; se acotó al diálogo. El segundo requirió iniciar Auditoría y el planificador de Archivos para verificar sus eventos. Los nueve contenedores usados quedaron detenidos al finalizar.
+- Revisión visual posterior: el selector nativo de archivos mostraba el idioma del navegador en lugar del idioma del perfil. Se reemplazó su presentación por un control accesible con «Seleccionar archivo / Ningún archivo seleccionado» y «Choose file / No file selected»; el input real y su flujo de carga se conservan. Compilación web e imagen Docker aprobaron. `folder-language.spec.mjs` volvió a pasar (1/1, 27,2 s), incluido el control accesible y ambos rótulos; informe `.local/browser-runs/3cab942c-3f86-45d5-8881-41a09f7d8624`. La captura de viewport móvil `.local/folder-language-mobile.png` se inspeccionó: control, formulario, cuota y estados vacíos quedan dentro de 360 px. Los siete contenedores usados quedaron detenidos.
+
+## Carpeta: nombres ES/EN — 08/10/2026
+
+- `FolderApiTest.php` y `FolderDocumentTest.php`: **32/32 pruebas, 778 aserciones** con PHP 8.2 local y extensiones Zip/GD activadas solo para el proceso. Cubren compatibilidad con clientes que solo envían `name`, alta/renombrado bilingüe, migas de pan y ruta inglesa de búsqueda.
+- `npm run build` de `apps/web`, `php -l` de los archivos PHP modificados, `node --check` de los dos recorridos de navegador y `docker compose config -q` aprobaron. Se construyeron las imágenes `srd-files` y `srd-web`.
+- `2026_10_08_000001_add_folder_name_en` se aplicó en MySQL con `docker compose run --rm --no-deps files php artisan migrate --force` (**DONE**, 501,72 ms), usando solo MySQL y un contenedor temporal. Ambos quedaron detenidos después.
+- Inicialmente se aplazaron `folder-language.spec.mjs` y `folders.spec.mjs`: al iniciar MySQL y Mailpit tras la reconstrucción, la memoria libre bajó a unos 330 MB. Se completaron después, como documenta la sección anterior, cuando hubo memoria suficiente.
+
 ## Cambio de junta y términos renovados en Android — 05/10/2026
 
 - `apps/mobile` aprobó **37/37 pruebas Jest**, `npx tsc --noEmit` y lint. Las pruebas comprueban aceptación explícita antes del cambio, sustitución del resumen de la junta anterior, persistencia del nuevo código, bloqueo de una segunda escritura tras respuesta perdida, comprobación de `/me` y aceptación obligatoria de términos renovados de la junta activa. La prueba de contrato comprueba el cuerpo del POST y la renovación del CSRF.
@@ -1232,3 +1246,27 @@ La reutilización de cuentas entre ejecuciones alcanzó el límite horario de c�
 No se ha validado Firefox, Edge ni Brave; tampoco Android, Electron, carga general, concurrencia InnoDB fuera de los escenarios probados del publicador y de campos adicionales, backup/restauración, operación de producción, accesibilidad integral ni todos los flujos del cambio de correo en varios dispositivos. El navegador integrado no estaba disponible; se usó Chromium aislado instalado dentro del proyecto. No se verificó visualmente el archivo Figma ni todas las figuras de Word.
 
 La consulta de entregas por junta y el comando srd:outbox-status permiten revisar agotados del outbox. Siguen pendientes alertas, supervisión global, reintento administrativo autorizado y supervisión de avisos SMTP. La bitácora completa y las garantías operativas no equivalen todavía a cumplimiento integral de los RNF.
+
+## Foto de contacto en directorio y chat (8 de octubre de 2026)
+
+Contactos y Chat consultan la foto privada del usuario visible a través de la API de Archivos; cada consulta vuelve a validar pertenencia y permiso. Si falta la imagen, se muestra la inicial. La compilación web y su imagen Docker aprobaron. Chromium/Compose con MySQL, ClamAV, Identidad, Archivos y Chat aprobó `profile-photo.spec.mjs` **1/1** en `.local/browser-runs/47234165-51f2-48f6-bf96-cea120a6aa2b`: un Consultor vio la foto sintética del Administrador en el directorio, la lista de conversaciones y el encabezado, pero no pudo cambiarla; otra junta no pudo leerla. El chat a 360 px no desbordó el documento y la captura `.local/contact-chat-mobile.png` se inspeccionó visualmente.
+
+## Logo de la junta en el acceso público (8 de octubre de 2026)
+
+La respuesta pública del código de junta incorpora únicamente su logo PNG configurado; Gateway resuelve primero una junta activa en Configuración y consulta a Registros solo por su UUID. Registros devuelve únicamente `logo_data` a Gateway, sin encabezados, columnas ni permisos. Si Registros no responde en dos segundos, el acceso sigue disponible con el icono genérico. El formulario de configuración avisa que el logo será visible públicamente. La suite completa de Registros aprobó **56 pruebas/1740 aserciones** y la de Gateway **34/470**; la compilación web aprobó. Chromium en Compose aprobó `planilla-settings.spec.mjs` **1/1** en `.local/browser-runs/8048c7cd-990b-42f4-85b5-9c5a832b1b3f`: logo en login sin sesión, persistencia tras recarga, aislamiento de otra junta y regresión de encabezado, Excel, PDF y vista imprimible. Gateway volvió a pasar 34/470 tras limitar el tiempo de la consulta opcional.
+
+## Foto de perfil por junta (8 de octubre de 2026)
+
+Se incorporó la foto de usuario en Archivos con una fila `user_photos` por usuario y junta, objetos privados, control de versión, cuota, normalización PNG, análisis ClamAV y eventos de auditoría. Identidad comprueba que el lector y el titular estén activos y pertenezcan a la junta; solo el titular puede cargar o eliminar. La web la muestra en el perfil, el encabezado y su menú, con controles ES/EN. La migración `2026_10_08_000002_user_photos` se aplicó en MySQL.
+
+Las suites locales de Identidad (41 pruebas/508 aserciones), Archivos (49/932, con extensiones ZIP y GD) y Gateway (32/461), así como `npm run build` de la web, aprobaron. La imagen de Archivos se reconstruyó tras corregir una validación UUID detectada por la primera ejecución real. La segunda ejecución comprobó carga, lectura y persistencia, pero tropezó con el límite de login al reutilizar al Consultor inmediatamente en otra junta; se ajustó la prueba sin relajar el limitador. La ejecución final de `profile-photo.spec.mjs` aprobó **1/1** en `.local/browser-runs/b8742d82-8108-4e04-b207-43ecd5c547e0`, con MySQL y ClamAV saludables: imagen en perfil y encabezado tras recargar, menú y ancho móvil de 360 px, lectura por miembro de la misma junta, rechazo de escritura ajena, rechazo de lectura desde otra junta y eliminación confirmada.
+
+## Planilla con logo de junta (8 de octubre de 2026)
+
+Se añadió un PNG opcional por junta a la configuración de la planilla. La API limita la carga a 128 KB y 1024 × 1024 píxeles, conserva el control de versión y permisos, y permite quitarlo. Excel incrusta el archivo en un dibujo OOXML; PDF y vista imprimible lo reciben en la respuesta autorizada. La migración `2026_10_08_000001_planilla_logo` se aplicó en MySQL.
+
+La compilación web local y en Docker pasó; la suite completa de Registros pasó con 55 pruebas y 1734 aserciones, incluidas relaciones XML válidas dentro del Excel. PHPUnit local requirió habilitar explícitamente la extensión ZIP (`php -d extension=zip vendor/phpunit/phpunit/phpunit`); `artisan test` no propagó esa opción al proceso hijo. Chromium en Compose aprobó `planilla-settings.spec.mjs` (1/1): cargó un PNG sintético, confirmó persistencia, imagen dentro de Excel, vista imprimible inglesa y descarga PDF.
+
+Una primera ejecución de `person-planilla.spec.mjs` alcanzó el limitador compartido de cinco exportaciones por minuto entre ambos recorridos y recibió 429 al descargar el PDF. Esa ejecución no valida la regresión sin logo; debe repetirse después de que expire el límite. No se relajó el limitador de producción.
+
+Después de expirar la ventana, `person-planilla.spec.mjs` aprobó (1/1) en `.local/browser-runs/60c2b71a-7460-47c2-847e-00408769160b`: Excel, PDF, impresión y paginación sin logo. Una nueva ejecución de `planilla-settings.spec.mjs` aprobó (1/1) en `.local/browser-runs/5de97f1b-46d7-4e89-aca7-19f247194a89` y confirmó el logo del encabezado antes y después de recargar, también a 360 px. El encabezado consume la misma configuración autorizada; no se duplicó el almacenamiento del logo.

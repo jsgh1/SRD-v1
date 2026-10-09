@@ -133,6 +133,45 @@ final class PersonExportTest extends TestCase
         $this->internal('GET', 'persons/export', ['filename' => str_repeat('a', 101), 'confirm_filename' => 1], $p)->assertUnprocessable();
     }
 
+    public function test_english_exports_use_saved_council_labels_and_keep_user_text(): void
+    {
+        $p = $this->principal();
+        $id = $this->create('EN-001', 'Nombre escrito por la junta', $p);
+        DB::table('persons')->where('id', $id)->update([
+            'position_label' => 'Vocal propio', 'position_label_en' => 'Council representative',
+            'affiliated' => 1, 'zone' => 'urban', 'gender' => 'female',
+        ]);
+        DB::table('person_field_values')->where('person_id', $id)->update(['snapshots' => json_encode([
+            'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' => [
+                'label' => 'Sector propio', 'label_en' => 'Own sector',
+                'display' => 'Norte propio', 'display_en' => 'North sector', 'value' => 'north', 'type' => 'select',
+            ],
+        ])]);
+
+        $list = $this->internal('GET', 'persons/export-pdf', ['language' => 'en'], $p)->assertOk()
+            ->assertJsonPath('data.language', 'en')->assertJsonPath('data.headers.1', 'First names')
+            ->assertJsonPath('data.rows.0.3', 'Citizenship Card')->assertJsonPath('data.rows.0.5', 'Pending')
+            ->assertJsonPath('data.rows.0.6', 'Yes')->assertJsonPath('data.rows.0.7', 'Urban')
+            ->assertJsonPath('data.rows.0.9', 'Council representative');
+        $this->assertSame('Nombre escrito por la junta', $list->json('data.rows.0.1'));
+        $xlsx = base64_decode($this->internal('GET', 'persons/export', ['language' => 'en'], $p)->assertOk()->json('data.content'), true);
+        $this->assertStringContainsString('First names', $xlsx);
+        $this->assertStringContainsString('Council representative', $xlsx);
+        $this->assertStringContainsString('Nombre escrito por la junta', $xlsx);
+
+        $path = 'persons/'.$id;
+        $individual = $this->internal('GET', $path.'/pdf', ['language' => 'en'], $p)->assertOk()
+            ->assertJsonPath('data.language', 'en')->assertJsonPath('data.headers.0', 'Field')
+            ->assertJsonPath('data.rows.13.0', 'Position')->assertJsonPath('data.rows.13.1', 'Council representative')
+            ->assertJsonPath('data.rows.21.0', 'Additional field: Own sector')
+            ->assertJsonPath('data.rows.21.1', 'North sector');
+        $this->assertStringNotContainsString('NOTA-PRIVADA-EXPORT', $individual->getContent());
+        $individualXlsx = base64_decode($this->internal('GET', $path.'/xlsx', ['language' => 'en'], $p)->assertOk()->json('data.content'), true);
+        $this->assertStringContainsString('Additional field: Own sector', $individualXlsx);
+        $this->assertStringContainsString('North sector', $individualXlsx);
+        $this->internal('GET', 'persons/export-pdf', ['language' => 'fr'], $p)->assertUnprocessable();
+    }
+
     public function test_pdf_export_reuses_safe_columns_filters_and_junta_scope(): void
     {
         $p = $this->principal();

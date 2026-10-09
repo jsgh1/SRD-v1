@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import { Empty, ErrorBox, Loading, Modal } from './ui';
 import { useRequestGeneration } from './useRequestGeneration';
+import { t, useLanguage } from './i18n';
 
 type Receipt = {
   id: string; receipt: string; kind: 'opening' | 'income' | 'expense' | 'reversal'; sign: number;
@@ -16,6 +17,7 @@ const cop = (value: string) => {
 };
 
 export function TreasurySearch({ query }: { query: string }) {
+  useLanguage();
   const generation = useRequestGeneration();
   const [page, setPage] = useState(1), [retry, setRetry] = useState(0);
   const [data, setData] = useState<Page>(), [error, setError] = useState<unknown>();
@@ -37,35 +39,35 @@ export function TreasurySearch({ query }: { query: string }) {
     finally { if (current === generation.current) setDetailBusy(false); }
   }
 
-  return <section className="panel" aria-label="Resultados de tesorería">
-    <h2>Tesorería</h2>
+  return <section className="panel" aria-label={t('Resultados de tesorería')}>
+    <h2>{t('Tesorería')}</h2>
     <ErrorBox error={error} />
-    {error ? <button onClick={() => setRetry(value => value + 1)}>Reintentar tesorería</button> : !data && <Loading />}
+    {error ? <button onClick={() => setRetry(value => value + 1)}>{t('Reintentar tesorería')}</button> : !data && <Loading />}
     {data && <>
-      <p role="status">{data.total} coincidencias en tesorería</p>
-      {!data.items.length ? <Empty title="Sin coincidencias en tesorería">Prueba otro concepto o comprobante completo.</Empty> :
-        <div className="table-scroll"><table><thead><tr><th>Comprobante</th><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Importe</th><th></th></tr></thead>
+      <p role="status">{t('{count} coincidencias en tesorería', { count: data.total })}</p>
+      {!data.items.length ? <Empty title={t('Sin coincidencias en tesorería')}>{t('Prueba otro concepto o comprobante completo.')}</Empty> :
+        <div className="table-scroll"><table><thead><tr><th>{t('Comprobante')}</th><th>{t('Fecha')}</th><th>{t('Tipo')}</th><th>{t('Concepto')}</th><th>{t('Importe')}</th><th></th></tr></thead>
           <tbody>{data.items.map(item => <tr key={item.id}>
-            <td>{item.receipt}</td><td>{item.effective_date}</td><td>{kinds[item.kind]}</td><td>{item.concept}</td>
+            <td>{item.receipt}</td><td>{item.effective_date}</td><td>{t(kinds[item.kind])}</td><td>{item.concept}</td>
             <td>{item.sign === -1 ? '−' : '+'}{cop(item.amount)}</td>
-            <td><button onClick={() => void open(item.id)} aria-label={`Ver comprobante ${item.receipt}`}>Ver comprobante</button></td>
+            <td><button onClick={() => void open(item.id)} aria-label={t('Ver comprobante {receipt}', { receipt: item.receipt })}>{t('Ver comprobante')}</button></td>
           </tr>)}</tbody></table></div>}
-      <div className="pagination"><button disabled={page === 1} onClick={() => setPage(value => value - 1)}>Anterior</button>
-        <span>Página {page}</span><button disabled={page * data.page_size >= data.total} onClick={() => setPage(value => value + 1)}>Siguiente</button></div>
+      <div className="pagination"><button disabled={page === 1} onClick={() => setPage(value => value - 1)}>{t('Anterior')}</button>
+        <span>{t('Página {page}', { page })}</span><button disabled={page * data.page_size >= data.total} onClick={() => setPage(value => value + 1)}>{t('Siguiente')}</button></div>
     </>}
     <ErrorBox error={detailError} />
     {detailBusy && <Loading />}
-    {selected && <Modal title={`Comprobante ${selected.receipt}`} onClose={() => { generation.current++; setSelected(undefined); setDetailBusy(false); setDetailError(undefined); }}>
+    {selected && <Modal title={t('Comprobante {receipt}', { receipt: selected.receipt })} onClose={() => { generation.current++; setSelected(undefined); setDetailBusy(false); setDetailError(undefined); }}>
       <dl className="treasury-receipt">
-        <div><dt>Tipo</dt><dd>{kinds[selected.kind]}</dd></div>
-        <div><dt>Importe</dt><dd>{selected.sign === -1 ? '−' : '+'}{cop(selected.amount)}</dd></div>
-        <div><dt>Concepto</dt><dd>{selected.concept}</dd></div>
-        <div><dt>Fecha efectiva</dt><dd>{selected.effective_date}</dd></div>
-        <div><dt>Responsable</dt><dd>{selected.actor_name}</dd></div>
-        <div><dt>Saldo tras asiento</dt><dd>{cop(selected.balance_after)}</dd></div>
-        {selected.support_note && <div><dt>Referencia del soporte</dt><dd>{selected.support_note}</dd></div>}
-        {selected.reverses_id && <div><dt>Revierte a</dt><dd>{selected.reverses_id}</dd></div>}
-        {selected.reversed_by_id && <div><dt>Revertido por</dt><dd>{selected.reversed_by_id}</dd></div>}
+        <div><dt>{t('Tipo')}</dt><dd>{t(kinds[selected.kind])}</dd></div>
+        <div><dt>{t('Importe')}</dt><dd>{selected.sign === -1 ? '−' : '+'}{cop(selected.amount)}</dd></div>
+        <div><dt>{t('Concepto')}</dt><dd>{selected.concept}</dd></div>
+        <div><dt>{t('Fecha efectiva')}</dt><dd>{selected.effective_date}</dd></div>
+        <div><dt>{t('Responsable')}</dt><dd>{selected.actor_name}</dd></div>
+        <div><dt>{t('Saldo tras asiento')}</dt><dd>{cop(selected.balance_after)}</dd></div>
+        {selected.support_note && <div><dt>{t('Referencia del soporte')}</dt><dd>{selected.support_note}</dd></div>}
+        {selected.reverses_id && <div><dt>{t('Revierte a')}</dt><dd>{selected.reverses_id}</dd></div>}
+        {selected.reversed_by_id && <div><dt>{t('Revertido por')}</dt><dd>{selected.reversed_by_id}</dd></div>}
       </dl>
     </Modal>}
   </section>;

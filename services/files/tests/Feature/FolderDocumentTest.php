@@ -13,6 +13,7 @@ final class FolderDocumentTest extends TestCase {
  protected function setUp():void {
   parent::setUp();
   (require database_path('migrations/2026_09_27_000001_create_internal_folders.php'))->up();
+  (require database_path('migrations/2026_10_08_000001_add_folder_name_en.php'))->up();
   (require database_path('migrations/2026_09_27_000002_create_folder_documents.php'))->up();
   (require database_path('migrations/2026_09_27_000003_add_folder_document_version.php'))->up();
   (require database_path('migrations/2026_09_27_000004_add_folder_document_deletion.php'))->up();
@@ -285,9 +286,9 @@ final class FolderDocumentTest extends TestCase {
  }
  public function test_document_search_is_literal_scoped_and_follows_read_permission():void {
   $folder=(string)Str::uuid();
-  $this->internal('POST','folders',['id'=>$folder,'parent_id'=>null,'name'=>'Actas'],$this->p)->assertOk();
+  $this->internal('POST','folders',['id'=>$folder,'parent_id'=>null,'name'=>'Actas','name_en'=>'Minutes'],$this->p)->assertOk();
   $child=(string)Str::uuid();
-  $this->internal('POST','folders',['id'=>$child,'parent_id'=>$folder,'name'=>'2026'],$this->p)->assertOk();
+  $this->internal('POST','folders',['id'=>$child,'parent_id'=>$folder,'name'=>'2026','name_en'=>'Year 2026'],$this->p)->assertOk();
   $match=$this->body($this->bytes());$match['folder_id']=$child;$match['name']='Acta 50%_!.docx';
   $other=$this->body($this->bytes());$other['name']='Acta 50AA.docx';
   $this->internal('POST','folder-documents',$match,$this->p)->assertOk();
@@ -300,12 +301,14 @@ final class FolderDocumentTest extends TestCase {
   $this->internal('GET','folder-documents/search',['q'=>'50%_!'],$viewer)->assertOk()
     ->assertJsonPath('data.total',1)->assertJsonPath('data.items.0.id',$match['id'])
     ->assertJsonPath('data.items.0.folder_name','2026')->assertJsonPath('data.items.0.folder_path','Inicio / Actas / 2026')
+    ->assertJsonPath('data.items.0.folder_name_en','Year 2026')->assertJsonPath('data.items.0.folder_path_en','Home / Minutes / Year 2026')
     ->assertJsonMissingPath('data.items.0.content');
   $archive=(string)Str::uuid();
   $this->internal('POST','folders',['id'=>$archive,'parent_id'=>null,'name'=>'Archivo'],$this->p)->assertOk();
   $this->internal('POST','folders/'.$folder.'/move',['parent_id'=>$archive,'version'=>1],$this->p)->assertOk();
   $this->internal('GET','folder-documents/search',['q'=>'50%_!'],$viewer)->assertOk()
-    ->assertJsonPath('data.items.0.folder_path','Inicio / Archivo / Actas / 2026');
+    ->assertJsonPath('data.items.0.folder_path','Inicio / Archivo / Actas / 2026')
+    ->assertJsonPath('data.items.0.folder_path_en','Home / Archivo / Minutes / Year 2026');
   $this->internal('GET','folder-documents/search',['q'=>'  '],$viewer)->assertUnprocessable();
   $this->internal('PUT','folder-access',['version'=>1,'reader_roles'=>[]],$this->p)->assertOk();
   $this->internal('GET','folder-documents/search',['q'=>'50%_!'],$viewer)->assertForbidden();

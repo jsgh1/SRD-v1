@@ -29,6 +29,32 @@ final class AuditExportTest extends TestCase
         ], $changes);
     }
 
+    public function test_english_exports_translate_presentation_but_keep_action_and_identifiers(): void
+    {
+        $event = $this->event(1);
+        DB::table('audit_events')->insert($event);
+        $pdf = $this->internal('GET', 'events/export-pdf', ['lang' => 'en'], $this->principal)
+            ->assertOk()->assertJsonPath('data.headers.0', 'Date UTC')
+            ->assertJsonPath('data.headers.1', 'Module')
+            ->assertJsonPath('data.rows.0.1', 'Records')
+            ->assertJsonPath('data.rows.0.2', '=2+2&<')
+            ->assertJsonPath('data.rows.0.3', 'Success');
+        $this->assertSame($event['id'], $pdf->json('data.rows.0.6'));
+        $xlsx = $this->internal('GET', 'events/export', ['lang' => 'en'], $this->principal)->assertOk();
+        $bytes = base64_decode($xlsx->json('data.content'), true);
+        $this->assertStringContainsString('name="Audit"', $bytes);
+        $this->assertStringContainsString('Date UTC', $bytes);
+        $this->assertStringContainsString('Records', $bytes);
+        $this->assertStringContainsString('Success', $bytes);
+        $this->assertStringContainsString('=2+2&amp;&lt;', $bytes);
+        $this->assertStringNotContainsString('<f>', $bytes);
+        $this->internal('GET', 'events/export', ['lang' => 'fr'], $this->principal)->assertUnprocessable();
+        $this->internal('GET', 'events/export-pdf', ['lang' => 'fr'], $this->principal)->assertUnprocessable();
+        $spanish = $this->internal('GET', 'events/export-pdf', ['lang' => 'es'], $this->principal)->assertOk();
+        $spanish->assertJsonPath('data.headers.0', 'Fecha UTC')->assertJsonPath('data.rows.0.1', 'Registros')
+            ->assertJsonPath('data.rows.0.3', 'Correcto');
+    }
+
     public function test_export_respects_filters_scope_roles_and_keeps_actions_as_text(): void
     {
         $first = $this->event(1);

@@ -29,11 +29,11 @@ final class FolderController
         return $this->folders($org)->where('id', strtolower($id))->first() ?? abort(404);
     }
 
-    private function name(string $name): string
+    private function name(string $name, string $field = 'name'): string
     {
         $name = trim($name);
         if ($name === '' || in_array($name, ['.', '..'], true) || preg_match('/[\x00-\x1f\x7f\/\\\\]/u', $name)) {
-            throw ValidationException::withMessages(['name' => 'Escribe un nombre sin barras ni caracteres de control.']);
+            throw ValidationException::withMessages([$field => 'Escribe un nombre sin barras ni caracteres de control.']);
         }
         return $name;
     }
@@ -52,7 +52,7 @@ final class FolderController
         while ($parent !== null) {
             abort_if(count($items) >= 20, 409);
             $folder = $this->folder($org, $parent);
-            array_unshift($items, ['id' => $folder->id, 'name' => $folder->name]);
+            array_unshift($items, ['id' => $folder->id, 'name' => $folder->name, 'name_en' => $folder->name_en]);
             $parent = $folder->parent_id;
         }
         return $items;
@@ -68,24 +68,27 @@ final class FolderController
         $page = (int) ($data['page'] ?? 1);
         $total = $query->count();
         return ['data' => ['items' => $query->orderBy('name')->orderBy('id')->offset(($page - 1) * 25)->limit(25)
-            ->get(['id', 'parent_id', 'name', 'version', 'created_at', 'updated_at']),
+            ->get(['id', 'parent_id', 'name', 'name_en', 'version', 'created_at', 'updated_at']),
             'total' => $total, 'page' => $page, 'page_size' => 25, 'breadcrumbs' => $path]];
     }
 
     public function store(Request $r): array
     {
         $p = $this->context($r);
-        $data = $r->validate(['id' => 'required|uuid|not_in:'.self::ROOT, 'parent_id' => 'nullable|uuid', 'name' => 'required|string|max:120']);
+        $data = $r->validate(['id' => 'required|uuid|not_in:'.self::ROOT, 'parent_id' => 'nullable|uuid',
+            'name' => 'required|string|max:120', 'name_en' => 'sometimes|nullable|string|max:120']);
         $name = $this->name($data['name']);
+        $nameEn = isset($data['name_en']) ? $this->name($data['name_en'], 'name_en') : null;
         $id = strtolower($data['id']);
         $parent = isset($data['parent_id']) ? strtolower($data['parent_id']) : null;
-        return DB::transaction(function () use ($p, $name, $id, $parent) {
+        return DB::transaction(function () use ($p, $name, $nameEn, $id, $parent, $data) {
             $org = $p['organization_id'];
             $this->lock($org);
             $existing = DB::table('internal_folders')->where('id', $id)->first();
             if ($existing) {
                 abort_unless($existing->organization_id === $org && $existing->created_by === $p['user_id']
-                    && $existing->name === $name && $existing->parent_id === $parent, 409);
+                    && $existing->name === $name && $existing->parent_id === $parent
+                    && (!array_key_exists('name_en', $data) || $existing->name_en === $nameEn), 409);
                 return ['data' => $existing];
             }
             if (count($this->breadcrumbs($org, $parent)) >= 20) {
@@ -93,7 +96,8 @@ final class FolderController
             }
             abort_if($this->folders($org)->count() >= 10000, 409);
             DB::table('internal_folders')->insert(['id' => $id, 'organization_id' => $org, 'parent_id' => $parent,
-                'parent_key' => $parent ?? self::ROOT, 'name' => $name, 'name_key' => hash('sha256', mb_strtolower($name)),
+                'parent_key' => $parent ?? self::ROOT, 'name' => $name, 'name_en' => $nameEn,
+                'name_key' => hash('sha256', mb_strtolower($name)),
                 'version' => 1, 'created_by' => $p['user_id'], 'created_at' => now(), 'updated_at' => now()]);
             Outbox::record('folder.created', $org, $p['user_id'], $id);
             return ['data' => $this->folder($org, $id)];
@@ -165,16 +169,20 @@ final class FolderController
     public function rename(Request $r, string $id): array
     {
         $p = $this->context($r);
-        $data = $r->validate(['name' => 'required|string|max:120', 'version' => 'required|integer|min:1|max:2147483646']);
+        $data = $r->validate(['name' => 'required|string|max:120', 'name_en' => 'sometimes|nullable|string|max:120',
+            'version' => 'required|integer|min:1|max:2147483646']);
         $name = $this->name($data['name']);
-        return DB::transaction(function () use ($p, $data, $name, $id) {
+        $nameEn = isset($data['name_en']) ? $this->name($data['name_en'], 'name_en') : null;
+        return DB::transaction(function () use ($p, $data, $name, $nameEn, $id) {
             $org = $p['organization_id'];
             $this->lock($org);
             $folder = $this->folder($org, $id);
             abort_unless((int) $folder->version === (int) $data['version'], 409);
-            if ($folder->name !== $name) {
-                $this->folders($org)->where('id', $folder->id)->update(['name' => $name,
-                    'name_key' => hash('sha256', mb_strtolower($name)), 'version' => $folder->version + 1, 'updated_at' => now()]);
+            if ($folder->name !== $name || (array_key_exists('name_en', $data) && $folder->name_en !== $nameEn)) {
+                $updates = ['name' => $name, 'name_key' => hash('sha256', mb_strtolower($name)),
+                    'version' => $folder->version + 1, 'updated_at' => now()];
+                if (array_key_exists('name_en', $data)) $updates['name_en'] = $nameEn;
+                $this->folders($org)->where('id', $folder->id)->update($updates);
                 Outbox::record('folder.renamed', $org, $p['user_id'], $folder->id);
             }
             return ['data' => $this->folder($org, $id)];

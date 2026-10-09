@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { api, canWrite, type Principal } from './api';
 import { ErrorBox, Loading, Modal } from './ui';
+import { t, useLanguage } from './i18n';
 
 type Photo = { slot: string; version: number; present: boolean; size: number; width: number | null; height: number | null };
 const labels: Record<string, string> = { person: 'Foto de la persona', document: 'Foto del documento', property: 'Foto del predio' };
 const assetLabels: Record<string, string> = { front: 'Vista frontal', side: 'Vista lateral', detail: 'Detalle' };
 
 export function PersonPhotos({ id, kind = 'person', writable = true }: { id: string; kind?: 'person' | 'asset'; writable?: boolean }) {
+  useLanguage();
   const prefix = kind === 'person' ? 'persons' : 'assets';
   const [photos, setPhotos] = useState<Photo[]>();
   const [write, setWrite] = useState(false);
@@ -20,16 +22,17 @@ export function PersonPhotos({ id, kind = 'person', writable = true }: { id: str
       .catch(e => { if (active) setError(e); });
     return () => { active = false; };
   }, [id, prefix, revision, writable]);
-  return <section className="person-photos" aria-label={kind === 'person' ? 'Fotografías de la ficha' : 'Fotografías del bien'}>
-    <h3>Fotografías</h3>
-    <p className="muted">JPEG, PNG o WebP de hasta 5 MB. Cada imagen se analiza antes de guardarla.</p>
+  return <section className="person-photos" aria-label={t(kind === 'person' ? 'Fotografías de la ficha' : 'Fotografías del bien')}>
+    <h3>{t('Fotografías')}</h3>
+    <p className="muted">{t('JPEG, PNG o WebP de hasta 5 MB. Cada imagen se analiza antes de guardarla.')}</p>
     <ErrorBox error={error} />
-    {error ? <button type="button" onClick={() => setRevision(r => r + 1)}>Reintentar fotografías</button> : !photos ? <Loading /> :
-      <div className="photo-grid">{photos.map(photo => <PhotoCard key={`${prefix}-${id}-${photo.slot}`} id={id} prefix={prefix} initial={photo} writable={write} label={(kind === 'person' ? labels : assetLabels)[photo.slot]} />)}</div>}
+    {error ? <button type="button" onClick={() => setRevision(r => r + 1)}>{t('Reintentar fotografías')}</button> : !photos ? <Loading /> :
+      <div className="photo-grid">{photos.map(photo => <PhotoCard key={`${prefix}-${id}-${photo.slot}`} id={id} prefix={prefix} initial={photo} writable={write} label={t((kind === 'person' ? labels : assetLabels)[photo.slot])} />)}</div>}
   </section>;
 }
 
 function PhotoCard({ id, prefix, initial, writable, label }: { id: string; prefix: string; initial: Photo; writable: boolean; label: string }) {
+  useLanguage();
   const [photo, setPhoto] = useState(initial);
   const [src, setSrc] = useState<string>();
   const [error, setError] = useState<unknown>();
@@ -89,22 +92,22 @@ function PhotoCard({ id, prefix, initial, writable, label }: { id: string; prefi
   }
   return <article className="photo-card" aria-label={label}>
     <h4>{label}</h4>
-    {src ? <button type="button" className="photo-preview" aria-label={`Ampliar ${label.toLowerCase()}`} onClick={() => setExpanded(true)}><img src={src} alt={label} /></button>
-      : <div className="photo-placeholder">{photo.present ? 'Vista previa no disponible todavía' : 'Sin fotografía'}</div>}
+    {src ? <button type="button" className="photo-preview" aria-label={t('Ampliar {label}', {label: label.toLowerCase()})} onClick={() => setExpanded(true)}><img src={src} alt={label} /></button>
+      : <div className="photo-placeholder">{t(photo.present ? 'Vista previa no disponible todavía' : 'Sin fotografía')}</div>}
     {photo.present && <p className="muted">{photo.width} × {photo.height} px · {Math.ceil(photo.size / 1024)} KB</p>}
     <ErrorBox error={error} />
-    {message && <p role="status">{message}</p>}
-    {busy && <p role="status">Procesando fotografía… Espera la confirmación.</p>}
+    {message && <p role="status">{t(message)}</p>}
+    {busy && <p role="status">{t('Procesando fotografía… Espera la confirmación.')}</p>}
     <div className="photo-actions">
-      <button type="button" disabled={busy} onClick={reload}>Recargar fotografía</button>
+      <button type="button" disabled={busy} onClick={reload}>{t('Recargar fotografía')}</button>
       {writable && <>
-        <label className="photo-upload">{photo.present ? 'Reemplazar fotografía' : 'Agregar fotografía'}
+        <label className="photo-upload">{t(photo.present ? 'Reemplazar fotografía' : 'Agregar fotografía')}
           <input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy || reloadRequired} onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; void save(file); }} />
         </label>
-        {photo.present && <button type="button" disabled={busy || reloadRequired} onClick={() => setConfirm(true)}>Eliminar fotografía</button>}
+        {photo.present && <button type="button" disabled={busy || reloadRequired} onClick={() => setConfirm(true)}>{t('Eliminar fotografía')}</button>}
       </>}
     </div>
-    {confirm && <div className="photo-confirm"><p>¿Eliminar esta fotografía de la ficha?</p><button type="button" disabled={busy} onClick={remove}>Confirmar eliminación</button><button type="button" disabled={busy} onClick={() => setConfirm(false)}>Cancelar</button></div>}
+    {confirm && <div className="photo-confirm"><p>{t('¿Eliminar esta fotografía de la ficha?')}</p><button type="button" disabled={busy} onClick={remove}>{t('Confirmar eliminación')}</button><button type="button" disabled={busy} onClick={() => setConfirm(false)}>{t('Cancelar')}</button></div>}
     {expanded && src && <Modal title={label} onClose={() => setExpanded(false)}><img className="photo-full" src={src} alt={label} /></Modal>}
   </article>;
 }

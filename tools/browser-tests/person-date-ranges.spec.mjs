@@ -32,7 +32,7 @@ async function mutation(page, method, url, data) {
 test('date intervals include both endpoints, paginate and preserve exact filters',async({page})=>{
   await login(page,'admin');
   const ids=[];
-  const field={id:crypto.randomUUID(),label:'Fecha comunitaria',type:'date',active:true,required:false,options:[]};
+  const field={id:crypto.randomUUID(),label:'Fecha comunitaria',label_en:'Community date',type:'date',active:true,required:false,options:[]};
   expect((await mutation(page,'PUT','/api/v1/person-fields',{version:0,fields:[field]})).status()).toBe(200);
   async function create(date,gender='female') {
     const result=await mutation(page,'POST','/api/v1/persons',{

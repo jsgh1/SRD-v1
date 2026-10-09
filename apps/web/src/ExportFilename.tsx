@@ -1,3 +1,5 @@
+import { t, useLanguage } from './i18n';
+
 export type ExportFilenameChoice = { name: string; confirmed: boolean };
 
 export function ExportFilename({ value, onChange, type, defaultDescription }: {
@@ -6,16 +8,17 @@ export function ExportFilename({ value, onChange, type, defaultDescription }: {
   type: 'auditoria' | 'inventario' | 'tesoreria' | 'personas' | 'planilla' | 'ficha_persona' | 'movimientos_inventario';
   defaultDescription?: string;
 }) {
+  useLanguage();
   return <div className="form-grid export-filename">
-    <label>Nombre del archivo (opcional)
+    <label>{t('Nombre del archivo (opcional)')}
       <input maxLength={100} value={value.name} onChange={event => onChange({ name: event.target.value, confirmed: false })} />
     </label>
     <label className="checkbox-label"><input type="checkbox" checked={value.confirmed}
       disabled={!value.name.trim()} onChange={event => onChange({ ...value, confirmed: event.target.checked })} />
-      Confirmo el nombre del archivo</label>
-    <p className="muted">{defaultDescription ?? (type === 'planilla' || type === 'personas'
-      ? `Si dejas el nombre vacío, se descargará como ${type}_AAAA-MM-DD.xlsx o ${type}_AAAA-MM-DD.pdf, según el formato, con la fecha de Colombia.`
-      : `Si dejas el nombre vacío, se descargará como ${type}_AAAA-MM-DD.xlsx con la fecha de Colombia.`)} El nombre escrito se sanea antes de descargar.</p>
+      {t('Confirmo el nombre del archivo')}</label>
+    <p className="muted">{defaultDescription ? t(defaultDescription) : (type === 'planilla' || type === 'personas'
+      ? t('Si dejas el nombre vacío, se descargará como {type}_AAAA-MM-DD.xlsx o {type}_AAAA-MM-DD.pdf, según el formato, con la fecha de Colombia.', {type})
+      : t('Si dejas el nombre vacío, se descargará como {type}_AAAA-MM-DD.xlsx con la fecha de Colombia.', {type}))} {t('El nombre escrito se sanea antes de descargar.')}</p>
   </div>;
 }
 

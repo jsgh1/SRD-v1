@@ -34,11 +34,13 @@ test('position catalog persists, protects history and rejects stale forms', asyn
   const panel = page.getByRole('region', {name:'Catálogo de cargos'});
   await panel.getByRole('button',{name:'Agregar cargo',exact:true}).click();
   await panel.getByLabel('Cargo 7',{exact:true}).fill('Vocal histórico');
+  await panel.getByLabel('Cargo 7 en inglés',{exact:true}).fill('Historical committee member');
   expect((await page.request.put('/api/v1/person-positions',{data:{version:0,items:[]}})).status()).toBe(419);
   await panel.getByRole('button',{name:'Guardar cargos',exact:true}).click();
   await expect(panel.getByRole('status')).toHaveText('Cargos guardados.');
   await page.reload(); await navigate(page, 'Configuración');
   await expect(panel.getByLabel('Cargo 7',{exact:true})).toHaveValue('Vocal histórico');
+  await expect(panel.getByLabel('Cargo 7 en inglés',{exact:true})).toHaveValue('Historical committee member');
   const catalog = (await (await page.request.get('/api/v1/person-positions')).json()).data;
   await navigate(page, 'Registro');
   await page.getByRole('combobox',{name:/Tipo de documento/}).selectOption('CC');
@@ -58,6 +60,7 @@ test('position catalog persists, protects history and rejects stale forms', asyn
     await expect(editor.getByRole('combobox',{name:'Cargo',exact:true})).toHaveValue(catalog.items[6].code);
     await navigate(page,'Configuración');
     await panel.getByLabel('Cargo 7',{exact:true}).fill('Vocal renombrado');
+    await panel.getByLabel('Cargo 7 en inglés',{exact:true}).fill('Renamed committee member');
     await panel.getByLabel('Cargo 7 activo',{exact:true}).uncheck();
     await panel.getByRole('button',{name:'Guardar cargos',exact:true}).click();
     await expect(panel.getByRole('status')).toHaveText('Cargos guardados.');
@@ -79,9 +82,12 @@ test('position catalog persists, protects history and rejects stale forms', asyn
       const viewer = await viewerContext.newPage(); await login(viewer,'viewer');
       expect((await mutation(viewer,'PUT','/api/v1/person-positions',catalog)).status()).toBe(403);
       const detail = (await (await viewer.request.get('/api/v1/persons/'+id)).json()).data;
-      expect(detail.position_label).toBe('Vocal histórico'); expect(detail.note).toBeUndefined();
-      await navigate(viewer,'Lista'); await viewer.getByRole('button',{name:'Ver Persona de cargos',exact:true}).click();
-      await expect(viewer.getByRole('dialog')).toContainText('Vocal histórico');
+      expect(detail.position_label).toBe('Vocal histórico'); expect(detail.position_label_en).toBe('Historical committee member'); expect(detail.note).toBeUndefined();
+      await viewer.locator('.profile-trigger').click();
+      await viewer.getByLabel('Idioma', {exact:true}).selectOption('en');
+      await expect(viewer.locator('html')).toHaveAttribute('lang','en');
+      await navigate(viewer,'List'); await viewer.getByRole('button',{name:'Ver Persona de cargos',exact:true}).click();
+      await expect(viewer.getByRole('dialog')).toContainText('Historical committee member');
     } finally { await viewerContext.close(); }
     await navigate(editor,'Registro');
     await expect(editor.getByRole('combobox',{name:'Cargo',exact:true})).toBeVisible();

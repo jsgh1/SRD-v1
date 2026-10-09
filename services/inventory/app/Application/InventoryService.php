@@ -20,8 +20,11 @@ final class InventoryService
     {
         return [
             'id' => $row->id, 'code' => $row->code, 'type' => $row->type, 'name' => $row->name,
+            'name_en' => $row->name_en,
             'category' => $row->category, 'unit' => $row->unit, 'description' => $row->description,
+            'category_en' => $row->category_en, 'unit_en' => $row->unit_en, 'description_en' => $row->description_en,
             'location' => $row->location, 'condition' => $row->condition,
+            'location_en' => $row->location_en, 'condition_en' => $row->condition_en,
             'responsible_name' => $row->responsible_name, 'quantity' => (int) $row->quantity,
             'status' => $row->status, 'version' => (int) $row->version,
             'created_by' => $row->created_by, 'updated_by' => $row->updated_by,
@@ -35,6 +38,7 @@ final class InventoryService
             'id' => $row->id, 'asset_id' => $row->asset_id, 'sequence' => (int) $row->sequence, 'type' => $row->type,
             'delta' => (int) $row->delta, 'quantity_before' => (int) $row->quantity_before,
             'quantity_after' => (int) $row->quantity_after, 'reason' => $row->reason,
+            'reason_en' => $row->reason_en,
             'performed_by' => $row->performed_by, 'performer_name' => $row->performer_name,
             'created_at' => $row->created_at,
         ];
@@ -52,14 +56,14 @@ final class InventoryService
     }
 
     private function record(array $principal, object $asset, string $type, int $before, int $after,
-        string $reason, string $key, string $hash): array
+        string $reason, string $key, string $hash, ?string $reasonEn = null): array
     {
         $id = (string) Str::uuid();
         $sequence = 1 + (int) DB::table('asset_movements')->where('asset_id', $asset->id)->max('sequence');
         DB::table('asset_movements')->insert([
             'id' => $id, 'organization_id' => $principal['organization_id'], 'asset_id' => $asset->id, 'sequence' => $sequence,
             'type' => $type, 'delta' => $after - $before, 'quantity_before' => $before,
-            'quantity_after' => $after, 'reason' => $reason, 'performed_by' => $principal['user_id'],
+            'quantity_after' => $after, 'reason' => $reason, 'reason_en' => $reasonEn, 'performed_by' => $principal['user_id'],
             'performer_name' => $principal['name'], 'idempotency_key' => $key, 'payload_hash' => $hash,
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -78,7 +82,8 @@ final class InventoryService
         if (!empty($data['q'])) {
             $term = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], trim($data['q'])).'%';
             $query->where(fn ($q) => $q->whereRaw("code LIKE ? ESCAPE '!'", [$term])
-                ->orWhereRaw("name LIKE ? ESCAPE '!'", [$term]));
+                ->orWhereRaw("name LIKE ? ESCAPE '!'", [$term])
+                ->orWhereRaw("name_en LIKE ? ESCAPE '!'", [$term]));
         }
         return $query;
     }
@@ -97,7 +102,7 @@ final class InventoryService
     {
         $filename = ExportFilename::xlsx('inventario', $data['filename'] ?? null, (bool) ($data['confirm_filename'] ?? false));
         $assets = $this->exportAssets($principal, $data);
-        $content = base64_encode(InventoryWorkbook::create($assets));
+        $content = base64_encode(InventoryWorkbook::create($assets, $data['lang'] ?? 'es'));
         Outbox::record('inventory.export', $principal['organization_id'], $principal['user_id'], null);
         return ['data' => [
             'filename' => $filename,
@@ -111,7 +116,7 @@ final class InventoryService
     {
         $filename = ExportFilename::pdf('inventario', $data['filename'] ?? null, (bool) ($data['confirm_filename'] ?? false));
         $assets = $this->exportAssets($principal, $data);
-        $table = InventoryWorkbook::table($assets);
+        $table = InventoryWorkbook::table($assets, $data['lang'] ?? 'es');
         Outbox::record('inventory.export', $principal['organization_id'], $principal['user_id'], null);
         return ['data' => ['filename' => $filename, 'date' => now('America/Bogota')->toDateString(),
             'count' => $assets->count()] + $table];
@@ -145,7 +150,8 @@ final class InventoryService
         if (isset($filters['movement_type'])) $movements->where('type', $filters['movement_type']);
         if (!empty(trim($filters['movement_q'] ?? ''))) {
             $term = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], trim($filters['movement_q'])).'%';
-            $movements->whereRaw("reason LIKE ? ESCAPE '!'", [$term]);
+            $movements->where(fn ($q) => $q->whereRaw("reason LIKE ? ESCAPE '!'", [$term])
+                ->orWhereRaw("reason_en LIKE ? ESCAPE '!'", [$term]));
         }
         if (isset($filters['movement_from'])) {
             $start = \Carbon\CarbonImmutable::createFromFormat('!Y-m-d', $filters['movement_from'], 'America/Bogota')->utc();
@@ -169,17 +175,22 @@ final class InventoryService
             if ($movements->count() > 2000) throw ValidationException::withMessages(['export' => 'La consulta supera 2000 movimientos. Acota los filtros antes de exportar.']);
             $labels = ['opening' => 'Registro inicial', 'in' => 'Entrada', 'out' => 'Salida', 'adjust' => 'Ajuste', 'retire' => 'Baja'];
             $table = ['headers' => ['Código del bien', 'Nombre del bien', 'N.º', 'Fecha UTC', 'Operación', 'Cambio', 'Existencia anterior', 'Existencia posterior', 'Motivo', 'Responsable', 'ID del movimiento'], 'rows' => []];
+            $language = $data['lang'] ?? 'es';
+            $table['headers'] = array_map(fn (string $header) => InventoryWorkbook::label($header, $language), $table['headers']);
             foreach ($movements as $movement) {
-                $table['rows'][] = [$asset->code, $asset->name, $movement->sequence, $movement->created_at,
-                    $labels[$movement->type], $movement->delta, $movement->quantity_before, $movement->quantity_after,
-                    $movement->reason, $movement->performer_name, $movement->id];
+                $reason = $movement->type === 'opening'
+                    ? InventoryWorkbook::label($movement->reason, $language)
+                    : InventoryWorkbook::localized($movement, 'reason', $language);
+                $table['rows'][] = [$asset->code, InventoryWorkbook::localized($asset, 'name', $language), $movement->sequence, $movement->created_at,
+                    InventoryWorkbook::label($labels[$movement->type], $language), $movement->delta, $movement->quantity_before, $movement->quantity_after,
+                    $reason, $movement->performer_name, $movement->id];
             }
             Outbox::record('inventory.export', $principal['organization_id'], $principal['user_id'], $id);
             if ($pdf) {
                 $table['rows'] = array_map(fn ($row) => array_map(fn ($value) => (string) ($value ?? ''), $row), $table['rows']);
                 return ['data' => ['filename' => $filename, 'date' => now('America/Bogota')->toDateString(), 'count' => $movements->count()] + $table];
             }
-            $content = base64_encode(InventoryWorkbook::fromTable($table));
+            $content = base64_encode(InventoryWorkbook::fromTable($table, $language));
             return ['data' => ['filename' => $filename, 'mime' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 'content' => $content, 'count' => $movements->count()]];
         }, 3);
@@ -197,14 +208,21 @@ final class InventoryService
         $code = strtoupper(trim($data['code']));
         $fields = [
             'code' => $code, 'type' => $type, 'name' => trim($data['name']),
+            'name_en' => isset($data['name_en']) ? trim($data['name_en']) : null,
             'category' => isset($data['category']) ? trim($data['category']) : null,
+            'category_en' => isset($data['category_en']) ? trim($data['category_en']) : null,
             'unit' => $type === 'movable' ? trim($data['unit']) : null,
+            'unit_en' => $type === 'movable' && isset($data['unit_en']) ? trim($data['unit_en']) : null,
             'description' => isset($data['description']) ? trim($data['description']) : null,
+            'description_en' => isset($data['description_en']) ? trim($data['description_en']) : null,
             'location' => trim($data['location']), 'condition' => trim($data['condition']),
+            'location_en' => isset($data['location_en']) ? trim($data['location_en']) : null,
+            'condition_en' => isset($data['condition_en']) ? trim($data['condition_en']) : null,
             'responsible_name' => isset($data['responsible_name']) ? trim($data['responsible_name']) : null,
             'quantity' => (int) $data['quantity'],
         ];
-        $hash = $this->fingerprint([$principal['user_id'], 'opening', $fields]);
+        $hashFields = array_filter($fields, fn ($value, $field) => !str_ends_with($field, '_en') || $value !== null, ARRAY_FILTER_USE_BOTH);
+        $hash = $this->fingerprint([$principal['user_id'], 'opening', $hashFields]);
         $make = function () use ($principal, $data, $fields, $hash) {
             $org = $principal['organization_id'];
             if ($previous = $this->previous($org, $data['idempotency_key'], $hash)) return $previous;
@@ -233,14 +251,19 @@ final class InventoryService
             if ($asset->type === 'movable' && (empty($data['category']) || empty($data['unit']))) {
                 throw ValidationException::withMessages(['category' => 'Los muebles requieren categoría y unidad.']);
             }
-            DB::table('assets')->where('id', $id)->update([
+            $changes = [
                 'name' => trim($data['name']), 'category' => isset($data['category']) ? trim($data['category']) : null,
                 'unit' => $asset->type === 'movable' ? trim($data['unit']) : null,
                 'description' => isset($data['description']) ? trim($data['description']) : null,
                 'location' => trim($data['location']), 'condition' => trim($data['condition']),
                 'responsible_name' => isset($data['responsible_name']) ? trim($data['responsible_name']) : null,
                 'version' => (int) $asset->version + 1, 'updated_by' => $principal['user_id'], 'updated_at' => now(),
-            ]);
+            ];
+            foreach (['name_en', 'category_en', 'unit_en', 'description_en', 'location_en', 'condition_en'] as $field) {
+                if (array_key_exists($field, $data)) $changes[$field] = $data[$field] === null ? null : trim($data[$field]);
+            }
+            if ($asset->type === 'real_estate') $changes['unit_en'] = null;
+            DB::table('assets')->where('id', $id)->update($changes);
             Outbox::record('inventory.asset_updated', $principal['organization_id'], $principal['user_id'], $id);
             return ['data' => $this->asset(DB::table('assets')->where('id', $id)->first())];
         }, 3);
@@ -251,8 +274,11 @@ final class InventoryService
         $quantity = (int) $data['quantity'];
         if ($data['type'] !== 'adjust' && $quantity === 0) throw ValidationException::withMessages(['quantity' => 'La cantidad debe ser positiva.']);
         $reason = trim($data['reason']);
-        $hash = $this->fingerprint([$principal['user_id'], $id, $data['type'], $quantity, $reason]);
-        $result = DB::transaction(function () use ($principal, $id, $data, $quantity, $reason, $hash) {
+        $reasonEn = isset($data['reason_en']) ? trim($data['reason_en']) : null;
+        $parts = [$principal['user_id'], $id, $data['type'], $quantity, $reason];
+        if ($reasonEn !== null) $parts[] = $reasonEn;
+        $hash = $this->fingerprint($parts);
+        $result = DB::transaction(function () use ($principal, $id, $data, $quantity, $reason, $reasonEn, $hash) {
             $org = $principal['organization_id'];
             $asset = DB::table('assets')->where('organization_id', $org)->where('id', $id)->lockForUpdate()->first();
             abort_unless($asset, 404);
@@ -267,7 +293,7 @@ final class InventoryService
             if ($after === $before) throw ValidationException::withMessages(['quantity' => 'El ajuste debe cambiar la existencia.']);
             DB::table('assets')->where('id', $id)->update(['quantity' => $after, 'version' => (int) $asset->version + 1,
                 'updated_by' => $principal['user_id'], 'updated_at' => now()]);
-            return $this->record($principal, $asset, $data['type'], $before, $after, $reason, $data['idempotency_key'], $hash);
+            return $this->record($principal, $asset, $data['type'], $before, $after, $reason, $data['idempotency_key'], $hash, $reasonEn);
         }, 3);
         abort_if(isset($result['rejected']), 422, 'La salida supera las existencias disponibles.');
         return $result;
@@ -276,8 +302,11 @@ final class InventoryService
     public function retire(array $principal, string $id, array $data): array
     {
         $reason = trim($data['reason']);
-        $hash = $this->fingerprint([$principal['user_id'], $id, 'retire', (int) $data['version'], $reason]);
-        return DB::transaction(function () use ($principal, $id, $data, $reason, $hash) {
+        $reasonEn = isset($data['reason_en']) ? trim($data['reason_en']) : null;
+        $parts = [$principal['user_id'], $id, 'retire', (int) $data['version'], $reason];
+        if ($reasonEn !== null) $parts[] = $reasonEn;
+        $hash = $this->fingerprint($parts);
+        return DB::transaction(function () use ($principal, $id, $data, $reason, $reasonEn, $hash) {
             $org = $principal['organization_id'];
             $asset = DB::table('assets')->where('organization_id', $org)->where('id', $id)->lockForUpdate()->first();
             abort_unless($asset, 404);
@@ -290,7 +319,7 @@ final class InventoryService
             DB::table('assets')->where('id', $id)->update(['status' => 'retired', 'quantity' => 0,
                 'version' => (int) $asset->version + 1, 'retired_at' => now(),
                 'updated_by' => $principal['user_id'], 'updated_at' => now()]);
-            return $this->record($principal, $asset, 'retire', $before, 0, $reason, $data['idempotency_key'], $hash);
+            return $this->record($principal, $asset, 'retire', $before, 0, $reason, $data['idempotency_key'], $hash, $reasonEn);
         }, 3);
     }
 }

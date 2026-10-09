@@ -12,7 +12,7 @@ final class DeliveryService
 {
     public function __construct(private InternalClient $client) {}
 
-    public function enqueueReminders(string $organizationId, string $eventId, string $userId, string $title, CarbonImmutable $start, bool $remind24h = true, bool $remind1h = true): void
+    public function enqueueReminders(string $organizationId, string $eventId, string $userId, string $title, CarbonImmutable $start, bool $remind24h = true, bool $remind1h = true, ?string $titleEn = null): void
     {
         $now = CarbonImmutable::now('UTC');
         if ($start->lessThanOrEqualTo($now)) return;
@@ -20,16 +20,16 @@ final class DeliveryService
             if (($hours === 24 && !$remind24h) || ($hours === 1 && !$remind1h)) continue;
             $due = $start->subHours($hours);
             if ($due->lessThan($now)) $due = $now;
-            $this->enqueue($organizationId, $eventId, $userId, $kind, $title, $start->toIso8601String(), $due, $start);
+            $this->enqueue($organizationId, $eventId, $userId, $kind, $title, $start->toIso8601String(), $due, $start, $titleEn);
         }
     }
 
-    public function enqueue(string $organizationId, string $eventId, string $userId, string $kind, string $title, string $anchor, CarbonImmutable $due, ?CarbonImmutable $eventStart = null): void
+    public function enqueue(string $organizationId, string $eventId, string $userId, string $kind, string $title, string $anchor, CarbonImmutable $due, ?CarbonImmutable $eventStart = null, ?string $titleEn = null): void
     {
         $key = hash('sha256', implode('|', [$organizationId, $eventId, $userId, $kind, $anchor]));
         DB::table('calendar_delivery_jobs')->insertOrIgnore([
             'id' => (string) Str::uuid(), 'organization_id' => $organizationId, 'event_id' => $eventId,
-            'user_id' => $userId, 'kind' => $kind, 'title' => $title, 'delivery_key' => $key,
+            'user_id' => $userId, 'kind' => $kind, 'title' => $title, 'title_en' => $titleEn, 'delivery_key' => $key,
             'due_at' => $due, 'event_starts_at' => $eventStart, 'next_attempt_at' => $due, 'attempts' => 0,
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -70,7 +70,7 @@ final class DeliveryService
                 $result = $this->client->call('notifications', 'POST', 'deliveries', [
                     'organization_id' => $job->organization_id, 'event_id' => $job->event_id,
                     'user_id' => $job->user_id, 'kind' => $job->kind,
-                    'title' => $job->title, 'delivery_key' => $job->delivery_key,
+                    'title' => $job->title, 'title_en' => $job->title_en, 'delivery_key' => $job->delivery_key,
                 ], ['organization_id' => $job->organization_id]);
                 if (empty($result['id'])) throw new DependencyFailure;
             } catch (\Throwable) {
@@ -104,12 +104,12 @@ final class DeliveryService
             ->whereNull('e.cancelled_at')->where('e.starts_at', '>', CarbonImmutable::now('UTC'))
             ->where('p.response', '!=', 'declined')
             ->orderBy('p.event_id')->orderBy('p.user_id')
-            ->select('p.organization_id', 'p.event_id', 'p.user_id', 'e.title', 'e.starts_at', 'e.remind_24h', 'e.remind_1h')
+            ->select('p.organization_id', 'p.event_id', 'p.user_id', 'e.title', 'e.title_en', 'e.starts_at', 'e.remind_24h', 'e.remind_1h')
             ->chunk(500, function ($rows) use (&$count) {
                 foreach ($rows as $row) {
                     $start = CarbonImmutable::parse($row->starts_at, 'UTC');
                     $this->enqueueReminders($row->organization_id, $row->event_id, $row->user_id, $row->title, $start,
-                        (bool) $row->remind_24h, (bool) $row->remind_1h);
+                        (bool) $row->remind_24h, (bool) $row->remind_1h, $row->title_en);
                     $count++;
                 }
             });

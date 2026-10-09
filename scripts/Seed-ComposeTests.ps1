@@ -12,6 +12,7 @@ if(-not $SrdFixture.StartsWith($SrdRoot+[IO.Path]::DirectorySeparatorChar,[Strin
 $SrdFixtureTarget='/tmp/'+[IO.Path]::GetFileName($SrdFixture)
 $SrdServices=@('configuration','identity')
 if($env:SRD_BROWSER_SPEC -eq 'calendar-delivery-retry.spec.mjs'){$SrdServices+= 'calendar'}
+if($env:SRD_BROWSER_SPEC -eq 'audit-export.spec.mjs'){$SrdServices+= 'audit'}
 foreach($SrdService in $SrdServices) {
     docker compose cp tools/create-fixtures.php "${SrdService}:/tmp/srd-fixtures.php"
     if($LASTEXITCODE){throw 'No se pudo copiar el generador de pruebas.'}

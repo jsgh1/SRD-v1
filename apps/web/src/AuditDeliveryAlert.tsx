@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ApiError, api } from './api';
+import { t } from './i18n';
 
 type Overview = { items: { service: string; available: boolean; exhausted: number | null }[] };
 const labels: Record<string, string> = {
@@ -60,12 +61,12 @@ export function AuditDeliveryAlert({ onOpen }: { onOpen: () => void }) {
   const missing = items.filter(item => !item.available);
   const count = failed.reduce((total, item) => total + (item.exhausted ?? 0), 0);
   if (!count && !missing.length && !unavailable) return null;
-  return <aside className="scheduler-alert" role="alert" aria-label="Alerta de auditoría">
+  return <aside className="scheduler-alert" role="alert" aria-label={t('Alerta de auditoría')}>
     <div>
-      <strong>{count ? `${count} evento${count === 1 ? '' : 's'} de auditoría con entrega agotada` : 'No se pudo comprobar toda la entrega de auditoría'}</strong>
-      {failed.length > 0 && <p>Revisar: {failed.map(item => `${labels[item.service] ?? item.service} (${item.exhausted})`).join(', ')}.</p>}
-      {(missing.length > 0 || unavailable) && <p>El estado de {unavailable ? 'los servicios' : missing.map(item => labels[item.service] ?? item.service).join(', ')} no está disponible.</p>}
+      <strong>{count ? t(count === 1 ? '{count} evento de auditoría con entrega agotada' : '{count} eventos de auditoría con entrega agotada', {count}) : t('No se pudo comprobar toda la entrega de auditoría')}</strong>
+      {failed.length > 0 && <p>{t('Revisar: {services}.', {services: failed.map(item => `${t(labels[item.service] ?? item.service)} (${item.exhausted})`).join(', ')})}</p>}
+      {(missing.length > 0 || unavailable) && <p>{t('El estado de {services} no está disponible.', {services: unavailable ? t('los servicios') : missing.map(item => t(labels[item.service] ?? item.service)).join(', ')})}</p>}
     </div>
-    <button type="button" onClick={onOpen}>Ver auditoría</button>
+    <button type="button" onClick={onOpen}>{t('Ver auditoría')}</button>
   </aside>;
 }

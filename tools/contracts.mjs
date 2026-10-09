@@ -48,15 +48,15 @@ const schemas = {
   CalendarCancel: obj({ version: { type: 'integer', minimum: 1 } }),
   CalendarInvitationResponse: obj({ response: str({ enum: ['accepted', 'declined'] }), version: { type: 'integer', minimum: 1 } }),
   PersonFilterSettings: obj({ version: { type: 'integer', minimum: 0 }, base: { type: 'array', maxItems: 9, uniqueItems: true, items: str({ enum: ['status','zone','affiliated','document_type','gender','descriptive_role','position_code','birth_date','registered_at'] }) }, custom: { type: 'array', maxItems: 20, uniqueItems: true, items: uuid() }, delegated_roles: { type: 'array', maxItems: 4, uniqueItems: true, items: str({ enum: ['registrar','treasurer','auditor','viewer'] }) } }, ['version','base','custom']),
-  PlanillaSettings: obj({ version: { type: 'integer', minimum: 0 }, allowed_columns: { type: 'array', maxItems: 8, uniqueItems: true, items: str({ enum: ['email','phone','property_name','zone','position_label','descriptive_role','status','affiliated'] }) }, h1: str({ minLength: 1, maxLength: 120 }), h2: str({ minLength: 1, maxLength: 120 }), h3: str({ minLength: 1, maxLength: 120 }), delegated_roles: { type: 'array', maxItems: 4, uniqueItems: true, items: str({ enum: ['registrar','treasurer','auditor','viewer'] }) } }, ['version','allowed_columns','h1','h2','h3']),
-  PersonPositionCatalog: obj({ version: { type: 'integer', minimum: 0 }, items: { type: 'array', minItems: 1, maxItems: 50, items: { ...obj({ code: str({ maxLength: 60, pattern: '^[a-z0-9-]+$' }), label: str({ maxLength: 80 }), active: { type: 'boolean' } }), additionalProperties: false } } }),
-  PersonFieldOption: { ...obj({ id: uuid(), label: str({ minLength: 1, maxLength: 80 }), active: { type: 'boolean' } }), additionalProperties: false },
-  PersonField: { ...obj({ id: uuid(), label: str({ minLength: 1, maxLength: 80 }), type: str({ enum: ['text', 'date', 'number', 'select'] }), active: { type: 'boolean' }, required: { type: 'boolean' }, options: { type: 'array', maxItems: 50, items: { $ref: '#/components/schemas/PersonFieldOption' } } }), additionalProperties: false },
+  PlanillaSettings: obj({ version: { type: 'integer', minimum: 0 }, allowed_columns: { type: 'array', maxItems: 8, uniqueItems: true, items: str({ enum: ['email','phone','property_name','zone','position_label','descriptive_role','status','affiliated'] }) }, h1: str({ minLength: 1, maxLength: 120 }), h2: str({ minLength: 1, maxLength: 120 }), h3: str({ minLength: 1, maxLength: 120 }), h1_en: { type: ['string','null'], maxLength: 120, description: 'Encabezado inglés; null solo en configuraciones anteriores.' }, h2_en: { type: ['string','null'], maxLength: 120 }, h3_en: { type: ['string','null'], maxLength: 120 }, delegated_roles: { type: 'array', maxItems: 4, uniqueItems: true, items: str({ enum: ['registrar','treasurer','auditor','viewer'] }) } }, ['version','allowed_columns','h1','h2','h3']),
+  PersonPositionCatalog: obj({ version: { type: 'integer', minimum: 0 }, items: { type: 'array', minItems: 1, maxItems: 50, items: { ...obj({ code: str({ maxLength: 60, pattern: '^[a-z0-9-]+$' }), label: str({ maxLength: 80 }), label_en: str({ maxLength: 80, description: 'Nombre en inglés; obligatorio al guardar, opcional en catálogos anteriores.' }), active: { type: 'boolean' } }, ['code','label','active']), additionalProperties: false } } }),
+  PersonFieldOption: { ...obj({ id: uuid(), label: str({ minLength: 1, maxLength: 80 }), label_en: str({ minLength: 1, maxLength: 80, description: 'Versión inglesa, opcional para esquemas anteriores.' }), active: { type: 'boolean' } }, ['id','label','active']), additionalProperties: false },
+  PersonField: { ...obj({ id: uuid(), label: str({ minLength: 1, maxLength: 80 }), label_en: str({ minLength: 1, maxLength: 80, description: 'Versión inglesa, opcional para esquemas anteriores.' }), type: str({ enum: ['text', 'date', 'number', 'select'] }), active: { type: 'boolean' }, required: { type: 'boolean' }, options: { type: 'array', maxItems: 50, items: { $ref: '#/components/schemas/PersonFieldOption' } } }, ['id','label','type','active','required','options']), additionalProperties: false },
   PersonFieldSchema: obj({ version: { type: 'integer', minimum: 0 }, fields: { type: 'array', maxItems: 20, items: { $ref: '#/components/schemas/PersonField' } }, delegated_roles: { type: 'array', maxItems: 4, uniqueItems: true, items: str({ enum: ['registrar','treasurer','auditor','viewer'] }), description: 'Opcional; solo SA/AD. Omitir conserva las delegaciones vigentes.' } }, ['version','fields']),
-  QuickLink: { ...obj({ function: str({ enum: ['register', 'list', 'lookup', 'settings', 'audit', 'downloads'] }), label: str({ minLength: 1, maxLength: 40 }) }), additionalProperties: false },
+  QuickLink: { ...obj({ function: str({ enum: ['register', 'list', 'lookup', 'settings', 'audit', 'downloads'] }), label: str({ minLength: 1, maxLength: 40 }), label_en: str({ minLength: 1, maxLength: 40, description: 'Versión inglesa, opcional para accesos anteriores.' }) }, ['function','label']), additionalProperties: false },
   OrganizationQuickLinks: obj({ version: { type: 'integer', minimum: 0 }, mode: str({ enum: ['common', 'personal'], description: 'Opcional: omitir conserva la política vigente. Solo SA puede cambiarla; AD puede enviar el valor vigente.' }), items: { type: 'array', maxItems: 3, items: { $ref: '#/components/schemas/QuickLink' } } }, ['version','items']),
   PersonalQuickLinks: obj({ version: { type: 'integer', minimum: 0 }, common_version: { type: 'integer', minimum: 0 }, inherit: { type: 'boolean' }, items: { type: 'array', maxItems: 3, items: { $ref: '#/components/schemas/QuickLink' } } }),
-  OrganizationCreate: obj({ code: str({ minLength: 3, maxLength: 40, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }), name: str({ maxLength: 160 }), terms: str({ minLength: 20, maxLength: 50000 }) }),
+  OrganizationCreate: obj({ code: str({ minLength: 3, maxLength: 40, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }), name: str({ maxLength: 160 }), terms: str({ minLength: 20, maxLength: 50000 }), terms_en: str({ minLength: 20, maxLength: 50000 }) }),
   OrganizationStatus: obj({ active: { type: 'boolean' }, version: { type: 'integer', minimum: 1 } }),
   AdministratorInvitation: obj({ email: str({ format: 'email', maxLength: 254 }) }),
   Invitation: obj({ email: str({ format: 'email', maxLength: 254 }), role: str({ enum: ['admin', 'registrar', 'treasurer', 'auditor', 'viewer'] }) }),
@@ -94,7 +94,8 @@ const schemas = {
     name: str({ maxLength: 120 }),
     theme: str({ enum: ["light", "dark"] }),
     presence: str({ enum: ["online", "away", "dnd", "invisible"] }),
-  }),
+    language: str({ enum: ["es", "en"] }),
+  }, ['name', 'theme', 'presence']),
   Organization: obj({
     name: str({ maxLength: 160 }),
     accent: str({ pattern: "^#[0-9a-fA-F]{6}$" }),
@@ -102,6 +103,7 @@ const schemas = {
   }),
   Terms: obj({
     body: str({ minLength: 20, maxLength: 50000 }),
+    body_en: str({ minLength: 20, maxLength: 50000 }),
     version: { type: "integer", minimum: 1 },
   }),
   Person: obj(
@@ -122,6 +124,7 @@ const schemas = {
       email: str({ format: "email" }),
       position_code: { type: ['string', 'null'], maxLength: 60, pattern: '^[a-z0-9-]+$', description: 'Identificador del catálogo de la junta. Una opción inactiva solo puede conservarse en la ficha que ya la usaba.' },
       position_label: { type: ['string', 'null'], maxLength: 80, readOnly: true, description: 'Nombre capturado al asignar el cargo; conserva su historia aunque cambie el catálogo.' },
+      position_label_en: { type: ['string', 'null'], maxLength: 80, readOnly: true, description: 'Nombre inglés capturado al asignar el cargo; los registros históricos sin traducción pueden conservar null.' },
       descriptive_role: str({
         enum: ["admin", "registrar", "treasurer", "auditor", "viewer"],
       }),
@@ -148,7 +151,31 @@ const schemas = {
   }),
   Error: error,
 };
+// Historical GET payloads may lack English. New writes must include both languages.
+schemas.PlanillaSettingsWrite = structuredClone(schemas.PlanillaSettings);
+for (const name of ['h1_en', 'h2_en', 'h3_en']) {
+  schemas.PlanillaSettingsWrite.properties[name] = str({ minLength: 1, maxLength: 120 });
+  schemas.PlanillaSettingsWrite.required.push(name);
+}
+schemas.PersonPositionCatalogWrite = structuredClone(schemas.PersonPositionCatalog);
+schemas.PersonPositionCatalogWrite.properties.items.items.required.push('label_en');
+schemas.PersonFieldOptionWrite = structuredClone(schemas.PersonFieldOption);
+schemas.PersonFieldOptionWrite.required.push('label_en');
+schemas.PersonFieldWrite = structuredClone(schemas.PersonField);
+schemas.PersonFieldWrite.required.push('label_en');
+schemas.PersonFieldWrite.properties.options.items.$ref = '#/components/schemas/PersonFieldOptionWrite';
+schemas.PersonFieldSchemaWrite = structuredClone(schemas.PersonFieldSchema);
+schemas.PersonFieldSchemaWrite.properties.fields.items.$ref = '#/components/schemas/PersonFieldWrite';
+schemas.QuickLinkWrite = structuredClone(schemas.QuickLink);
+schemas.QuickLinkWrite.required.push('label_en');
+for (const name of ['OrganizationQuickLinks', 'PersonalQuickLinks']) {
+  schemas[`${name}Write`] = structuredClone(schemas[name]);
+  schemas[`${name}Write`].properties.items.items.$ref = '#/components/schemas/QuickLinkWrite';
+}
 for (const name of ['CalendarEvent', 'CalendarEventUpdate']) {
+  schemas[name].properties.title_en = { type: ['string', 'null'], minLength: 2, maxLength: 160, description: 'Versión inglesa redactada por la junta; opcional para clientes y eventos anteriores.' };
+  schemas[name].properties.location_en = { type: ['string', 'null'], maxLength: 160 };
+  schemas[name].properties.description_en = { type: ['string', 'null'], maxLength: 4000 };
   for (const field of ['remind_24h', 'remind_1h']) schemas[name].properties[field] = {
     type: 'boolean', ...(name === 'CalendarEvent' ? { default: true } : {}),
     description: name === 'CalendarEvent' ? 'Anticipación del evento; omitir activa esta anticipación. La preferencia personal puede suprimir la entrega.' : 'Anticipación del evento; omitir conserva su valor anterior. Requiere versión vigente y permiso de edición.',
@@ -159,11 +186,11 @@ const routes = [
   ['get', '/person-filter-settings', 'Filtros visibles comunes, versión y permisos de edición. custom=null en la configuración inicial significa todos los campos.'],
   ['put', '/person-filter-settings', 'Guardar filtros comunes; SA/AD o rol delegado vigente. Solo SA/AD pueden enviar delegated_roles. Conflicto de versión: 409; no modifica permisos de lectura.', 'PersonFilterSettings'],
   ['get', '/planilla-settings', 'Configuración de encabezados y columnas de la planilla para la junta activa; todos los roles lectores'],
-  ['put', '/planilla-settings', 'Guardar encabezados, columnas disponibles y delegaciones con versión; SA/AD o rol delegado vigente. Solo SA/AD cambian delegaciones.', 'PlanillaSettings'],
+  ['put', '/planilla-settings', 'Guardar encabezados ES/EN, columnas disponibles y delegaciones con versión; SA/AD o rol delegado vigente. Solo SA/AD cambian delegaciones.', 'PlanillaSettingsWrite'],
   ['get', '/person-positions', 'Catálogo de cargos de personas de la junta; todos los lectores'],
-  ['put', '/person-positions', 'Guardar cargos; SA/AD, versión, desactivación e historia', 'PersonPositionCatalog'],
+  ['put', '/person-positions', 'Guardar cargos; SA/AD, versión, desactivación e historia', 'PersonPositionCatalogWrite'],
   ['get', '/contacts', 'Directorio de otras cuentas con membresía activa en la junta; nombre, rol y presencia pública. Valida la sesión sin renovar inactividad.'],
-  ['put', '/person-fields', 'Guardar campos adicionales; SA/AD o delegado vigente. Solo SA/AD conceden delegaciones. Versión compartida y conservación histórica.', 'PersonFieldSchema'],
+  ['put', '/person-fields', 'Guardar campos adicionales; SA/AD o delegado vigente. Solo SA/AD conceden delegaciones. Versión compartida y conservación histórica.', 'PersonFieldSchemaWrite'],
   ["get", "/csrf", "Inicializar CSRF", null, "public"],
   [
     "get",
@@ -278,8 +305,8 @@ const routes = [
   ['post', '/notifications/{id}/read', 'Marcar como leído un aviso propio'],
   ['delete', '/notifications/{id}', 'Descartar un aviso propio sin borrar auditoría'],
   ['get', '/quick-links', 'Accesos efectivos, catálogo autorizado y versiones de configuración'],
-  ['patch', '/quick-links/organization', 'Guardar accesos comunes: SA/AD. Cambiar política común/personal: solo SA; AD recibe 403 si intenta cambiarla. Versión antigua: 409.', 'OrganizationQuickLinks'],
-  ['patch', '/quick-links/personal', 'Guardar accesos propios o volver a heredar; requiere modo personal y versiones vigentes', 'PersonalQuickLinks'],
+  ['patch', '/quick-links/organization', 'Guardar accesos comunes: SA/AD. Cambiar política común/personal: solo SA; AD recibe 403 si intenta cambiarla. Versión antigua: 409.', 'OrganizationQuickLinksWrite'],
+  ['patch', '/quick-links/personal', 'Guardar accesos propios o volver a heredar; requiere modo personal y versiones vigentes', 'PersonalQuickLinksWrite'],
   ['get', '/platform/organizations', 'Listar juntas, solo superadministrador; páginas de 25'],
   ['post', '/platform/organizations', 'Crear junta con términos iniciales, solo superadministrador', 'OrganizationCreate'],
   ['patch', '/platform/organizations/{id}', 'Activar o suspender junta con versión; no suspender la junta actual', 'OrganizationStatus'],
@@ -782,9 +809,9 @@ for (const [service, filter] of Object.entries({
     summary: 'Entrega idempotente de avisos de Calendario o Chat; emisor firmado correspondiente',
     security: [{ internal: [] }],
     requestBody: { required: true, content: { 'application/json': { schema: { oneOf: [
-      obj({ organization_id: uuid(), user_id: uuid(), event_id: uuid(), title: str({ maxLength: 160 }),
+      obj({ organization_id: uuid(), user_id: uuid(), event_id: uuid(), title: str({ maxLength: 160 }), title_en: { type: ['string', 'null'], maxLength: 160 },
         kind: str({ enum: ['invitation', 'event_changed', 'event_cancelled', 'reminder_24h', 'reminder_1h'] }),
-        delivery_key: str({ pattern: '^[a-f0-9]{64}$' }) }),
+        delivery_key: str({ pattern: '^[a-f0-9]{64}$' }) }, ['organization_id', 'user_id', 'event_id', 'title', 'kind', 'delivery_key']),
       obj({ organization_id: uuid(), user_id: uuid(), conversation_id: uuid(), kind: str({ enum: ['chat_message'] }),
         delivery_key: str({ pattern: '^[a-f0-9]{64}$' }) }),
     ] } } } },

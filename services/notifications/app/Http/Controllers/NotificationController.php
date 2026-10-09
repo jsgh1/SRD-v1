@@ -25,6 +25,7 @@ final class NotificationController
         $data = $request->validate($issuer === 'calendar' ? [
             'organization_id' => 'required|uuid', 'user_id' => 'required|uuid',
             'event_id' => 'required|uuid', 'title' => 'required|string|min:2|max:160',
+            'title_en' => 'sometimes|nullable|string|min:2|max:160',
             'kind' => 'required|in:invitation,event_changed,event_cancelled,reminder_24h,reminder_1h',
             'delivery_key' => 'required|regex:/^[a-f0-9]{64}$/',
         ] : [
@@ -35,6 +36,7 @@ final class NotificationController
         $data['event_id'] = $issuer === 'calendar' ? $data['event_id'] : null;
         $data['conversation_id'] = $issuer === 'chat' ? $data['conversation_id'] : null;
         $data['title'] = $issuer === 'chat' ? 'Nuevo mensaje' : $data['title'];
+        $data['title_en'] = $issuer === 'chat' ? 'New message' : ($data['title_en'] ?? null);
         $principal = $request->attributes->get('principal', []);
         abort_unless(($principal['organization_id'] ?? null) === $data['organization_id'], 403);
         return DB::transaction(function () use ($data) {
@@ -114,10 +116,10 @@ final class NotificationController
         $total = (clone $base)->count();
         $unread = (clone $base)->whereNull('read_at')->count();
         $items = $base->orderByDesc('created_at')->orderByDesc('id')->forPage($page, 25)
-            ->get(['id', 'event_id', 'conversation_id', 'kind', 'title', 'created_at', 'read_at']);
+            ->get(['id', 'event_id', 'conversation_id', 'kind', 'title', 'title_en', 'created_at', 'read_at']);
         return ['data' => ['items' => $items->map(fn ($item) => [
             'id' => $item->id, 'event_id' => $item->event_id, 'conversation_id' => $item->conversation_id, 'kind' => $item->kind,
-            'title' => $item->title,
+            'title' => $item->title, 'title_en' => $item->title_en,
             'created_at' => CarbonImmutable::parse($item->created_at, 'UTC')->toIso8601String(),
             'read_at' => $item->read_at ? CarbonImmutable::parse($item->read_at, 'UTC')->toIso8601String() : null,
         ])->all(), 'page' => $page, 'page_size' => 25,

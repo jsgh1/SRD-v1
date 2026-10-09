@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ApiError, api } from './api';
+import { t } from './i18n';
 
 type CalendarDeliveries = { exhausted: number };
 type MailDeliveries = {
@@ -57,15 +58,15 @@ export function DeliveryAlert({ onOpen }: { onOpen: () => void }) {
   const calendar = status.calendar ?? 0;
   const mail = status.mail ?? 0;
   if (!calendar && !mail && !status.unknown) return null;
-  return <aside className="scheduler-alert" role="alert" aria-label="Alerta de entregas">
+  return <aside className="scheduler-alert" role="alert" aria-label={t('Alerta de entregas')}>
     <div>
-      <strong>{calendar || mail ? 'Hay entregas que agotaron sus intentos' : 'No se pudo comprobar el estado de las entregas'}</strong>
+      <strong>{t(calendar || mail ? 'Hay entregas que agotaron sus intentos' : 'No se pudo comprobar el estado de las entregas')}</strong>
       {(calendar > 0 || mail > 0) && <p>{[
-        calendar > 0 ? `${calendar} aviso${calendar === 1 ? '' : 's'} de calendario` : null,
-        mail > 0 ? `${mail} correo${mail === 1 ? '' : 's'}` : null,
-      ].filter(Boolean).join(' y ')}. Revisa cada trabajo antes de programar otro intento.</p>}
-      {status.unknown && <p>Una consulta falló; el estado de las entregas podría estar incompleto.</p>}
+        calendar > 0 ? t(calendar === 1 ? '{count} aviso de calendario' : '{count} avisos de calendario', {count: calendar}) : null,
+        mail > 0 ? t(mail === 1 ? '{count} correo' : '{count} correos', {count: mail}) : null,
+      ].filter(Boolean).join(t(' y '))}{t('. Revisa cada trabajo antes de programar otro intento.')}</p>}
+      {status.unknown && <p>{t('Una consulta falló; el estado de las entregas podría estar incompleto.')}</p>}
     </div>
-    <button type="button" onClick={onOpen}>Ver entregas</button>
+    <button type="button" onClick={onOpen}>{t('Ver entregas')}</button>
   </aside>;
 }

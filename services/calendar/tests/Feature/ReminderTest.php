@@ -22,7 +22,7 @@ final class ReminderTest extends TestCase
     }
     private function input(): array
     {
-        return ['type' => 'meeting', 'title' => 'Recordatorios de prueba',
+        return ['type' => 'meeting', 'title' => 'Recordatorios de prueba', 'title_en' => 'Test reminders',
             'starts_at' => '2026-09-24T14:00:00+00:00', 'ends_at' => '2026-09-24T15:00:00+00:00',
             'participants' => [self::MEMBER]];
     }
@@ -42,6 +42,7 @@ final class ReminderTest extends TestCase
             $delivery = app(DeliveryService::class);
             $job = DB::table('calendar_delivery_jobs')->where('event_id', $event['id'])->where('kind', 'reminder_1h')->first();
             $this->assertSame('2026-09-24 13:00:00', $job->due_at);
+            $this->assertSame('Test reminders', $job->title_en);
             $this->assertDatabaseHas('calendar_delivery_jobs', ['event_id' => $event['id'], 'kind' => 'reminder_24h', 'due_at' => '2026-09-23 14:00:00']);
             $this->assertSame(1, $delivery->backfillFutureReminders());
             $this->assertSame(1, $delivery->backfillFutureReminders());
@@ -61,7 +62,8 @@ final class ReminderTest extends TestCase
             $this->assertSame('delivered', $delivery->deliverOne($job->id));
             $this->assertSame('skipped', $delivery->deliverOne($job->id));
             Http::assertSentCount(1);
-            Http::assertSent(fn ($request) => $request['kind'] === 'reminder_1h' && $request['delivery_key'] === $job->delivery_key);
+            Http::assertSent(fn ($request) => $request['kind'] === 'reminder_1h' && $request['delivery_key'] === $job->delivery_key
+                && $request['title_en'] === 'Test reminders');
             $delivery->backfillFutureReminders();
             $this->assertDatabaseCount('calendar_delivery_jobs', 3);
             $this->assertNotNull(DB::table('calendar_delivery_jobs')->where('id', $job->id)->value('delivered_at'));

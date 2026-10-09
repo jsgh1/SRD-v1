@@ -41,6 +41,7 @@ try {
             $env:SRD_FIXTURE_PATH=$SrdBrowserFixture
             $SrdServices=@('configuration','identity')
             if($SrdSpec -eq 'calendar-delivery-retry.spec.mjs'){$SrdServices+='calendar'}
+            if($SrdSpec -eq 'audit-export.spec.mjs'){$SrdServices+='audit'}
             foreach($SrdService in $SrdServices) {
                 & $Php tools/create-fixtures.php $SrdService
                 if($LASTEXITCODE){throw 'Falló la preparación local de las pruebas.'}

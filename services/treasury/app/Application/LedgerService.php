@@ -156,7 +156,7 @@ final class LedgerService
         return ['data' => $receipt];
     }
 
-    public function exportReceiptPdf(array $principal, string $id, ?string $requestedFilename, bool $confirmed): array
+    public function exportReceiptPdf(array $principal, string $id, ?string $requestedFilename, bool $confirmed, string $language = 'es'): array
     {
         $receipt = $this->show($principal, $id)['data'];
         $filename = trim($requestedFilename ?? '') === ''
@@ -166,14 +166,14 @@ final class LedgerService
         return ['data' => ['filename' => $filename, 'receipt' => $receipt]];
     }
 
-    public function exportReceiptXlsx(array $principal, string $id, ?string $requestedFilename, bool $confirmed): array
+    public function exportReceiptXlsx(array $principal, string $id, ?string $requestedFilename, bool $confirmed, string $language = 'es'): array
     {
         $receipt = $this->show($principal, $id)['data'];
         $filename = trim($requestedFilename ?? '') === ''
             ? 'comprobante_'.$receipt['receipt'].'.xlsx'
             : substr(ExportFilename::pdf('comprobante', $requestedFilename, $confirmed), 0, -4).'.xlsx';
         $receipt['organization_id'] = $principal['organization_id'];
-        $content = base64_encode(TreasuryWorkbook::receipt($receipt));
+        $content = base64_encode(TreasuryWorkbook::receipt($receipt, $language));
         Outbox::record('treasury.receipt_export', $principal['organization_id'], $principal['user_id'], $id);
         return ['data' => ['filename' => $filename, 'mime' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'content' => $content, 'count' => 1]];
@@ -225,11 +225,11 @@ final class LedgerService
         return $base;
     }
 
-    public function export(array $principal, ?string $from, ?string $to, ?string $text, ?string $requestedFilename, bool $confirmed): array
+    public function export(array $principal, ?string $from, ?string $to, ?string $text, ?string $requestedFilename, bool $confirmed, string $language = 'es'): array
     {
         $filename = ExportFilename::xlsx('tesoreria', $requestedFilename, $confirmed);
         $rows = $this->exportRows($principal, $from, $to, $text);
-        $content = base64_encode(TreasuryWorkbook::create($rows));
+        $content = base64_encode(TreasuryWorkbook::create($rows, $language));
         Outbox::record('treasury.export', $principal['organization_id'], $principal['user_id'], null);
         return ['data' => [
             'filename' => $filename,
@@ -238,11 +238,11 @@ final class LedgerService
         ]];
     }
 
-    public function exportPdf(array $principal, ?string $from, ?string $to, ?string $text, ?string $requestedFilename, bool $confirmed): array
+    public function exportPdf(array $principal, ?string $from, ?string $to, ?string $text, ?string $requestedFilename, bool $confirmed, string $language = 'es'): array
     {
         $filename = ExportFilename::pdf('tesoreria', $requestedFilename, $confirmed);
         $rows = $this->exportRows($principal, $from, $to, $text);
-        $table = TreasuryWorkbook::table($rows);
+        $table = TreasuryWorkbook::table($rows, $language);
         Outbox::record('treasury.export', $principal['organization_id'], $principal['user_id'], null);
         return ['data' => ['filename' => $filename, 'date' => now('America/Bogota')->toDateString(),
             'count' => $rows->count()] + $table];

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ApiError, api } from './api';
+import { t } from './i18n';
 
 type SchedulerStatus = {
   items: { service: string; available: boolean }[];
@@ -59,12 +60,12 @@ export function SchedulerAlert({ onOpen }: { onOpen: () => void }) {
   }, []);
 
   if (!failed.length && !unavailable) return null;
-  return <aside className="scheduler-alert" role="alert" aria-label="Alerta de planificadores">
+  return <aside className="scheduler-alert" role="alert" aria-label={t('Alerta de planificadores')}>
     <div>
-      <strong>{failed.length ? `${failed.length} planificador${failed.length === 1 ? '' : 'es'} sin señal reciente` : 'No se pudo comprobar el estado de los planificadores'}</strong>
-      {failed.length > 0 && <p>Revisar: {failed.join(', ')}. Algunas tareas o avisos podrían retrasarse.</p>}
-      {unavailable && <p>La última consulta falló. Comprueba el estado en Configuración.</p>}
+      <strong>{failed.length ? t(failed.length === 1 ? '{count} planificador sin señal reciente' : '{count} planificadores sin señal reciente', {count: failed.length}) : t('No se pudo comprobar el estado de los planificadores')}</strong>
+      {failed.length > 0 && <p>{t('Revisar: {services}. Algunas tareas o avisos podrían retrasarse.', {services: failed.map(label => t(label)).join(', ')})}</p>}
+      {unavailable && <p>{t('La última consulta falló. Comprueba el estado en Configuración.')}</p>}
     </div>
-    <button type="button" onClick={onOpen}>Ver estado</button>
+    <button type="button" onClick={onOpen}>{t('Ver estado')}</button>
   </aside>;
 }

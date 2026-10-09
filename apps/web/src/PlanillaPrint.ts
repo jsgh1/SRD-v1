@@ -1,6 +1,8 @@
 export type PlanillaPreview = {
   title: string;
+  language: 'es' | 'en';
   headings: { h1: string; h2: string; h3: string };
+  logo_data: string | null;
   date: { month: string; day: string; year: string };
   headers: string[];
   rows: string[][];
@@ -10,7 +12,7 @@ export type PlanillaPreview = {
 export function showPlanillaPrint(popup: Window, preview: PlanillaPreview) {
   const doc = popup.document;
   doc.open();
-  doc.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title></title></head><body></body></html>');
+  doc.write(`<!doctype html><html lang="${preview.language}"><head><meta charset="utf-8"><title></title></head><body></body></html>`);
   doc.close();
   doc.title = preview.title;
   const style = doc.createElement('style');
@@ -27,12 +29,13 @@ export function showPlanillaPrint(popup: Window, preview: PlanillaPreview) {
     .heading th { border: 0; text-align: center; padding: 3px; font-weight: normal; }
     .heading.main th { font-weight: 700; font-size: 17px; }
     .heading.third th { font-weight: 700; font-size: 14px; padding-bottom: 14px; }
+    .sheet-logo { position: absolute; top: 80px; left: 26px; width: 64px; height: 64px; object-fit: contain; }
     .column-head th { border: 1px solid #333; padding: 7px 4px; background: #e8eef2; }
     tbody td { border: 1px solid #333; padding: 6px 4px; min-height: 26px; }
     tbody td:last-child { height: 27px; }
     .signatures { display: flex; justify-content: space-around; gap: 35px; margin-top: 58px; break-inside: avoid; page-break-inside: avoid; }
     .signatures div { width: 36%; text-align: center; border-top: 1px solid #333; padding-top: 7px; font-weight: 700; }
-    @media print { body { margin: 0; color: #000; } .toolbar { display: none; } }
+    @media print { body { margin: 0; color: #000; } .toolbar { display: none; } .sheet-logo { top: 0; left: 0; } }
   `;
   doc.head.append(style);
 
@@ -40,12 +43,22 @@ export function showPlanillaPrint(popup: Window, preview: PlanillaPreview) {
   toolbar.className = 'toolbar';
   const button = doc.createElement('button');
   button.type = 'button';
-  button.textContent = 'Imprimir o guardar como PDF';
+  button.textContent = preview.language === 'en' ? 'Print or save as PDF' : 'Imprimir o guardar como PDF';
   button.addEventListener('click', () => popup.print());
   const hint = doc.createElement('span');
-  hint.textContent = `Nombre sugerido: ${preview.title}.pdf. Elige «Guardar como PDF» en el diálogo del navegador.`;
+  hint.textContent = preview.language === 'en'
+    ? `Suggested name: ${preview.title}.pdf. Select “Save as PDF” in your browser.`
+    : `Nombre sugerido: ${preview.title}.pdf. Elige «Guardar como PDF» en el diálogo del navegador.`;
   toolbar.append(button, hint);
   doc.body.append(toolbar);
+
+  if (preview.logo_data?.startsWith('data:image/png;base64,')) {
+    const logo = doc.createElement('img');
+    logo.className = 'sheet-logo';
+    logo.alt = preview.language === 'en' ? 'Council logo' : 'Logo de la junta';
+    logo.src = preview.logo_data;
+    doc.body.append(logo);
+  }
 
   const table = doc.createElement('table');
   const optionalColumns = Math.max(0, preview.headers.length - 5);
@@ -66,7 +79,9 @@ export function showPlanillaPrint(popup: Window, preview: PlanillaPreview) {
   };
   heading(preview.headings.h1, 'main');
   heading(preview.headings.h2, 'second');
-  heading(`MES: ${preview.date.month}     DÍA: ${preview.date.day}     AÑO: ${preview.date.year}`, 'date');
+  heading(preview.language === 'en'
+    ? `MONTH: ${preview.date.month}     DAY: ${preview.date.day}     YEAR: ${preview.date.year}`
+    : `MES: ${preview.date.month}     DÍA: ${preview.date.day}     AÑO: ${preview.date.year}`, 'date');
   heading(preview.headings.h3, 'third');
   const labelRow = head.insertRow(); labelRow.className = 'column-head';
   for (const label of preview.headers) {
@@ -79,7 +94,7 @@ export function showPlanillaPrint(popup: Window, preview: PlanillaPreview) {
   }
   doc.body.append(table);
   const signatures = doc.createElement('div'); signatures.className = 'signatures';
-  for (const title of ['PRESIDENTE', 'SECRETARIO']) {
+  for (const title of (preview.language === 'en' ? ['PRESIDENT', 'SECRETARY'] : ['PRESIDENTE', 'SECRETARIO'])) {
     const line = doc.createElement('div'); line.textContent = title; signatures.append(line);
   }
   doc.body.append(signatures);

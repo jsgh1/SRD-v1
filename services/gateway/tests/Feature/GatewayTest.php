@@ -10,6 +10,33 @@ final class GatewayTest extends TestCase
 {
     use SignedRequests;
 
+    public function test_public_council_config_includes_its_logo_without_requiring_login(): void
+    {
+        $id = '11111111-1111-4111-8111-111111111111';
+        $logo = 'data:image/png;base64,abc=';
+        Http::fake(function ($request) use ($id, $logo) {
+            if (str_ends_with($request->url(), '/organizations/code/junta-a'))
+                return Http::response(['data' => ['id' => $id, 'code' => 'junta-a', 'name' => 'Junta A']]);
+            if (str_ends_with($request->url(), '/public-logo/'.$id))
+                return Http::response(['data' => ['logo_data' => $logo]]);
+            return Http::response([], 404);
+        });
+        $this->getJson('/api/v1/organizations/junta-a')->assertOk()
+            ->assertJsonPath('data.logo_data', $logo)->assertJsonPath('data.name', 'Junta A');
+        Http::assertSentCount(2);
+        $this->getJson('/api/v1/organizations/INVALID')->assertNotFound();
+        Http::assertSentCount(2);
+    }
+
+    public function test_login_configuration_remains_available_when_records_is_unavailable(): void
+    {
+        Http::fake(fn ($request) => str_contains($request->url(), '/organizations/code/junta-a')
+            ? Http::response(['data' => ['id' => '11111111-1111-4111-8111-111111111111', 'code' => 'junta-a']])
+            : Http::response([], 503));
+        $this->getJson('/api/v1/organizations/junta-a')->assertOk()
+            ->assertJsonPath('data.logo_data', null)->assertJsonPath('data.code', 'junta-a');
+    }
+
     public function test_global_limit_separates_sessions_on_one_ip_and_keeps_anonymous_limit(): void
     {
         for ($i = 0; $i < 120; $i++) {

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 const fixture = JSON.parse(fs.readFileSync(process.env.SRD_BROWSER_FIXTURE));
 const mailUrl = process.env.SRD_MAILPIT_URL || 'http://localhost:8025';
@@ -60,13 +61,18 @@ test('treasury opening, entries, reversal, receipt and role isolation', async ({
   await dialog.getByLabel('Motivo del reverso').fill('Corrección de compra ficticia');
   await dialog.getByRole('button', { name: 'Registrar reverso' }).click();
   await expect(page.getByRole('dialog', { name: 'Comprobante TES-000004' })).toBeVisible();
-  dialog = page.getByRole('dialog', { name: 'Comprobante TES-000004' });
-  await dialog.getByLabel('Nombre del archivo (opcional)').fill('Reunión/Septiembre?.xlsx.pdf');
-  await expect(dialog.getByRole('button', { name: 'Descargar comprobante PDF' })).toBeDisabled();
-  await dialog.getByLabel('Confirmo el nombre del archivo').check();
+  await page.getByRole('dialog').getByRole('button', { name: 'Cerrar' }).click();
+  await page.locator('.profile-trigger').click();
+  await page.getByLabel('Idioma', { exact: true }).selectOption('en');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await page.getByRole('row').filter({ hasText: 'TES-000004' }).getByRole('button', { name: 'View receipt' }).click();
+  dialog = page.getByRole('dialog', { name: 'Receipt TES-000004' });
+  await dialog.getByLabel('Filename (optional)').fill('Reunión/Septiembre?.xlsx.pdf');
+  await expect(dialog.getByRole('button', { name: 'Download PDF receipt' })).toBeDisabled();
+  await dialog.getByLabel('I confirm this filename').check();
   const receiptResponsePromise = page.waitForResponse(response => response.url().includes('/api/v1/treasury/movements/') && response.request().method() === 'GET');
   const pdfPromise = page.waitForEvent('download');
-  await page.getByRole('dialog').getByRole('button', { name: 'Descargar comprobante PDF' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Download PDF receipt' }).click();
   const receiptResponse = await receiptResponsePromise;
   expect(receiptResponse.status()).toBe(200);
   const receiptData = (await receiptResponse.json()).data;
@@ -78,9 +84,17 @@ test('treasury opening, entries, reversal, receipt and role isolation', async ({
   expect(pdf.suggestedFilename()).toBe('Reunion-Septiembre.pdf');
   const pdfBytes = fs.readFileSync(await pdf.path());
   expect(pdfBytes.subarray(0, 5).toString()).toBe('%PDF-');
+  const receiptDocument = await getDocument({ data: new Uint8Array(pdfBytes), useSystemFonts: true }).promise;
+  const receiptPage = await receiptDocument.getPage(1);
+  const receiptText = (await receiptPage.getTextContent()).items.map(item => 'str' in item ? item.str : '').join(' ').replace(/\s+/g, ' ');
+  expect(receiptText).toContain('Treasury receipt');
+  expect(receiptText).toContain('Reversal');
+  expect(receiptText).toContain('Corrección de compra ficticia');
+  expect(receiptText).not.toContain('Comprobante de tesorería');
+  await receiptDocument.destroy();
   fs.writeFileSync('.local/treasury-receipt-proof.pdf', pdfBytes);
   const excelPromise = page.waitForEvent('download');
-  await dialog.getByRole('button', { name: 'Descargar comprobante Excel' }).click();
+  await dialog.getByRole('button', { name: 'Download Excel receipt' }).click();
   const excel = await excelPromise;
   expect(excel.suggestedFilename()).toBe('Reunion-Septiembre.xlsx');
   const excelBytes = fs.readFileSync(await excel.path());
@@ -89,14 +103,17 @@ test('treasury opening, entries, reversal, receipt and role isolation', async ({
   expect(excelBytes.includes(Buffer.from(downloadedReceipt.reverses_id))).toBe(true);
   expect(excelBytes.includes(Buffer.from('20.25'))).toBe(true);
   expect(excelBytes.includes(Buffer.from('125.50'))).toBe(true);
+  expect(excelBytes.includes(Buffer.from('Reversal'))).toBe(true);
+  expect(excelBytes.includes(Buffer.from('name="Treasury"'))).toBe(true);
+  expect(excelBytes.includes(Buffer.from('Referencia del soporte'))).toBe(false);
   expect(excelBytes.includes(Buffer.from('Apertura ficticia'))).toBe(false);
   fs.writeFileSync('.local/treasury-receipt-proof.xlsx', excelBytes);
   await page.setViewportSize({ width: 360, height: 800 });
-  await expect(dialog.getByRole('button', { name: 'Descargar comprobante Excel' })).toBeVisible();
-  await dialog.getByRole('button', { name: 'Descargar comprobante Excel' }).scrollIntoViewIfNeeded();
+  await expect(dialog.getByRole('button', { name: 'Download Excel receipt' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Download Excel receipt' }).scrollIntoViewIfNeeded();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(2);
   await page.screenshot({ path: '.local/treasury-receipt-downloads-mobile.png' });
-  await page.getByRole('dialog').getByRole('button', { name: 'Cerrar' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
   await expect(page.locator('.treasury-summary').getByText('$ 125,50')).toBeVisible();
   const viewerContext = await browser.newContext({ baseURL: process.env.SRD_TEST_URL || 'http://localhost:8080' });
   try {
@@ -110,7 +127,7 @@ test('treasury opening, entries, reversal, receipt and role isolation', async ({
     expect((await viewer.request.get(`/api/v1/treasury/movements/${downloadedReceipt.id}/xlsx`)).status()).toBe(403);
   } finally { await viewerContext.close(); }
   await page.setViewportSize({ width: 360, height: 800 });
-  await expect(page.getByRole('heading', { name: 'Tesorería' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Treasury' })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(2);
   expect(errors).toEqual([]);
 });

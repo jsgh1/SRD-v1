@@ -26,24 +26,25 @@ final class PersonController
         $name = $r->validate([
             'filename' => 'sometimes|nullable|string|max:100',
             'confirm_filename' => 'sometimes|boolean',
+            'language' => 'sometimes|in:es,en',
         ]);
-        return $this->service->export($p, $filters, $name['filename'] ?? null, (bool) ($name['confirm_filename'] ?? false));
+        return $this->service->export($p, $filters, $name['filename'] ?? null, (bool) ($name['confirm_filename'] ?? false), $name['language'] ?? 'es');
     }
 
     public function exportIndividual(Request $r, string $id): array
     {
         abort_unless($r->attributes->get('issuer') === 'gateway', 403);
         $p = Access::require('persons.export');
-        $name = $r->validate(['filename' => 'sometimes|nullable|string|max:100', 'confirm_filename' => 'sometimes|boolean']);
-        return $this->service->exportIndividual($p, $id, $name['filename'] ?? null, (bool) ($name['confirm_filename'] ?? false));
+        $name = $r->validate(['filename' => 'sometimes|nullable|string|max:100', 'confirm_filename' => 'sometimes|boolean', 'language' => 'sometimes|in:es,en']);
+        return $this->service->exportIndividual($p, $id, $name['filename'] ?? null, (bool) ($name['confirm_filename'] ?? false), $name['language'] ?? 'es');
     }
 
     public function exportIndividualPdf(Request $r, string $id): array
     {
         abort_unless($r->attributes->get('issuer') === 'gateway', 403);
         $p = Access::require('persons.export');
-        $name = $r->validate(['filename' => 'sometimes|nullable|string|max:100', 'confirm_filename' => 'sometimes|boolean']);
-        return $this->service->exportIndividualPdf($p, $id, $name['filename'] ?? null, (bool) ($name['confirm_filename'] ?? false));
+        $name = $r->validate(['filename' => 'sometimes|nullable|string|max:100', 'confirm_filename' => 'sometimes|boolean', 'language' => 'sometimes|in:es,en']);
+        return $this->service->exportIndividualPdf($p, $id, $name['filename'] ?? null, (bool) ($name['confirm_filename'] ?? false), $name['language'] ?? 'es');
     }
 
     public function exportPdf(Request $r): array
@@ -54,28 +55,29 @@ final class PersonController
         $name = $r->validate([
             'filename' => 'sometimes|nullable|string|max:100',
             'confirm_filename' => 'sometimes|boolean',
+            'language' => 'sometimes|in:es,en',
         ]);
-        return $this->service->exportPdf($p, $filters, $name['filename'] ?? null, (bool) ($name['confirm_filename'] ?? false));
+        return $this->service->exportPdf($p, $filters, $name['filename'] ?? null, (bool) ($name['confirm_filename'] ?? false), $name['language'] ?? 'es');
     }
 
     public function planilla(Request $r): array
     {
         [$p, $filters, $input, $headings] = $this->planillaRequest($r);
-        return $this->service->exportPlanilla($p, $filters, $input['columns'] ?? [], $headings,
+        return $this->service->exportPlanilla($p, $filters, $input['columns'] ?? [], $headings, $input['language'] ?? 'es',
             $input['filename'] ?? null, (bool) ($input['confirm_filename'] ?? false));
     }
 
     public function planillaPreview(Request $r): array
     {
         [$p, $filters, $input, $headings] = $this->planillaRequest($r);
-        return $this->service->previewPlanilla($p, $filters, $input['columns'] ?? [], $headings,
+        return $this->service->previewPlanilla($p, $filters, $input['columns'] ?? [], $headings, $input['language'] ?? 'es',
             $input['filename'] ?? null, (bool) ($input['confirm_filename'] ?? false));
     }
 
     public function planillaPdf(Request $r): array
     {
         [$p, $filters, $input, $headings] = $this->planillaRequest($r);
-        return $this->service->pdfPlanilla($p, $filters, $input['columns'] ?? [], $headings,
+        return $this->service->pdfPlanilla($p, $filters, $input['columns'] ?? [], $headings, $input['language'] ?? 'es',
             $input['filename'] ?? null, (bool) ($input['confirm_filename'] ?? false));
     }
 
@@ -90,6 +92,7 @@ final class PersonController
             'h1' => 'sometimes|nullable|string|max:120',
             'h2' => 'sometimes|nullable|string|max:120',
             'h3' => 'sometimes|nullable|string|max:120',
+            'language' => 'sometimes|in:es,en',
             'filename' => 'sometimes|nullable|string|max:100',
             'confirm_filename' => 'sometimes|boolean',
         ]);

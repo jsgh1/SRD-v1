@@ -4,6 +4,7 @@ export type PersonExportPdfData = {
   headers: string[];
   rows: string[][];
   count: number;
+  language?: 'es' | 'en';
 };
 
 export function personExportPdfDefinition(data: PersonExportPdfData, organizationName: string) {
@@ -15,16 +16,17 @@ export function personExportPdfDefinition(data: PersonExportPdfData, organizatio
     throw new Error('La exportación PDF recibida no tiene un formato válido.');
   }
   const weights = [3, 10, 10, 12, 11, 7, 7, 7, 9, 9, 12, 19];
+  const english = data.language === 'en';
   const available = 1134 - data.headers.length * 7;
   const total = weights.reduce((sum, value) => sum + value, 0);
   return {
     pageSize: 'A3', pageOrientation: 'landscape', pageMargins: [28, 32, 28, 38],
-    info: { title: data.filename.slice(0, -4), subject: 'Listado de personas SRD' },
+    info: { title: data.filename.slice(0, -4), subject: english ? 'SRD people list' : 'Listado de personas SRD' },
     defaultStyle: { font: 'Roboto', fontSize: 7.5, color: '#111827' },
     content: [
-      { text: 'Listado de personas', bold: true, fontSize: 16, margin: [0, 0, 0, 3] },
+      { text: english ? 'People list' : 'Listado de personas', bold: true, fontSize: 16, margin: [0, 0, 0, 3] },
       { text: organizationName, fontSize: 10, margin: [0, 0, 0, 3] },
-      { text: `Fecha (Colombia): ${data.date}    Personas: ${data.count}`, margin: [0, 0, 0, 10] },
+      { text: english ? `Date (Colombia): ${data.date}    People: ${data.count}` : `Fecha (Colombia): ${data.date}    Personas: ${data.count}`, margin: [0, 0, 0, 10] },
       { table: {
         headerRows: 1, dontBreakRows: true,
         widths: weights.map(value => available * value / total),
@@ -37,7 +39,7 @@ export function personExportPdfDefinition(data: PersonExportPdfData, organizatio
         paddingTop: () => 4, paddingBottom: () => 4,
       } },
     ],
-    footer: (page: number, pages: number) => ({ text: `Página ${page} de ${pages}`,
+    footer: (page: number, pages: number) => ({ text: english ? `Page ${page} of ${pages}` : `Página ${page} de ${pages}`,
       alignment: 'right', margin: [28, 10, 28, 0], fontSize: 8 }),
   };
 }

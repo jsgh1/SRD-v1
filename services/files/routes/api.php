@@ -27,6 +27,10 @@ Route::get('outbox-status', \App\Http\Controllers\FileOutboxStatusController::cl
 Route::post('outbox-status/{id}/retry', \Srd\OutboxRetryController::class)->whereUuid('id')->middleware('internal');
 
 Route::middleware(['internal', \App\Http\Middleware\PhotoContext::class])->group(function () {
+    Route::get('users/{id}/photos', [PhotoController::class, 'index'])->whereUuid('id');
+    Route::get('users/{id}/photos/{slot}', [PhotoController::class, 'show'])->whereUuid('id')->whereIn('slot', ['avatar']);
+    Route::put('users/{id}/photos/{slot}', [PhotoController::class, 'store'])->whereUuid('id')->whereIn('slot', ['avatar']);
+    Route::delete('users/{id}/photos/{slot}', [PhotoController::class, 'destroy'])->whereUuid('id')->whereIn('slot', ['avatar']);
     Route::get('assets/{id}/photos', [PhotoController::class, 'index'])->whereUuid('id');
     Route::get('assets/{id}/photos/{slot}', [PhotoController::class, 'show'])->whereUuid('id')->whereIn('slot', ['front', 'side', 'detail']);
     Route::put('assets/{id}/photos/{slot}', [PhotoController::class, 'store'])->whereUuid('id')->whereIn('slot', ['front', 'side', 'detail']);

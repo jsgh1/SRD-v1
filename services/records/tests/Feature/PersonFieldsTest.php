@@ -12,13 +12,28 @@ final class PersonFieldsTest extends TestCase
     use RefreshDatabase, SignedRequests;
     private array $p = ['organization_id' => '11111111-1111-4111-8111-111111111111', 'user_id' => '22222222-2222-4222-8222-222222222222', 'role' => 'admin'];
     private function field(string $type = 'text', array $changes = []): array {
-        return array_replace(['id' => (string) Str::uuid(), 'label' => 'Campo sintético', 'type' => $type, 'active' => true, 'required' => false, 'options' => []], $changes);
+        return array_replace(['id' => (string) Str::uuid(), 'label' => 'Campo sintético', 'label_en' => 'Synthetic field', 'type' => $type, 'active' => true, 'required' => false, 'options' => []], $changes);
     }
     private function person(array $changes = []): array {
         return array_replace(['document_type' => 'CC', 'document_number' => 'TEST-'.Str::random(8), 'first_names' => 'Persona ficticia', 'status' => 'pending', 'schema_version' => 1, 'authorization_basis' => 'Prueba sintética', 'authorization_purpose' => 'Verificación local', 'note' => 'Nota reservada'], $changes);
     }
     private function configure(array $fields, int $version = 0) {
+        foreach ($fields as &$field) {
+            foreach ($field['options'] ?? [] as $index => $option) $field['options'][$index]['label_en'] ??= 'Synthetic option';
+        }
+        unset($field);
         return $this->internal('PUT', 'person-fields', ['version' => $version, 'fields' => $fields], $this->p);
+    }
+
+    public function test_english_labels_are_required_on_write_and_legacy_schema_remains_readable(): void
+    {
+        $field = $this->field('select', ['options' => [['id' => (string) Str::uuid(), 'label' => 'Antigua', 'active' => true]]]);
+        $withoutEnglish = $field; unset($withoutEnglish['label_en']);
+        $this->internal('PUT', 'person-fields', ['version' => 0, 'fields' => [$withoutEnglish]], $this->p)->assertUnprocessable();
+        $this->internal('PUT', 'person-fields', ['version' => 0, 'fields' => [$field]], $this->p)->assertUnprocessable();
+        $this->assertDatabaseCount('person_field_schemas', 0);
+        DB::table('person_field_schemas')->insert(['organization_id' => $this->p['organization_id'], 'version' => 1, 'fields' => json_encode([$withoutEnglish], JSON_THROW_ON_ERROR), 'created_at' => now(), 'updated_at' => now()]);
+        $this->internal('GET', 'person-fields', [], $this->p)->assertOk()->assertJsonPath('data.fields.0.label', $field['label'])->assertJsonMissingPath('data.fields.0.label_en');
     }
 
     public function test_date_ranges_are_inclusive_scoped_typed_and_combinable(): void
@@ -129,12 +144,13 @@ final class PersonFieldsTest extends TestCase
 
     public function test_inactive_option_retains_historical_label_but_cannot_be_selected_again(): void
     {
-        $old = ['id' => (string) Str::uuid(), 'label' => 'Etiqueta histórica', 'active' => true];
-        $new = ['id' => (string) Str::uuid(), 'label' => 'Opción nueva', 'active' => true];
-        $field = $this->field('select', ['options' => [$old, $new]]);
+        $old = ['id' => (string) Str::uuid(), 'label' => 'Etiqueta histórica', 'label_en' => 'Historical option', 'active' => true];
+        $new = ['id' => (string) Str::uuid(), 'label' => 'Opción nueva', 'label_en' => 'New option', 'active' => true];
+        $field = $this->field('select', ['label_en' => 'Test field', 'options' => [$old, $new]]);
         $this->configure([$field])->assertOk();
         $person = $this->person(['custom_values' => [$field['id'] => $old['id']]]);
         $id = $this->internal('POST', 'persons', $person, $this->p)->assertOk()->json('data.id');
+        $this->internal('GET', 'persons/'.$id, [], $this->p)->assertJsonPath('data.custom_fields.'.$field['id'].'.label_en', 'Test field')->assertJsonPath('data.custom_fields.'.$field['id'].'.display_en', 'Historical option');
         $changed = array_replace($field, ['label' => 'Nombre actualizado', 'options' => [array_replace($old, ['label' => 'Renombrada', 'active' => false]), $new]]);
         $this->configure([$changed], 1)->assertOk();
         $this->internal('PATCH', 'persons/'.$id, $person + ['version' => 1], $this->p)->assertConflict();
