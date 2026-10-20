@@ -5,7 +5,7 @@ import type { FieldSchema } from './PersonFields';
 import { localizedLabel, t, useLanguage } from './i18n';
 
 export type FilterSettings = { version: number; base: string[]; custom: string[] | null; delegated_roles: string[]; can_manage: boolean; can_delegate: boolean };
-const baseLabels: Record<string,string> = { status:'Estado',zone:'Zona',affiliated:'Afiliación',document_type:'Tipo de documento',gender:'Género',descriptive_role:'Rol descriptivo',position_code:'Cargo',birth_date:'Intervalo de nacimiento',registered_at:'Intervalo de registro' };
+const baseLabels: Record<string,string> = { status:'Estado',zone:'Zona',affiliated:'Afiliación',document_type:'Tipo de documento',gender:'Género',descriptive_role:'Rol en la comunidad',position_code:'Cargo',birth_date:'Intervalo de nacimiento',registered_at:'Intervalo de registro' };
 export function PersonFilterSettings() {
   useLanguage();
   const [settings,setSettings]=useState<FilterSettings>(), [schema,setSchema]=useState<FieldSchema>();

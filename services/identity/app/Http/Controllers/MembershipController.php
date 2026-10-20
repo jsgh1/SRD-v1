@@ -53,10 +53,11 @@ final class MembershipController
 
     public function invite(Request $r): array
     {
-        $p = Access::require('members.manage');
-        $d = $r->validate(['email' => 'required|email|max:254', 'role' => ['required', Rule::in(MembershipService::ASSIGNABLE)]]);
+        $p = Access::require('members.invite');
+        $d = $r->validate(['email' => 'required|email|max:254', 'role' => ['required', Rule::in(MembershipService::ASSIGNABLE)],
+            'person_id' => 'sometimes|nullable|uuid']);
 
-        return ['data' => $this->invitations->issue($p, strtolower($d['email']), $d['role'])];
+        return ['data' => $this->invitations->issue($p, strtolower($d['email']), $d['role'], $d['person_id'] ?? null)];
     }
 
     public function inviteAdministrator(Request $r, string $id): array
@@ -85,7 +86,8 @@ final class MembershipController
     public function accept(Request $r): array
     {
         $d = $r->validate(['invitation_id' => 'required|uuid', 'secret' => 'required|regex:/^[a-f0-9]{64}$/', 'name' => 'required|string|min:2|max:120',
-            'password' => 'required|string|min:12|max:128|confirmed', 'terms_version_id' => 'required|uuid', 'accepted' => 'required|accepted']);
+            'password' => 'required|string|min:12|max:128|confirmed', 'terms_version_id' => 'required|uuid',
+            'accepted' => 'required|accepted', 'language' => 'sometimes|in:es,en']);
 
         return ['data' => $this->invitations->accept($d)];
     }

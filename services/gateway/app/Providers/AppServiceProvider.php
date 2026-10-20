@@ -30,9 +30,19 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return [
-                Limit::perMinute(120)->by('session:'.hash('sha256', $credential)),
+                Limit::perMinute(600)->by('session:'.hash('sha256', $credential)),
                 Limit::perMinute(6000)->by('ip:'.$ip),
             ];
+        });
+
+        RateLimiter::for('srd-export', static function (Request $request) {
+            $ip = $request->ip() ?? 'unknown';
+            $credential = $request->session()->get('credential');
+            if (! is_string($credential) || $credential === '') {
+                return Limit::perMinute(5)->by('guest:'.$ip);
+            }
+
+            return Limit::perMinute(5)->by('session:'.hash('sha256', $credential));
         });
     }
 }

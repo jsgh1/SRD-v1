@@ -59,7 +59,9 @@ final class GatewayController
         if (in_array($action, ['verify', 'resend', 'cancel'], true)) {
             abort_unless($r->session()->get('challenge_id') === ($data['challenge_id'] ?? null), 422);
         }
-        $result = $this->client->call('identity', 'POST', 'auth/'.$action, $data);
+        // Password verification and local mail delivery can exceed the default internal timeout.
+        $timeout = in_array($action, ['login', 'resend', 'recover'], true) ? 30 : null;
+        $result = $this->client->call('identity', 'POST', 'auth/'.$action, $data, [], $timeout);
         if (in_array($action, ['logout', 'switchOrganization'], true)
             && is_string($principal['session_id'] ?? null)) {
             $this->chatConnections->terminate($principal['session_id']);
@@ -227,6 +229,26 @@ final class GatewayController
             'channel' => 'presence-chat.'.$p['organization_id'].'.'.$p['user_id']]];
     }
 
+    public function voiceIceConfig(Request $r): array
+    {
+        $p = $this->principal($r, false, false);
+        abort_unless(Access::allows($p['role'], 'chat.read'), 403);
+        $servers = [];
+        $stun = config('srd.webrtc_stun_url');
+        if (is_string($stun) && preg_match('~^stuns?:[^\s]{1,240}$~', $stun)) {
+            $servers[] = ['urls' => $stun];
+        }
+        $turn = config('srd.webrtc_turn_url');
+        $secret = config('srd.webrtc_turn_secret');
+        if (is_string($turn) && preg_match('~^turns?:[^\s]{1,240}$~', $turn)
+            && is_string($secret) && strlen($secret) >= 32) {
+            $username = (time() + 3600).':'.$p['user_id'];
+            $servers[] = ['urls' => $turn, 'username' => $username,
+                'credential' => base64_encode(hash_hmac('sha1', $username, $secret, true))];
+        }
+        return ['data' => ['iceServers' => $servers]];
+    }
+
     public function chatBroadcastAuthorize(Request $r): array
     {
         $p = $this->principal($r, false, false);
@@ -259,8 +281,9 @@ final class GatewayController
             || ($service === 'identity' && $path === 'mail-delivery-status')
             || ($service === 'calendar' && $path === 'delivery-status')
             || ($service === 'notifications' && $path === 'notifications')
-            || ($service === 'chat' && ($path === 'conversations'
-                || preg_match('~^conversations/[0-9a-fA-F-]{36}/messages$~', $path))));
+            || ($service === 'chat' && ($path === 'conversations' || $path === 'voice-calls'
+                || preg_match('~^conversations/[0-9a-fA-F-]{36}/messages$~', $path)
+                || preg_match('~^conversations/[0-9a-fA-F-]{36}/calls/[0-9a-fA-F-]{36}(/signals)?$~', $path))));
         $p = $this->principal($r, false, !$passiveRead);
         $context = array_intersect_key($p, array_flip(['user_id', 'organization_id', 'session_id', 'role', 'membership_id', 'membership_version']));
         if (in_array($service, ['treasury', 'inventory', 'chat'], true)) $context['name'] = $p['user']['name'];
@@ -274,7 +297,12 @@ final class GatewayController
             $data['user_id'] = $r->input('user_id');
         }
 
-        $result = $this->client->call($service, $r->method(), $path, $data, $context);
+        $attachmentTimeout = $service === 'chat' && $r->isMethod('POST')
+            && preg_match('~^conversations/[0-9a-fA-F-]{36}/messages$~', $path)
+            && isset($data['attachment']) ? 90
+            : ($service === 'chat' && $r->isMethod('GET')
+                && preg_match('~^conversations/[0-9a-fA-F-]{36}/messages/[0-9a-fA-F-]{36}/attachment$~', $path) ? 75 : null);
+        $result = $this->client->call($service, $r->method(), $path, $data, $context, $attachmentTimeout);
         if ($service === 'identity' && $r->isMethod('PATCH')
             && (preg_match('~^members/[0-9a-fA-F-]{36}$~', $path)
                 || preg_match('~^platform/accounts/[0-9a-fA-F-]{36}$~', $path))) {

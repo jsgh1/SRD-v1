@@ -13,7 +13,7 @@ const initial = { date_from: '', date_to: '', actor_id: '', service: '', action:
 const services: Record<string, string> = { identity: 'Identidad', configuration: 'Configuración', records: 'Registros', files: 'Archivos', calendar: 'Calendario', notifications: 'Notificaciones', treasury: 'Tesorería', inventory: 'Inventario', chat: 'Chat' };
 const results: Record<string, string> = { success: 'Correcto', rejected: 'Rechazado', failed: 'Fallido' };
 
-export function Audit({ principal }: { principal: Principal }) {
+export function Audit({ principal, logoData }: { principal: Principal; logoData?: string | null }) {
   const language = useLanguage();
   const [draft, setDraft] = useState(initial), [filters, setFilters] = useState(initial);
   const [page, setPage] = useState(1), [refresh, setRefresh] = useState(0);
@@ -42,7 +42,7 @@ export function Audit({ principal }: { principal: Principal }) {
       if (format === 'pdf') {
         const data = await api<AuditExportPdfData>(`audit-events/export-pdf?${query}`);
         const { downloadAuditExportPdf } = await import('./AuditExportPdf');
-        await downloadAuditExportPdf(data, principal.organization.name);
+        await downloadAuditExportPdf(data, principal.organization.name, logoData);
         return;
       }
       const file = await api<Workbook>(`audit-events/export?${query}`);
@@ -57,7 +57,7 @@ export function Audit({ principal }: { principal: Principal }) {
     finally { setExporting(false); }
   }
   return <>
-    <div className="page-heading"><div><h1>{t('Auditoría')}</h1><p className="muted">{t('Historial de acciones de tu junta. La entrega se procesa cada minuto y puede demorarse cuando hay fallos.')}</p></div>
+    <div className="page-heading"><div><h1>{t('Auditoría')}</h1><p className="muted">{t('Consulta quién hizo cada cambio y cuándo ocurrió.')}</p></div>
       <button disabled={busy} onClick={() => setRefresh(value => value + 1)}>{t('Actualizar')}</button></div>
     <section className="panel" aria-label={t('Consulta de auditoría')}>
       <h2>{t('Buscar eventos')}</h2><p className="muted">{t('Combina los filtros. Las fechas incluyen el día completo en UTC; actor y acción requieren coincidencia exacta.')}</p>
@@ -75,15 +75,23 @@ export function Audit({ principal }: { principal: Principal }) {
       </form>
       <ErrorBox error={error} />
       <ErrorBox error={exportError} />
-      <ExportFilename value={exportName} onChange={setExportName} type="auditoria"
-        defaultDescription={t('Si dejas el nombre vacío, se descargará como auditoria_AAAA-MM-DD.xlsx o auditoria_AAAA-MM-DD.pdf, según el formato, con la fecha de Colombia.')} />
+      <ExportFilename value={exportName} onChange={setExportName} type="auditoria" />
       {busy ? <Loading /> : data && <>
         <p role="status">{t('{count} eventos encontrados', { count: data.total })}</p>
         <div className="pagination"><button type="button" disabled={exporting || data.total > 2000 || !exportFilenameReady(exportName)} onClick={() => void exportExcel()}>{t(exporting ? 'Preparando archivo…' : 'Exportar Excel')}</button>
           <button type="button" disabled={exporting || data.total > 2000 || !exportFilenameReady(exportName)} onClick={() => void exportExcel('pdf')}>{t(exporting ? 'Preparando archivo…' : 'Exportar PDF')}</button>
-          <span>{t('Usa los filtros aplicados; máximo 2000 eventos por archivo. Si hay más, acota la consulta. PDF en A3 horizontal; fechas de los eventos en UTC.')}</span></div>
-        {data.items.length ? <div className="table-scroll"><table><thead><tr><th>{t('Fecha UTC')}</th><th>{t('Módulo')}</th><th>{t('Acción')}</th><th>{t('Resultado')}</th><th>{t('Detalle')}</th></tr></thead>
-          <tbody>{data.items.map(event => <tr key={event.id}><td>{event.occurred_at}</td><td>{t(services[event.service] || event.service)}</td><td>{event.action}</td><td>{t(results[event.result] || event.result)}</td><td><button onClick={() => setSelected(event)} aria-label={t('Ver evento {id}', { id: event.id })}>{t('Ver')}</button></td></tr>)}</tbody></table></div>
+          <span className="export-help">{t('Descarga hasta 2000 eventos según los filtros. Si hay más, acota la búsqueda. Fechas en UTC.')}</span></div>
+        {data.items.length ? <>
+          <div className="table-scroll audit-desktop-table"><table><thead><tr><th>{t('Fecha UTC')}</th><th>{t('Módulo')}</th><th>{t('Acción')}</th><th>{t('Resultado')}</th><th>{t('Detalle')}</th></tr></thead>
+            <tbody>{data.items.map(event => <tr key={event.id}><td>{event.occurred_at}</td><td>{t(services[event.service] || event.service)}</td><td>{event.action}</td><td>{t(results[event.result] || event.result)}</td><td><button onClick={() => setSelected(event)} aria-label={t('Ver evento {id}', { id: event.id })}>{t('Ver')}</button></td></tr>)}</tbody></table></div>
+          <ul className="audit-mobile-list" aria-label={t('Eventos de auditoría')}>
+            {data.items.map(event => <li className="audit-mobile-card" key={event.id}>
+              <div className="audit-mobile-heading"><strong>{t(services[event.service] || event.service)}</strong><span>{t(results[event.result] || event.result)}</span></div>
+              <dl><div><dt>{t('Fecha UTC')}</dt><dd>{event.occurred_at}</dd></div><div><dt>{t('Acción')}</dt><dd>{event.action}</dd></div></dl>
+              <button type="button" onClick={() => setSelected(event)} aria-label={t('Ver evento {id}', { id: event.id })}>{t('Ver detalle')}</button>
+            </li>)}
+          </ul>
+        </>
           : <Empty title={t('No hay eventos para esta consulta')}>{t('Modifica los filtros o actualiza cuando se hayan entregado nuevas acciones.')}</Empty>}
         <div className="pagination"><button disabled={page === 1} onClick={() => setPage(value => value - 1)}>{t('Anterior')}</button><span>{t('Página {page} de {pages}', { page, pages: Math.max(1, Math.ceil(data.total / data.page_size)) })}</span><button disabled={page * data.page_size >= data.total} onClick={() => setPage(value => value + 1)}>{t('Siguiente')}</button></div>
       </>}

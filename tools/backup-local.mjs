@@ -6,6 +6,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { seal, unseal, digest } from './backup-codec.mjs';
 import { payloadMagic, lengthPrefix, inspectPayload } from './backup-payload.mjs';
+import { compareErasureRows } from './backup-erasure-policy.mjs';
 
 const root = fs.realpathSync(path.resolve(import.meta.dirname, '..'));
 process.chdir(root);
@@ -135,6 +136,18 @@ async function authenticatedPayload() {
 function sql(query) {
   return run(['exec', container, 'sh', '-c', 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --protocol=TCP --host=127.0.0.1 --user=root --batch --raw --skip-column-names --local-infile=0 --execute "$1"', 'srd-query', query]);
 }
+function liveSql(query) {
+  return run(['compose', 'exec', '-T', 'mysql', 'sh', '-c', 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --protocol=TCP --host=127.0.0.1 --user=root --batch --raw --skip-column-names --local-infile=0 --execute "$1"', 'srd-live-query', query]);
+}
+function erasureComparison(tables) {
+  // The current operational database is a local reference, never a source of data to import.
+  if (!run(['compose', 'ps', '-q', 'mysql'])) return { status: 'unavailable' };
+  if (Number(liveSql("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='srd_records' AND TABLE_NAME='privacy_requests';")) !== 1) return { status: 'unavailable' };
+  const erased = liveSql("SELECT DISTINCT organization_id,person_id FROM srd_records.privacy_requests WHERE kind='erasure' AND status IN ('erasure_in_progress','erased');")
+    .split('\n').filter(Boolean).map(line => line.split('\t'));
+  const hasColumn = (db, table, column) => Number(sql(`SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='${db}' AND TABLE_NAME='${table}' AND COLUMN_NAME='${column}';`)) === 1;
+  return compareErasureRows(erased, tables, sql, hasColumn);
+}
 function identifier(value) {
   if (!/^[a-zA-Z0-9_]+$/.test(value)) throw new Error('Identificador inesperado en la copia.');
   return '`' + value + '`';
@@ -176,6 +189,8 @@ async function restoreTest(payload) {
   // Historical backups precede some services; require only databases present when created.
   for (const db of databases.filter(db => (db !== 'srd_files' || payload.includesFiles) && (db !== 'srd_calendar' || payload.includesCalendar) && (db !== 'srd_notifications' || payload.includesNotifications) && (db !== 'srd_treasury' || payload.includesTreasury) && (db !== 'srd_inventory' || payload.includesInventory) && (db !== 'srd_chat' || payload.includesChat))) if (!counts[db]?.tables) throw new Error('Falta una base del respaldo.');
   audit('tables_checked', { tables: tables.length });
+  const erasure = erasureComparison(tables);
+  audit('erasure_compared', erasure);
   // Verify every declared FK, including composite references, after import.
   const references = sql("SELECT TABLE_SCHEMA,TABLE_NAME,CONSTRAINT_NAME,COLUMN_NAME,REFERENCED_TABLE_SCHEMA,REFERENCED_TABLE_NAME,REFERENCED_COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE REFERENCED_TABLE_NAME IS NOT NULL AND TABLE_SCHEMA IN (" + databases.map(db => "'" + db + "'").join(',') + ') ORDER BY TABLE_SCHEMA,TABLE_NAME,CONSTRAINT_NAME,ORDINAL_POSITION;');
   const groups = new Map();
@@ -236,7 +251,7 @@ async function restoreTest(payload) {
     photoReport={included:true,restored:objects.size,active:references.length,documents:documentRows.filter(r=>r[3]==='1').length,pending_documents:documentRows.filter(r=>r[3]!=='1').length,pending_removal:garbage.length,unreferenced:objects.size-used.size,hashes_verified:true,quotas_verified:true};
     audit('photos_restored',photoReport);
   }
-  return { file: path.basename(payload.file), sha256: payload.sha256, databases: counts, foreign_keys_checked: groups.size, photos:photoReport, isolated: true };
+  return { file: path.basename(payload.file), sha256: payload.sha256, databases: counts, foreign_keys_checked: groups.size, photos:photoReport, erasure_comparison: erasure, isolated: true };
 }
 
 try {

@@ -4,6 +4,11 @@ use App\Http\Controllers\PersonController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('internal')->group(function () {
+    Route::get('privacy-erasure-status', [\App\Http\Controllers\PrivacyRequestController::class, 'erasureStatus']);
+    Route::get('privacy-requests', [\App\Http\Controllers\PrivacyRequestController::class, 'index']);
+    Route::post('privacy-requests', [\App\Http\Controllers\PrivacyRequestController::class, 'store']);
+    Route::patch('privacy-requests/{id}', [\App\Http\Controllers\PrivacyRequestController::class, 'update'])->whereUuid('id');
+    Route::post('privacy-requests/{id}/execute-erasure', [\App\Http\Controllers\PrivacyRequestController::class, 'executeErasure'])->whereUuid('id');
     Route::get('public-logo/{id}', [\App\Http\Controllers\PlanillaSettingsController::class, 'publicLogo'])->whereUuid('id');
     Route::get('planilla-settings', [\App\Http\Controllers\PlanillaSettingsController::class, 'index']);
     Route::put('planilla-settings', [\App\Http\Controllers\PlanillaSettingsController::class, 'update']);
@@ -20,6 +25,9 @@ Route::middleware('internal')->group(function () {
     Route::get('dashboard', [$c, 'dashboard']);
     Route::get('persons', [$c, 'index']);
     Route::get('persons/export', [$c, 'export']);
+    Route::post('persons/export-jobs', [$c, 'queueExport']);
+    Route::get('persons/export-jobs/{id}', [$c, 'exportJob'])->whereUuid('id');
+    Route::get('persons/export-jobs/{id}/download', [$c, 'downloadExportJob'])->whereUuid('id');
     Route::get('persons/export-pdf', [$c, 'exportPdf']);
     Route::get('persons/planilla', [$c, 'planilla']);
     Route::get('persons/planilla-preview', [$c, 'planillaPreview']);

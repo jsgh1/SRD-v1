@@ -48,8 +48,10 @@ test('SA/AD reintenta un evento agotado y Auditoría lo recibe una sola vez', as
     const adminCard = await identityCard(page);
     const row = adminCard.getByRole('row', { name: new RegExp(fixture.retry_event_id) });
     await expect(row).toBeVisible();
-    page.once('dialog', dialog => dialog.accept());
     await row.getByRole('button', { name: 'Reintentar entrega' }).click();
+    const confirmation = page.getByRole('dialog', { name: 'Confirmar acción' });
+    await expect(confirmation).toContainText('¿Programar un nuevo intento');
+    await confirmation.getByRole('button', { name: 'Confirmar' }).click();
     await expect(page.getByText('Reintento programado. La entrega se procesará en el próximo ciclo.')).toBeVisible();
     await expect.poll(async () => {
       const response = await page.request.get('/api/v1/audit-delivery/identity');

@@ -26,6 +26,17 @@ final class IsolationTest extends TestCase
         return $this->internal('POST', 'persons', $this->person(), $p)->assertOk()->json('data.id');
     }
 
+    public function test_pending_record_can_wait_for_authorization_without_losing_identity(): void
+    {
+        $draft = ['document_type' => 'CC', 'document_number' => 'PENDING-1', 'first_names' => 'Borrador', 'status' => 'pending'];
+        $id = $this->internal('POST', 'persons', $draft, $this->a)->assertOk()->json('data.id');
+        $this->assertDatabaseMissing('data_authorizations', ['person_id' => $id]);
+        $this->internal('GET', 'persons/'.$id, [], $this->a)->assertOk()->assertJsonPath('data.status', 'pending');
+        $this->internal('PATCH', 'persons/'.$id, $draft + ['version' => 1, 'authorization_basis' => 'Soporte'], $this->a)->assertUnprocessable();
+        $this->internal('PATCH', 'persons/'.$id, $draft + ['version' => 1, 'authorization_basis' => 'Consentimiento escrito', 'authorization_purpose' => 'Registro comunitario'], $this->a)->assertOk();
+        $this->assertDatabaseHas('data_authorizations', ['person_id' => $id, 'basis' => 'Consentimiento escrito']);
+    }
+
     public function test_two_juntas_cannot_share_reads_updates_deletes_or_statistics(): void
     {
         $id = $this->create($this->a);

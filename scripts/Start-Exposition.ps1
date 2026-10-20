@@ -12,9 +12,15 @@ Set-Location -LiteralPath $SrdRoot
 if ($LASTEXITCODE -ne 0) { throw 'No se pudo preparar el entorno de exposición.' }
 
 if (-not $SkipSeed) {
-    & (Join-Path $PSScriptRoot 'Seed-Exposition.ps1')
+    & (Join-Path $PSScriptRoot 'Seed-Exposition.ps1') -Build:$Build
     if ($LASTEXITCODE -ne 0) { throw 'No se pudo cargar la semilla de exposición.' }
 } else {
+    if ($Build) {
+        foreach ($SrdService in @('treasury', 'inventory')) {
+            docker compose build $SrdService
+            if ($LASTEXITCODE -ne 0) { throw "Compilación fallida: $SrdService" }
+        }
+    }
     docker compose up -d --wait --no-build treasury inventory
     if ($LASTEXITCODE -ne 0) { throw 'No se pudieron iniciar Tesorería e Inventario.' }
 }

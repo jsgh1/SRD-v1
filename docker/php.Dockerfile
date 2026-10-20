@@ -4,15 +4,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends libonig-dev lib
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
 ARG SERVICE
 RUN if [ "$SERVICE" = gateway ]; then apt-get update && apt-get install -y --no-install-recommends libcurl4-openssl-dev && docker-php-ext-install curl && rm -rf /var/lib/apt/lists/*; fi
+RUN if [ "$SERVICE" = records ]; then apt-get update && apt-get install -y --no-install-recommends libpng-dev && docker-php-ext-install gd && rm -rf /var/lib/apt/lists/*; fi
 WORKDIR /app/services/${SERVICE}
 COPY services/${SERVICE}/composer.json services/${SERVICE}/composer.lock ./
 RUN composer install --no-dev --no-interaction --prefer-dist --no-scripts --no-autoloader
 COPY packages/php /app/packages/php
 COPY services/${SERVICE} /app/services/${SERVICE}
-RUN mkdir -p bootstrap/cache storage/framework/cache/data storage/framework/sessions storage/framework/views storage/framework/scheduler-health storage/logs \
-    && chown -R www-data:www-data storage bootstrap/cache \
-    && composer dump-autoload --no-dev --optimize
+RUN composer dump-autoload --no-dev --optimize && mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/framework/scheduler-health storage/logs && chown -R www-data:www-data storage bootstrap/cache
 RUN if [ "$SERVICE" = gateway ]; then printf "memory_limit=256M\npost_max_size=32M\n" > /usr/local/etc/php/conf.d/srd-gateway.ini; fi
+RUN if [ "$SERVICE" = records ]; then printf "memory_limit=512M\n" > /usr/local/etc/php/conf.d/srd-records.ini; fi
 USER www-data
 EXPOSE 8000
 CMD ["php", "-S", "0.0.0.0:8000", "-t", "public", "public/index.php"]

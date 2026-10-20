@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { LoaderCircle, X } from "lucide-react";
 import { ApiError } from "./api";
 import { isKnownEnglishCopy, t, translateToEnglish, useLanguage } from './i18n';
 
@@ -88,7 +88,7 @@ export function Empty({
 }
 export function Loading() {
   return (
-    <p role="status" className="loading">
+    <p role="status" className="loading"><LoaderCircle size={18} aria-hidden="true" />
       {t('Cargando información…')}
     </p>
   );

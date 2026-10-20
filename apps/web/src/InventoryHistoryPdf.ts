@@ -1,8 +1,9 @@
 import { t } from './i18n';
+import { pdfLogoBlock } from './pdfLogo';
 
 export type InventoryHistoryPdfData = { filename: string; date: string; count: number; headers: string[]; rows: string[][] };
 
-export function inventoryHistoryPdfDefinition(data: InventoryHistoryPdfData, organizationName: string) {
+export function inventoryHistoryPdfDefinition(data: InventoryHistoryPdfData, organizationName: string, logoData?: string | null) {
   if (!/^[A-Za-z0-9][A-Za-z0-9._ -]{0,119}\.pdf$/.test(data.filename)
     || !/^\d{4}-\d{2}-\d{2}$/.test(data.date) || data.headers.length !== 11
     || data.count !== data.rows.length || data.rows.length > 2000
@@ -16,6 +17,7 @@ export function inventoryHistoryPdfDefinition(data: InventoryHistoryPdfData, org
     defaultStyle: { font: 'Roboto', fontSize: 10, color: '#111827' },
     header: { text: `${t('Inventario')} · ${organizationName}`, margin: [36, 16, 36, 0], fontSize: 9, color: '#475569' },
     content: [
+      ...pdfLogoBlock(logoData),
       { text: t('Historial de movimientos de Inventario'), bold: true, fontSize: 19, margin: [0, 0, 0, 6] },
       { text: t('Fecha (Colombia): {date} · Movimientos: {count}', { date: data.date, count: data.count }), margin: [0, 0, 0, 14] },
       { text: t('Las existencias anteriores y posteriores son históricas; no se recalculan con los filtros ni representan necesariamente la existencia actual.'), fontSize: 9, margin: [0, 0, 0, 12] },
@@ -35,8 +37,8 @@ export function inventoryHistoryPdfDefinition(data: InventoryHistoryPdfData, org
   };
 }
 
-export async function downloadInventoryHistoryPdf(data: InventoryHistoryPdfData, organizationName: string, isCurrent: () => boolean = () => true): Promise<void> {
-  const definition = inventoryHistoryPdfDefinition(data, organizationName);
+export async function downloadInventoryHistoryPdf(data: InventoryHistoryPdfData, organizationName: string, isCurrent: () => boolean = () => true, logoData?: string | null): Promise<void> {
+  const definition = inventoryHistoryPdfDefinition(data, organizationName, logoData);
   const [{ default: pdfMake }, { default: fonts }] = await Promise.all([
     import('pdfmake/build/pdfmake.js'), import('pdfmake/build/vfs_fonts.js'),
   ]);

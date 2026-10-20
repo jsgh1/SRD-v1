@@ -13,7 +13,7 @@ type Contact = { id: string; name: string; role: string; presence: string };
 type Result = { items: (Person | Contact)[]; total: number; page_size: number };
 const presence: Record<string, string> = { online: 'En línea', away: 'Ausente', dnd: 'No molestar', offline: 'Desconectado' };
 
-function SearchGroup({ kind, query }: { kind: Kind; query: string }) {
+function SearchGroup({ kind, query, principal }: { kind: Kind; query: string; principal: Principal }) {
   const [page, setPage] = useState(1), [retry, setRetry] = useState(0), [detail, setDetail] = useState<string>();
   const [data, setData] = useState<Result>(), [error, setError] = useState<unknown>();
   useLanguage();
@@ -59,7 +59,7 @@ function SearchGroup({ kind, query }: { kind: Kind; query: string }) {
         : <ul className="contact-list">{(data.items as Contact[]).map(contact => <li key={contact.id} className="contact-card"><span className="avatar" aria-hidden="true">{contact.name.slice(0, 1)}</span><div><strong>{contact.name}</strong><div className="muted">{t(roleNames[contact.role] ?? contact.role)}</div><span className="presence-status" data-state={contact.presence}><span aria-hidden="true">●</span> {t(presence[contact.presence] ?? 'Desconectado')}</span></div></li>)}</ul>}
       <div className="pagination"><button disabled={page === 1} onClick={() => setPage(v => v - 1)}>{t('Anterior')}</button><span>{t('Página {page}', { page })}</span><button disabled={page * data.page_size >= data.total} onClick={() => setPage(v => v + 1)}>{t('Siguiente')}</button></div>
     </>}
-    {detail && <PersonDetail id={detail} onClose={() => setDetail(undefined)} />}
+      {detail && <PersonDetail id={detail} principal={principal} onClose={() => setDetail(undefined)} />}
   </section>;
 }
 
@@ -81,8 +81,8 @@ export function GlobalSearch({ principal, folderRead, onOpenFolder }: { principa
       <button className="primary">{t('Buscar')}</button><button type="button" onClick={() => { setQuery(''); setScope('all'); setSearch(undefined); setError(undefined); }}>{t('Limpiar búsqueda')}</button>
     </form><ErrorBox error={error} /><p className="muted">{t('Los resultados pertenecen a tu junta activa. La presencia de contactos se actualiza mientras los resultados estén visibles.')}</p></section>
     {!search ? <Empty title={t('¿Qué necesitas encontrar?')}>{t('Escribe un texto para consultar los módulos disponibles.')}</Empty> : <div key={`${search.version}:${search.query}:${search.scope}`}>
-      {(search.scope === 'all' || search.scope === 'persons') && <SearchGroup kind="persons" query={search.query} />}
-      {(search.scope === 'all' || search.scope === 'contacts') && <SearchGroup kind="contacts" query={search.query} />}
+      {(search.scope === 'all' || search.scope === 'persons') && <SearchGroup kind="persons" query={search.query} principal={principal} />}
+      {(search.scope === 'all' || search.scope === 'contacts') && <SearchGroup kind="contacts" query={search.query} principal={principal} />}
       {(search.scope === 'all' || search.scope === 'calendar') && <CalendarSearch query={search.query} />}
       {folderRead && (search.scope === 'all' || search.scope === 'files') && <FolderSearch query={search.query} onOpenFolder={onOpenFolder} />}
       {financialAllowed && (search.scope === 'all' || search.scope === 'assets') && <AssetSearch query={search.query} />}

@@ -4,6 +4,8 @@ import { Empty, ErrorBox, Loading, Modal } from './ui';
 import { calendarState } from './calendar-state';
 import { useCalendarClock } from './useCalendarClock';
 import { formatLocale, t, useLanguage } from './i18n';
+import { confirmInApp } from './ConfirmHost';
+import { useRequestGeneration } from './useRequestGeneration';
 
 type CalendarEvent = {
   id: string; type: 'meeting' | 'appointment' | 'activity' | 'important_date';
@@ -94,39 +96,60 @@ export function Calendar({ principal, openEventId, onOpened }: { principal: Prin
   const [contacts, setContacts] = useState<Contact[]>([]), [contactError, setContactError] = useState<unknown>();
   const [roles, setRoles] = useState<string[]>([]), [busy, setBusy] = useState(false), [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(), [notice, setNotice] = useState(''), [refresh, setRefresh] = useState(0);
+  const [failedOpenEventId, setFailedOpenEventId] = useState<string>(), [openEventBusy, setOpenEventBusy] = useState(false);
+  const openGeneration = useRequestGeneration();
+  const [readError, setReadError] = useState<unknown>();
+  const [settingsError, setSettingsError] = useState<unknown>(), [settingsRevision, setSettingsRevision] = useState(0);
+  const [invitationError, setInvitationError] = useState<unknown>(), [invitationRevision, setInvitationRevision] = useState(0);
+  const [contactRevision, setContactRevision] = useState(0);
   const range = useMemo(() => windowFor(view, anchor), [view, anchor, language]);
   const clock = useCalendarClock();
 
   useEffect(() => {
     if (!openEventId) return;
-    let active = true;
+    const current = ++openGeneration.current;
+    setError(undefined); setFailedOpenEventId(undefined); setOpenEventBusy(true);
     api<CalendarEvent>(`calendar-events/${openEventId}`).then(value => {
-      if (active) { setSelected(value); setAnchor(localInput(value.starts_at).slice(0, 10)); onOpened?.(); }
-    }).catch(value => { if (active) { setError(value); onOpened?.(); } });
-    return () => { active = false; };
+      if (current === openGeneration.current) { setSelected(value); setAnchor(localInput(value.starts_at).slice(0, 10)); setFailedOpenEventId(undefined); setOpenEventBusy(false); onOpened?.(); }
+    }).catch(value => { if (current === openGeneration.current) { setError(value); setFailedOpenEventId(openEventId); setOpenEventBusy(false); onOpened?.(); } });
+    return () => { if (current === openGeneration.current) openGeneration.current++; };
   }, [openEventId, onOpened]);
+  async function retryOpenEvent() {
+    if (!failedOpenEventId || openEventBusy) return;
+    const id = failedOpenEventId, current = ++openGeneration.current;
+    setError(undefined); setOpenEventBusy(true);
+    try {
+      const value = await api<CalendarEvent>(`calendar-events/${id}`);
+      if (current === openGeneration.current) { setSelected(value); setAnchor(localInput(value.starts_at).slice(0, 10)); setFailedOpenEventId(undefined); }
+    } catch (value) { if (current === openGeneration.current) setError(value); }
+    finally { if (current === openGeneration.current) setOpenEventBusy(false); }
+  }
 
   useEffect(() => {
     let active = true;
-    api<Settings>('calendar-settings').then(value => { if (active) { setSettings(value); setRoles(value.editor_roles); } }).catch(value => { if (active) setError(value); });
+    setSettings(undefined); setSettingsError(undefined);
+    api<Settings>('calendar-settings').then(value => { if (active) { setSettings(value); setRoles(value.editor_roles); } }).catch(value => { if (active) setSettingsError(value); });
     return () => { active = false; };
-  }, [principal.organization.id]);
+  }, [principal.organization.id, settingsRevision]);
   useEffect(() => {
     let active = true;
-    setLoading(true); setError(undefined);
-    api<{ items: CalendarEvent[] }>(`calendar-events?${new URLSearchParams({ from: range.from, to: range.to })}`)
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    setLoading(true); setReadError(undefined); setEvents([]);
+    api<{ items: CalendarEvent[] }>(`calendar-events?${new URLSearchParams({ from: range.from, to: range.to })}`, 'GET', undefined, { signal: controller.signal })
       .then(value => { if (active) setEvents(value.items); })
-      .catch(value => { if (active) setError(value); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+      .catch(value => { if (active) setReadError(value); })
+      .finally(() => { window.clearTimeout(timeout); if (active) setLoading(false); });
+    return () => { active = false; window.clearTimeout(timeout); controller.abort(); };
   }, [principal.organization.id, range.from, range.to, refresh]);
   useEffect(() => {
     let active = true;
+    setInvitations(undefined); setInvitationError(undefined);
     api<InvitationPage>(`calendar-invitations?page=${invitationPage}`)
       .then(value => { if (active) setInvitations(value); })
-      .catch(value => { if (active) setError(value); });
+      .catch(value => { if (active) setInvitationError(value); });
     return () => { active = false; };
-  }, [principal.organization.id, invitationPage, refresh]);
+  }, [principal.organization.id, invitationPage, refresh, invitationRevision]);
   useEffect(() => {
     if (!editing) return;
     let active = true;
@@ -136,7 +159,7 @@ export function Calendar({ principal, openEventId, onOpened }: { principal: Prin
         .catch(value => { if (active) { setContacts([]); setContactError(value); } });
     }, 250);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [editing, contactQuery, principal.organization.id]);
+  }, [editing, contactQuery, principal.organization.id, contactRevision]);
   function move(direction: number) {
     if (view === 'week') setAnchor(addDays(anchor, direction * 7));
     else if (view === 'agenda') setAnchor(addDays(anchor, direction * 30));
@@ -152,6 +175,10 @@ export function Calendar({ principal, openEventId, onOpened }: { principal: Prin
   async function save(e: FormEvent) {
     e.preventDefault();
     if (form.ends_at <= form.starts_at) { setError(new Error('El final debe ser posterior al inicio.')); return; }
+    if (Date.parse(`${form.ends_at}:00-05:00`) - Date.parse(`${form.starts_at}:00-05:00`) > 7 * 24 * 60 * 60 * 1000) {
+      setError(new Error('El evento no puede durar más de siete días.'));
+      return;
+    }
     setBusy(true); setError(undefined);
     try {
       const body = { ...form, participants: participants.map(item => item.user_id), starts_at: form.starts_at + ':00-05:00', ends_at: form.ends_at + ':00-05:00', ...(editing !== 'new' && editing ? { version: editing.version } : {}) };
@@ -161,7 +188,7 @@ export function Calendar({ principal, openEventId, onOpened }: { principal: Prin
     } catch (value) { setError(value); } finally { setBusy(false); }
   }
   async function cancel() {
-    if (!selected || !window.confirm(t('¿Cancelar este evento?'))) return;
+    if (!selected || !await confirmInApp(t('¿Cancelar este evento?'))) return;
     setBusy(true); setError(undefined);
     try { setSelected(await api<CalendarEvent>(`calendar-events/${selected.id}/cancel`, 'POST', { version: selected.version })); setNotice('Evento cancelado.'); setRefresh(count => count + 1); }
     catch (value) { setError(value); } finally { setBusy(false); }
@@ -196,6 +223,7 @@ export function Calendar({ principal, openEventId, onOpened }: { principal: Prin
     {participants.length > 0 && <ul className="calendar-participant-list">{participants.map(item => <li key={item.user_id}>{item.name} <button type="button" onClick={() => setParticipants(current => current.filter(value => value.user_id !== item.user_id))} aria-label={t('Quitar a {name}', { name: item.name })}>{t('Quitar')}</button></li>)}</ul>}
     <label>{t('Buscar integrante')}<input maxLength={120} value={contactQuery} onChange={e => setContactQuery(e.target.value)} placeholder={t('Nombre del integrante')} /></label>
     <ErrorBox error={contactError} />
+    {!!contactError && <button type="button" onClick={() => setContactRevision(value => value + 1)}>{t('Reintentar integrantes')}</button>}
     {participants.length < 50 && principal.user_id && !participants.some(item => item.user_id === principal.user_id) && <button type="button" onClick={() => addParticipant(principal.user_id, principal.user.name)}>{t('Añadirme')}</button>}
     {availableContacts.length > 0 && <ul className="calendar-participant-list">{availableContacts.map(contact => <li key={contact.id}><span>{contact.name} · {t(roleNames[contact.role] ?? contact.role)}</span><button type="button" disabled={participants.length >= 50} onClick={() => addParticipant(contact.id, contact.name)} aria-label={t('Añadir a {name}', { name: contact.name })}>{t('Añadir')}</button></li>)}</ul>}
     {!contactQuery && contacts.length === 25 && <p className="muted">{t('Busca por nombre para encontrar otros integrantes.')}</p>}
@@ -209,8 +237,12 @@ export function Calendar({ principal, openEventId, onOpened }: { principal: Prin
   return <>
     <div className="page-heading"><div><h1>{t('Calendario')}</h1><p className="muted">{t('Eventos de {name} · hora de Colombia', { name: principal.organization.name })}</p></div>
       {settings?.can_edit && <button className="primary" onClick={() => openForm()}>{t('Crear evento')}</button>}</div>
-    <ErrorBox error={error} />{notice && <p className="notice" role="status">{t(notice)}</p>}
-    <p className="muted">{t('Próximo: durante las 24 horas previas al inicio. Los estados avanzan automáticamente con la hora del dispositivo. Usa Actualizar calendario para consultar cambios de otros integrantes.')}</p>
+    <ErrorBox error={error} />
+    {!!failedOpenEventId && <button type="button" disabled={openEventBusy} onClick={() => void retryOpenEvent()}>{t('Reintentar evento')}</button>}
+    {notice && <p className="notice" role="status">{t(notice)}</p>}
+    {!!settingsError && <div className="panel"><ErrorBox error={settingsError} /><button type="button" onClick={() => setSettingsRevision(value => value + 1)}>{t('Reintentar permisos del calendario')}</button></div>}
+    {!!invitationError && <div className="panel"><ErrorBox error={invitationError} /><button type="button" onClick={() => setInvitationRevision(value => value + 1)}>{t('Reintentar invitaciones del calendario')}</button></div>}
+    <p className="muted">{t('Los eventos próximos comienzan dentro de 24 horas. Actualiza para ver cambios recientes.')}</p>
     {invitations && <section className="panel" aria-label={t('Mis invitaciones')}><h2>{t('Mis invitaciones')}</h2>
       <p className="muted">{t('Eventos futuros a los que te asignaron. Puedes responder aquí y consultar los avisos en la campana.')}</p>
       {invitations.items.length ? <ul className="calendar-invitation-list">{invitations.items.map(item => <li key={item.event_id}>
@@ -225,10 +257,12 @@ export function Calendar({ principal, openEventId, onOpened }: { principal: Prin
     </section>}
     <section className="panel calendar-panel" aria-label={t('Calendario de la junta')}>
       <div className="calendar-toolbar"><div className="pagination"><button onClick={() => move(-1)} aria-label={t('Período anterior')}>{t('Anterior')}</button><button onClick={() => { const value = today(); setAnchor(value); setSelectedDay(value); }}>{t('Hoy')}</button><button onClick={() => move(1)} aria-label={t('Período siguiente')}>{t('Siguiente')}</button><button disabled={loading} onClick={() => setRefresh(value => value + 1)}>{t('Actualizar calendario')}</button></div>
-        <h2>{range.title}</h2><div className="pagination">{(['month', 'week', 'agenda'] as View[]).map(value => <button key={value} aria-pressed={view === value} onClick={() => setView(value)}>{t(value === 'month' ? 'Mes' : value === 'week' ? 'Semana' : 'Agenda')}</button>)}</div></div>
-      {loading ? <Loading /> : <>
+        <h2>{range.title}</h2><div className="pagination">{(['month', 'week', 'agenda'] as View[]).map(value => <button key={value} aria-pressed={view === value} onClick={() => { if (view === 'week' && value === 'agenda') setAnchor(range.from); setView(value); }}>{t(value === 'month' ? 'Mes' : value === 'week' ? 'Semana' : 'Agenda')}</button>)}</div></div>
+      <ErrorBox error={readError} />
+      {loading ? <Loading /> : readError ? null : <>
         {view === 'month' && <><div className="calendar-weekdays">{days.map(day => <strong key={day}>{t(day)}</strong>)}</div><div className="calendar-grid">{range.dates.map(day => <div key={day} className={`calendar-day ${day.slice(0, 7) !== anchor.slice(0, 7) ? 'outside' : ''} ${selectedDay === day ? 'selected' : ''}`}>
           <button className="calendar-date" onClick={() => setSelectedDay(day)} aria-label={day}>{Number(day.slice(8))}</button>
+          {dayEvents(day).length > 0 && <span className="calendar-day-count" aria-label={t('Eventos: {count}', { count: dayEvents(day).length })}>{dayEvents(day).length}</span>}
           {dayEvents(day).slice(0, 3).map(button)}{dayEvents(day).length > 3 && <small>{t('+{count} más', { count: dayEvents(day).length - 3 })}</small>}
         </div>)}</div><div className="calendar-selected"><h3>{dayLabel(selectedDay, { weekday: 'long', day: 'numeric', month: 'long' })}</h3>{dayEvents(selectedDay).length ? dayEvents(selectedDay).map(button) : <p className="muted">{t('Sin eventos este día.')}</p>}</div></>}
         {view === 'week' && <div className="calendar-week">{range.dates.map(day => <section key={day}><h3>{dayLabel(day, { weekday: 'short', day: 'numeric', month: 'short' })}</h3>{dayEvents(day).length ? dayEvents(day).map(button) : <p className="muted">{t('Sin eventos')}</p>}</section>)}</div>}
@@ -249,14 +283,14 @@ export function Calendar({ principal, openEventId, onOpened }: { principal: Prin
     {editing && <Modal title={t(editing === 'new' ? 'Crear evento' : 'Editar evento')} onClose={() => setEditing(undefined)}><form className="calendar-form" onSubmit={save}>
       <label>{t('Tipo')}<select value={form.type} onChange={e => setForm({ ...form, type: e.target.value as Form['type'] })}>{Object.entries(types).map(([key, label]) => <option key={key} value={key}>{t(label)}</option>)}</select></label>
       <p className="muted">{t('Escribe cada texto del evento en español e inglés. Los eventos antiguos sin inglés necesitan una versión antes de guardar cambios.')}</p>
-      <label>{t('Título')}<input required minLength={2} maxLength={160} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></label>
-      <label>{t('Título (EN)')}<input required minLength={2} maxLength={160} value={form.title_en} onChange={e => setForm({ ...form, title_en: e.target.value })} /></label>
+      <label>{t('Título')}<input required minLength={2} maxLength={160} placeholder={t('Ej.: Asamblea de vecinos')} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></label>
+      <label>{t('Título (EN)')}<input required minLength={2} maxLength={160} placeholder={t("E.g.: Residents' meeting")} value={form.title_en} onChange={e => setForm({ ...form, title_en: e.target.value })} /></label>
       <label>{t('Inicio')}<input required type="datetime-local" value={form.starts_at} onChange={e => setForm({ ...form, starts_at: e.target.value })} /></label>
       <label>{t('Final')}<input required type="datetime-local" value={form.ends_at} onChange={e => setForm({ ...form, ends_at: e.target.value })} /></label>
-      <label>{t('Lugar')}<input required={!!form.location_en.trim()} maxLength={160} value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} /></label>
-      <label>{t('Lugar (EN)')}<input required={!!form.location.trim()} maxLength={160} value={form.location_en} onChange={e => setForm({ ...form, location_en: e.target.value })} /></label>
-      <label>{t('Descripción')}<textarea required={!!form.description_en.trim()} maxLength={4000} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></label>
-      <label>{t('Descripción (EN)')}<textarea required={!!form.description.trim()} maxLength={4000} value={form.description_en} onChange={e => setForm({ ...form, description_en: e.target.value })} /></label>
+      <label>{t('Lugar')}<input required={!!form.location_en.trim()} maxLength={160} placeholder={t('Ej.: Salón comunal')} value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} /></label>
+      <label>{t('Lugar (EN)')}<input required={!!form.location.trim()} maxLength={160} placeholder={t('E.g.: Community hall')} value={form.location_en} onChange={e => setForm({ ...form, location_en: e.target.value })} /></label>
+      <label>{t('Descripción')}<textarea required={!!form.description_en.trim()} maxLength={4000} placeholder={t('Ej.: Revisión del presupuesto y próximos eventos.')} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></label>
+      <label>{t('Descripción (EN)')}<textarea required={!!form.description.trim()} maxLength={4000} placeholder={t('E.g.: Review the budget and upcoming events.')} value={form.description_en} onChange={e => setForm({ ...form, description_en: e.target.value })} /></label>
       {reminderPicker}{participantPicker}<ErrorBox error={error} />
       <button className="primary" type="submit" disabled={busy}>{t(busy ? 'Guardando…' : 'Guardar evento')}</button>
     </form></Modal>}

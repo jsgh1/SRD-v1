@@ -41,12 +41,12 @@ test('las conversaciones posteriores a la primera página se pueden abrir', asyn
   const buttons = conversations.locator('.chat-conversations button');
   await expect(buttons).toHaveCount(25);
   await expect(conversations.getByText('Página 1 de 2')).toBeVisible();
-  const firstPage = await buttons.allTextContents();
+  const firstPage = await buttons.locator('strong').allTextContents();
 
   await conversations.getByRole('button', { name: 'Conversaciones siguientes' }).click();
   await expect(conversations.getByText('Página 2 de 2')).toBeVisible();
   await expect(buttons).toHaveCount(2);
-  const secondPage = await buttons.allTextContents();
+  const secondPage = await buttons.locator('strong').allTextContents();
   const expected = ['Prueba Viewer', ...fixture.extra_chat_users.map(user => user.name)];
   expect(new Set([...firstPage, ...secondPage])).toEqual(new Set(expected));
   await page.waitForResponse(response => response.url().includes('/api/v1/conversations?page=2')
@@ -55,11 +55,11 @@ test('las conversaciones posteriores a la primera página se pueden abrir', asyn
   await expect(buttons).toHaveCount(2);
 
   const contactName = secondPage[0];
-  await conversations.getByRole('button', { name: contactName, exact: true }).click();
+  await conversations.getByRole('button', { name: new RegExp(`^${contactName}`) }).click();
   const messages = page.getByRole('region', { name: 'Mensajes' });
-  await expect(messages.getByRole('heading', { name: contactName })).toBeVisible();
+  await expect(messages.getByRole('button', { name: `Ver perfil de ${contactName}` })).toBeVisible();
   const body = `Mensaje desde la segunda página ${Date.now()}`;
-  await messages.getByLabel('Mensaje').fill(body);
+  await messages.getByRole('textbox', { name: 'Mensaje' }).fill(body);
   await messages.getByRole('button', { name: 'Enviar', exact: true }).click();
   await expect(messages.getByText(body)).toBeVisible();
 });

@@ -28,6 +28,24 @@ final class PhotoDeletionPublisher
                 return 'retry';
             }
             DB::table('photo_deletions')->where('id', $id)->update(['delivered_at' => now()]);
+            if ($row->privacy_request_id) {
+                $request = DB::table('privacy_requests')->where('id', $row->privacy_request_id)
+                    ->where('organization_id', $row->organization_id)->lockForUpdate()->first();
+                if ($request && $request->status === 'erasure_in_progress') {
+                    DB::table('privacy_requests')->where('id', $request->id)
+                        ->where('organization_id', $row->organization_id)->update([
+                            'status' => 'erased', 'version' => $request->version + 1, 'updated_at' => now(),
+                        ]);
+                    DB::table('privacy_request_history')->insert([
+                        'id' => (string) \Illuminate\Support\Str::uuid(),
+                        'organization_id' => $row->organization_id,
+                        'request_id' => $request->id, 'actor_id' => $row->actor_id,
+                        'status' => 'erased', 'created_at' => now(),
+                    ]);
+                    \Srd\Outbox::record('privacy_request.updated', $row->organization_id,
+                        $row->actor_id, $request->id);
+                }
+            }
             return 'delivered';
         });
     }

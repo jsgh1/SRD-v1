@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\RateLimiter;
 use Srd\Testing\SignedRequests;
 use Tests\TestCase;
 
@@ -39,7 +40,7 @@ final class GatewayTest extends TestCase
 
     public function test_global_limit_separates_sessions_on_one_ip_and_keeps_anonymous_limit(): void
     {
-        for ($i = 0; $i < 120; $i++) {
+        for ($i = 0; $i < 600; $i++) {
             $this->withSession(['credential' => 'first-session'])->getJson('/api/v1/csrf')->assertOk();
         }
         $this->withSession(['credential' => 'first-session'])->getJson('/api/v1/csrf')->assertStatus(429);
@@ -48,6 +49,26 @@ final class GatewayTest extends TestCase
             $this->withSession(['credential' => null])->getJson('/api/v1/csrf')->assertOk();
         }
         $this->withSession(['credential' => null])->getJson('/api/v1/csrf')->assertStatus(429);
+    }
+
+    public function test_export_limit_separates_authenticated_sessions_on_one_ip(): void
+    {
+        $limiter = RateLimiter::limiter('srd-export');
+        $request = \Illuminate\Http\Request::create('/api/v1/persons/export', 'GET', server: ['REMOTE_ADDR' => '127.0.0.1']);
+        $request->setLaravelSession($this->app['session']->driver());
+
+        $request->session()->put('credential', 'first-session');
+        $first = $limiter($request);
+        $request->session()->put('credential', 'second-session');
+        $second = $limiter($request);
+        $request->session()->forget('credential');
+        $guest = $limiter($request);
+
+        $this->assertSame(5, $first->maxAttempts);
+        $this->assertSame(60, $first->decaySeconds);
+        $this->assertNotSame($first->key, $second->key);
+        $this->assertNotSame($first->key, $guest->key);
+        $this->assertSame('guest:127.0.0.1', $guest->key);
     }
 
     public function test_service_status_requires_administrator_and_reports_only_fixed_health_booleans(): void
@@ -417,6 +438,50 @@ final class GatewayTest extends TestCase
             ['token' => 'server-token', 'touch_activity' => false],
             ['token' => 'server-token', 'touch_activity' => true],
         ], $me);
+    }
+
+    public function test_voice_call_poll_is_passive_and_start_uses_verified_principal(): void
+    {
+        $id = '11111111-1111-4111-8111-111111111111';
+        $me = ['user_id' => '22222222-2222-4222-8222-222222222222',
+            'organization_id' => '33333333-3333-4333-8333-333333333333',
+            'session_id' => '44444444-4444-4444-8444-444444444444',
+            'role' => 'viewer', 'user' => ['name' => 'Miembro'], 'terms_required' => false];
+        Http::fake(fn ($request) => Http::response(['data' => str_ends_with($request->url(), '/auth/me') ? $me : []]));
+        $this->getJson('/api/v1/voice-calls')->assertUnauthorized();
+        $this->withSession(['credential' => 'server-token'])->getJson('/api/v1/voice-calls')->assertOk();
+        $this->withSession(['credential' => 'server-token'])->getJson('/api/v1/conversations/'.$id.'/calls/'.$id.'/signals?after=4')->assertOk();
+        $this->withSession(['credential' => 'server-token'])->postJson('/api/v1/conversations/'.$id.'/calls', [
+            'organization_id' => 'forged', 'user_id' => 'forged', 'role' => 'superadmin',
+        ])->assertOk();
+        $auth = collect(Http::recorded())->filter(fn ($pair) => str_ends_with($pair[0]->url(), '/auth/me'))
+            ->values()->map(fn ($pair) => $pair[0]->data())->all();
+        $this->assertSame([
+            ['token' => 'server-token', 'touch_activity' => false],
+            ['token' => 'server-token', 'touch_activity' => false],
+            ['token' => 'server-token', 'touch_activity' => true],
+        ], $auth);
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/conversations/'.$id.'/calls')
+            && $request->hasHeader('X-SRD-Context') && !str_contains($request->body(), 'forged'));
+    }
+
+    public function test_voice_ice_credentials_are_temporary_and_only_returned_to_authenticated_user(): void
+    {
+        config()->set('srd.webrtc_stun_url', 'stun:localhost:3478');
+        config()->set('srd.webrtc_turn_url', 'turn:localhost:3478?transport=udp');
+        config()->set('srd.webrtc_turn_secret', str_repeat('s', 32));
+        $user = '22222222-2222-4222-8222-222222222222';
+        Http::fake(fn () => Http::response(['data' => ['user_id' => $user,
+            'organization_id' => '33333333-3333-4333-8333-333333333333',
+            'role' => 'viewer', 'user' => ['name' => 'Miembro'], 'terms_required' => false]]));
+        $this->getJson('/api/v1/voice-calls/ice-config')->assertUnauthorized();
+        $servers = $this->withSession(['credential' => 'server-token'])
+            ->getJson('/api/v1/voice-calls/ice-config')->assertOk()->json('data.iceServers');
+        $this->assertSame('stun:localhost:3478', $servers[0]['urls']);
+        $this->assertSame('turn:localhost:3478?transport=udp', $servers[1]['urls']);
+        $this->assertStringEndsWith(':'.$user, $servers[1]['username']);
+        $this->assertSame(base64_encode(hash_hmac('sha1', $servers[1]['username'], str_repeat('s', 32), true)), $servers[1]['credential']);
+        $this->assertStringNotContainsString(str_repeat('s', 32), json_encode($servers));
     }
 
     public function test_chat_socket_authorization_is_bound_to_session_user_and_organization(): void

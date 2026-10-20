@@ -42,6 +42,103 @@ final class MembershipTest extends TestCase
         return ['invitation_id' => $id, 'secret' => $m[2]];
     }
 
+    public function test_registrar_can_invite_only_a_matching_person_as_viewer_and_the_link_survives_acceptance(): void
+    {
+        $registrar = (string) Str::uuid();
+        $person = (string) Str::uuid();
+        DB::table('users')->insert(['id' => $registrar, 'email' => 'registrar@example.test', 'name' => 'Registradora',
+            'password' => Hash::make('Clave-de-prueba-123'), 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('memberships')->insert(['id' => (string) Str::uuid(), 'user_id' => $registrar,
+            'organization_id' => $this->org, 'role' => 'registrar']);
+        $principal = ['user_id' => $registrar, 'organization_id' => $this->org, 'role' => 'registrar'];
+        Http::swap(new \Illuminate\Http\Client\Factory);
+        Http::fake(function ($request) use ($person) {
+            if (str_contains($request->url(), '/persons/')) return Http::response(['data' => [
+                'id' => $person, 'email' => 'persona@example.test', 'first_names' => 'Persona',
+            ]]);
+            return Http::response(['data' => ['id' => $this->org, 'code' => 'junta-prueba', 'name' => 'Junta sintética',
+                'terms' => ['id' => $this->terms, 'version' => 1, 'body' => 'Términos de prueba.']]]);
+        });
+        $payload = ['email' => 'persona@example.test', 'role' => 'viewer', 'person_id' => $person];
+        $this->internal('POST', 'invitations', $payload, $principal)->assertOk();
+        $this->assertDatabaseHas('invitations', ['email' => 'persona@example.test', 'person_id' => $person, 'role' => 'viewer']);
+        $this->internal('POST', 'invitations', array_replace($payload, ['role' => 'admin']), $principal)->assertForbidden();
+        $this->internal('POST', 'invitations', array_replace($payload, ['person_id' => null]), $principal)->assertForbidden();
+        $this->internal('POST', 'invitations', array_replace($payload, ['email' => 'otro@example.test']), $principal)->assertUnprocessable();
+        $this->artisan('srd:invitations')->assertExitCode(0);
+        $mail = Mail::getSymfonyTransport()->messages()->last()->getOriginalMessage();
+        $this->assertStringContainsString('<strong>junta-prueba</strong>', $mail->getHtmlBody());
+        preg_match('/\/invite#([a-f0-9-]+)\.([a-f0-9]{64})/', $mail->getHtmlBody(), $match);
+        $this->assertCount(3, $match);
+        $this->internal('POST', 'invitations/accept', $this->acceptance(['invitation_id' => $match[1], 'secret' => $match[2]]))->assertOk();
+        $this->assertDatabaseHas('memberships', ['organization_id' => $this->org, 'role' => 'viewer', 'person_id' => $person]);
+    }
+
+    public function test_only_the_active_account_linked_to_a_person_may_edit_its_own_photo(): void
+    {
+        $viewer = (string) Str::uuid();
+        $person = (string) Str::uuid();
+        $session = (string) Str::uuid();
+        DB::table('users')->insert(['id' => $viewer, 'email' => 'self-photo@example.test', 'name' => 'Foto propia',
+            'password' => Hash::make('Clave-de-prueba-123'), 'created_at' => now(), 'updated_at' => now()]);
+        $membership = (string) Str::uuid();
+        DB::table('memberships')->insert(['id' => $membership, 'user_id' => $viewer,
+            'organization_id' => $this->org, 'role' => 'viewer', 'person_id' => $person]);
+        DB::table('auth_sessions')->insert(['id' => $session, 'user_id' => $viewer,
+            'organization_id' => $this->org, 'token_hash' => hash('sha256', 'self-photo-test'),
+            'last_activity_at' => now(), 'expires_at' => now()->addHour(), 'created_at' => now()]);
+        $principal = ['user_id' => $viewer, 'organization_id' => $this->org, 'role' => 'viewer', 'session_id' => $session];
+        $this->internal('POST', "persons/$person/self-photo-access", [], $principal, 'records')
+            ->assertOk()->assertJsonPath('data.authorized', true);
+        $this->internal('POST', 'persons/'.Str::uuid().'/self-photo-access', [], $principal, 'records')->assertForbidden();
+        $this->internal('POST', "persons/$person/self-photo-access", [], $principal, 'files')->assertUnauthorized();
+        DB::table('auth_sessions')->where('id', $session)->update(['revoked_at' => now()]);
+        $this->internal('POST', "persons/$person/self-photo-access", [], $principal, 'records')->assertForbidden();
+        DB::table('auth_sessions')->where('id', $session)->update(['revoked_at' => null]);
+        DB::table('memberships')->where('id', $membership)->update(['active' => false]);
+        $this->internal('POST', "persons/$person/self-photo-access", [], $principal, 'records')->assertForbidden();
+    }
+
+    public function test_invitation_uses_existing_recipient_language_before_inviter_language(): void
+    {
+        DB::table('users')->insert([
+            'id' => (string) Str::uuid(), 'email' => 'english-recipient@example.test',
+            'name' => 'English recipient', 'password' => Hash::make('Clave-de-prueba-123'),
+            'language' => 'en', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $credential = $this->invite('english-recipient@example.test');
+        $mail = Mail::getSymfonyTransport()->messages()->last()->getOriginalMessage();
+        $this->assertSame('Private invitation to SRD', $mail->getSubject());
+        $this->assertStringContainsString('<html lang="en">', $mail->getHtmlBody());
+        $this->assertStringContainsString('Review and accept invitation', $mail->getHtmlBody());
+        $this->assertStringNotContainsString('Revisar y aceptar invitación', $mail->getHtmlBody());
+        $this->assertStringContainsString('.en"', $mail->getHtmlBody());
+        $this->internal('POST', 'invitations/accept', array_replace($this->acceptance($credential), [
+            'language' => 'es',
+        ]))->assertOk();
+        $this->assertDatabaseHas('users', ['email' => 'english-recipient@example.test', 'language' => 'en']);
+    }
+
+    public function test_new_recipient_inherits_inviter_language_for_the_invitation(): void
+    {
+        DB::table('users')->where('id', $this->admin)->update(['language' => 'en']);
+        $credential = $this->invite('new-recipient@example.test');
+        $mail = Mail::getSymfonyTransport()->messages()->last()->getOriginalMessage();
+        $this->assertSame('Private invitation to SRD', $mail->getSubject());
+        $this->assertStringContainsString('<html lang="en">', $mail->getHtmlBody());
+        $this->assertStringContainsString('You were invited to Junta sintética', $mail->getHtmlBody());
+        $this->assertStringContainsString('Review and accept invitation', $mail->getHtmlBody());
+        $this->assertStringContainsString('.en"', $mail->getHtmlBody());
+        $this->internal('POST', 'invitations/accept', array_replace($this->acceptance($credential), [
+            'language' => 'fr',
+        ]))->assertUnprocessable();
+        $this->assertDatabaseMissing('users', ['email' => 'new-recipient@example.test']);
+        $this->internal('POST', 'invitations/accept', array_replace($this->acceptance($credential), [
+            'language' => 'en',
+        ]))->assertOk();
+        $this->assertDatabaseHas('users', ['email' => 'new-recipient@example.test', 'language' => 'en']);
+    }
+
     public function test_folder_reader_candidates_are_active_scoped_and_versioned(): void
     {
         $ids = [];
@@ -77,6 +174,23 @@ final class MembershipTest extends TestCase
         $last = $this->internal('GET', 'contacts', ['page' => 2], $this->principal)->assertOk()->assertJsonCount(1, 'data.items')->json('data.items');
         $this->assertEmpty(array_intersect(array_column($first, 'id'), array_column($last, 'id')));
         $this->internal('GET', 'contacts', ['q' => '50%_!'], $this->principal)->assertOk()->assertJsonPath('data.total', 1)->assertJsonPath('data.items.0.name', 'Equipo 50%_!');
+        $contactId = DB::table('users')->where('name', 'Equipo 50%_!')->value('id');
+        DB::table('member_profile_titles')->insert(['organization_id' => $this->org,
+            'user_id' => $contactId, 'title' => 'Secretaria', 'title_en' => 'Secretary']);
+        $this->internal('GET', 'contacts', ['q' => '50%_!'], $this->principal)->assertOk()
+            ->assertJsonPath('data.items.0.title', 'Secretaria')->assertJsonPath('data.items.0.title_en', 'Secretary');
+        $this->internal('GET', 'contacts/'.$contactId, [], $this->principal)->assertOk()
+            ->assertJsonPath('data.title', 'Secretaria')->assertJsonPath('data.title_en', 'Secretary')
+            ->assertJsonPath('data.name', 'Equipo 50%_!')->assertJsonPath('data.role', 'viewer')
+            ->assertJsonPath('data.presence', 'offline')->assertJsonMissingPath('data.email');
+        $this->internal('GET', 'contacts/'.$contactId, [], array_replace($this->principal,
+            ['organization_id' => $this->other]))->assertNotFound();
+        $this->internal('GET', 'contacts/'.$this->admin, [], $this->principal)->assertNotFound();
+        DB::table('memberships')->where('organization_id', $this->org)->where('user_id', $contactId)
+            ->update(['active' => false]);
+        $this->internal('GET', 'contacts/'.$contactId, [], $this->principal)->assertNotFound();
+        DB::table('memberships')->where('organization_id', $this->org)->where('user_id', $contactId)
+            ->update(['active' => true]);
         $this->internal('GET', 'contacts', ['q' => 'missing'], $this->principal)->assertOk()->assertJsonPath('data.total', 0);
         $this->internal('GET', 'contacts', ['q' => str_repeat('x', 121)], $this->principal)->assertUnprocessable();
         $this->internal('GET', 'contacts', ['page' => 0], $this->principal)->assertUnprocessable();
@@ -133,7 +247,9 @@ final class MembershipTest extends TestCase
         app(\App\Application\SessionService::class)->create(DB::table('users')->where('id', $id)->first(), $this->org, $this->terms);
         DB::table('auth_sessions')->where('user_id', $id)->update(['presence_seen_at' => now()]);
         $item = $this->internal('GET', 'contacts', [], $this->principal)->assertOk()->assertJsonPath('data.items.0.presence', 'offline')->json('data.items.0');
-        $this->assertSame(['id', 'name', 'role', 'presence'], array_keys($item));
+        $this->assertSame(['id', 'name', 'role', 'presence', 'title', 'title_en'], array_keys($item));
+        $this->assertNull($item['title']);
+        $this->assertNull($item['title_en']);
         DB::table('users')->where('id', $id)->update(['presence' => 'away']);
         $this->internal('GET', 'contacts', [], $this->principal)->assertOk()->assertJsonPath('data.items.0.presence', 'away');
         $this->travel(90)->seconds();
@@ -174,6 +290,9 @@ final class MembershipTest extends TestCase
         $this->artisan('srd:invitations')->assertExitCode(0);
         $this->artisan('srd:invitations')->assertExitCode(0);
         $this->assertCount(1, Mail::getSymfonyTransport()->messages());
+        $invitationMail = Mail::getSymfonyTransport()->messages()->last()->getOriginalMessage();
+        $this->assertSame('Invitación privada a SRD', $invitationMail->getSubject());
+        $this->assertStringContainsString('<html lang="es">', $invitationMail->getHtmlBody());
         $this->assertNull(DB::table('invitations')->value('secret_encrypted'));
         $this->internal('POST', 'invitations/inspect', $credential)->assertOk()->assertJsonPath('data.existing_account', false);
         $this->internal('GET', 'invitations', [], $this->principal)->assertOk()->assertJsonMissingPath('data.items.0.secret_hash')->assertJsonMissingPath('data.items.0.secret_encrypted');

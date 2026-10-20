@@ -30,12 +30,14 @@ test('calendar search finds past literal events for all roles and retries indepe
   const marker = String(Date.now()).slice(-8);
   const title = `Reunión 50%_! ${marker}`;
   const token = (await (await page.request.get('/api/v1/csrf')).json()).data.token;
+  let wantedId;
   for (const name of [title, `Reunión 50ABC! ${marker}`]) {
     const response = await page.request.post('/api/v1/calendar-events', { headers: { 'X-CSRF-TOKEN': token }, data: {
       type: 'meeting', title: name, location: `Salón ${marker}`,
       starts_at: '2024-01-10T09:00:00-05:00', ends_at: '2024-01-10T10:00:00-05:00',
     } });
     expect(response.status()).toBe(200);
+    if (name === title) wantedId = (await response.json()).data.id;
   }
   const viewerContext = await browser.newContext({ baseURL: process.env.SRD_TEST_URL || 'http://localhost:8080' });
   try {
@@ -51,6 +53,19 @@ test('calendar search finds past literal events for all roles and retries indepe
     await calendar.getByRole('button', { name: `Ver evento ${title}` }).click();
     await expect(viewer.getByRole('dialog', { name: 'Detalle del evento' }).getByText(title)).toBeVisible();
     await viewer.getByRole('dialog', { name: 'Detalle del evento' }).getByRole('button', { name: 'Cerrar' }).click();
+    let detailFailed = false;
+    await viewer.route(`**/api/v1/calendar-events/${wantedId}`, async route => {
+      if (!detailFailed) {
+        detailFailed = true;
+        await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Evento no disponible.' } }) });
+      } else await route.continue();
+    });
+    await calendar.getByRole('button', { name: `Ver evento ${title}` }).click();
+    await expect(calendar).toContainText('Evento no disponible.');
+    await calendar.getByRole('button', { name: 'Reintentar evento' }).click();
+    await expect(viewer.getByRole('dialog', { name: 'Detalle del evento' }).getByText(title)).toBeVisible();
+    await viewer.getByRole('dialog', { name: 'Detalle del evento' }).getByRole('button', { name: 'Cerrar' }).click();
+    await viewer.unroute(`**/api/v1/calendar-events/${wantedId}`);
     await viewer.route('**/api/v1/calendar-events/search?*', route => route.fulfill({ status: 503, contentType: 'application/json',
       body: JSON.stringify({ error: { message: 'Fallo simulado de calendario' } }) }));
     await form.getByRole('button', { name: 'Buscar', exact: true }).click();

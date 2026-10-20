@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Srd\Access;
 use Srd\Testing\SignedRequests;
 use Tests\TestCase;
@@ -47,6 +48,21 @@ final class PhotoAccessTest extends TestCase
         }
         // Authorization probes are not person reads and must not generate duplicate read events.
         $this->assertSame($events, DB::table('outbox_events')->count());
+    }
+
+    public function test_linked_viewer_may_write_only_the_own_person_slot_after_identity_verification(): void
+    {
+        $id = $this->createPerson();
+        $viewer = array_replace($this->principal, ['role' => 'viewer',
+            'session_id' => '44444444-4444-4444-8444-444444444444']);
+        Http::fake(fn () => Http::response(['data' => ['authorized' => true]]));
+        $this->internal('POST', "persons/$id/photo-access", ['action' => 'persons.write', 'slot' => 'person'], $viewer, 'files')
+            ->assertOk()->assertJsonPath('data.authorized', true);
+        $this->internal('POST', "persons/$id/photo-access", ['action' => 'persons.write', 'slot' => 'document'], $viewer, 'files')
+            ->assertForbidden();
+        $this->internal('POST', "persons/$id/photo-access", ['action' => 'persons.write'], $viewer, 'files')
+            ->assertForbidden();
+        Http::assertSentCount(1);
     }
 
     public function test_scope_comes_from_signed_context_and_is_rechecked_after_deletion(): void

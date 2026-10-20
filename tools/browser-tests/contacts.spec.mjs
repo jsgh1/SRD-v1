@@ -37,7 +37,7 @@ test('contacts scope directory and mask invisible presence across accounts', asy
   await expect(directory.locator('.contact-card')).toHaveCount(5);
   await expect(directory.getByText('Prueba Admin',{exact:true})).toHaveCount(0);
   const result=(await (await page.request.get('/api/v1/contacts')).json()).data;
-  expect(Object.keys(result.items[0]).sort()).toEqual(['id','name','presence','role']);
+  expect(Object.keys(result.items[0]).sort()).toEqual(['id','name','presence','role','title','title_en']);
   await directory.getByLabel('Buscar contacto').fill('sin coincidencias');
   await directory.getByRole('button',{name:'Buscar',exact:true}).click();
   await expect(directory.getByText('Sin contactos',{exact:true})).toBeVisible();

@@ -61,15 +61,15 @@ export function FolderDocuments({ folder,readOnly=false }: { folder?: string; re
       const link=document.createElement('a');link.href=url;link.download=result.name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
     }catch(err){if(active.current)setError(err);}finally{if(active.current)setDownloading(undefined);}
   }
-  return <section className="panel" aria-label={t('Archivos privados')}><h2>{t('Archivos privados')}</h2>
-    <p>{t('DOCX/XLSX/PDF, WAV PCM de 16 bits y MP3 MPEG-1 de hasta 20 MB, o imágenes PNG/JPEG/WebP de hasta 5 MB. Las imágenes se convierten a PNG y las etiquetas MP3 se retiran. Todo archivo se analiza antes de aparecer en la lista. Puedes ver extractos de DOCX/XLSX, navegar páginas de un PDF y escuchar audio autorizado.')}</p>
-    {!readOnly&&<form onSubmit={upload} className="form-grid"><label className="folder-file-label">{t('Documento, imagen o audio')}<input className="folder-file-input" ref={input} type="file" accept=".docx,.xlsx,.pdf,.wav,.mp3,.png,.jpg,.jpeg,.webp" disabled={uploading} onChange={event=>{
+  return <section className="panel folder-documents" aria-label={t('Archivos privados')}><h2>{t('Archivos privados')}</h2>
+    <p className="muted">{t('Guarda documentos, fotos y audio de la junta. Imágenes hasta 5 MB; otros archivos hasta 20 MB.')}</p>
+    {!readOnly&&<form onSubmit={upload} className="form-grid folder-upload"><label className="folder-file-label">{t('Documento, imagen o audio')}<input className="folder-file-input" ref={input} type="file" accept=".docx,.xlsx,.pdf,.wav,.mp3,.png,.jpg,.jpeg,.webp" disabled={uploading} onChange={event=>{
       const selected=event.target.files?.[0];setFile(selected);setName(selected?.name??'');uploadId.current=undefined;setStatus('');
     }}/><span className="folder-file-picker" aria-hidden="true"><span className="folder-file-button">{t('Seleccionar archivo')}</span><span className="folder-file-name">{file?.name||t('Ningún archivo seleccionado')}</span></span></label><label>{t('Nombre del archivo')}<input required maxLength={255} value={name} disabled={uploading} onChange={event=>{setName(event.target.value);uploadId.current=undefined;}}/></label>
       <button className="primary" disabled={uploading||!file}>{t(uploading?'Analizando archivo…':'Guardar archivo')}</button></form>}
     {!readOnly&&<FolderQuota revision={revision}/>}
-    <p role="status">{t(status)}</p><ErrorBox error={error}/><button disabled={loading||uploading} onClick={()=>setRevision(value=>value+1)}>{t('Actualizar archivos')}</button>
-    {loading&&<Loading/>}{listing&&<><p>{t(listing.total===1?'{count} archivo en esta ubicación.':'{count} archivos en esta ubicación.',{count:listing.total})}</p>
+    {status && <p className="notice" role="status">{t(status)}</p>}<ErrorBox error={error}/><button disabled={loading||uploading} onClick={()=>setRevision(value=>value+1)}>{t('Actualizar archivos')}</button>
+    {loading&&<Loading/>}{listing&&<>{listing.total>0&&<p>{t(listing.total===1?'{count} archivo en esta ubicación.':'{count} archivos en esta ubicación.',{count:listing.total})}</p>}
       {listing.items.length?<div className="table-wrap"><table><thead><tr><th>{t('Nombre')}</th><th>{t('Tamaño')}</th><th>{t('Acción')}</th></tr></thead><tbody>
         {listing.items.map(item=><tr key={item.id}><td>{item.name}</td><td>{Math.ceil(item.bytes/1024)} KB</td><td>
           <div className="actions">{item.mime==='image/png'&&<button disabled={uploading||!!downloading} onClick={()=>setPreviewing(item)} aria-label={t('Ver imagen {name}',{name:item.name})}>{t('Ver imagen')}</button>}
@@ -82,8 +82,8 @@ export function FolderDocuments({ folder,readOnly=false }: { folder?: string; re
           <button disabled={uploading||!!downloading} onClick={()=>{setStatus('');setMoving(item);}} aria-label={t('Mover {kind} {name}',{kind:t(kind(item)),name:item.name})}>{t('Mover')}</button>
           <button disabled={uploading||!!downloading} onClick={()=>{setStatus('');setRemoving(item);}} aria-label={t('Eliminar {kind} {name}',{kind:t(kind(item)),name:item.name})}>{t('Eliminar')}</button></>}</div></td></tr>)}
       </tbody></table></div>:<Empty title={t('No hay archivos en esta ubicación')}>{t('Los archivos aprobados aparecerán aquí.')}</Empty>}
-      <div className="actions"><button disabled={page===1} onClick={()=>setPage(value=>value-1)}>{t('Archivos anteriores')}</button><span>{t('Página {page}',{page})}</span>
-        <button disabled={page*listing.page_size>=listing.total} onClick={()=>setPage(value=>value+1)}>{t('Archivos siguientes')}</button></div></>}
+      {listing.total>listing.page_size&&<div className="actions"><button disabled={page===1} onClick={()=>setPage(value=>value-1)}>{t('Archivos anteriores')}</button><span>{t('Página {page}',{page})}</span>
+        <button disabled={page*listing.page_size>=listing.total} onClick={()=>setPage(value=>value+1)}>{t('Archivos siguientes')}</button></div>}</>}
     {renaming&&<RenameDocument item={renaming} onClose={()=>setRenaming(undefined)} onRefresh={()=>{setRenaming(undefined);setRevision(value=>value+1);}}
       onSaved={()=>{if(active.current){setRenaming(undefined);setStatus(renaming.mime==='image/png'?'Nombre de la imagen actualizado.':'Nombre del documento actualizado.');setRevision(value=>value+1);}}}/>}
     {moving&&<MoveDocument item={moving} onClose={()=>setMoving(undefined)} onRefresh={()=>{setMoving(undefined);setRevision(value=>value+1);}}
@@ -108,7 +108,7 @@ function FolderQuota({revision}:{revision:number}){
   return <div aria-label={t('Espacio compartido de la junta')}>
     {quota&&<><p>{t('Espacio compartido: {used} de {limit} usados · {available} disponibles.',{used:space(quota.used_bytes),limit:space(quota.limit_bytes),available:space(quota.available_bytes)})}</p>
       <progress aria-label={t('Espacio utilizado')} value={quota.used_bytes} max={quota.limit_bytes}/></>}
-    <p className="muted">{t('Incluye fotos, archivos y retiros pendientes. El espacio de un archivo eliminado se libera cuando termina su limpieza.')}</p>
+    <p className="muted">{t('El espacio incluye fotos y archivos. Al eliminarlos, puede tardar en liberarse.')}</p>
     <ErrorBox error={error}/>
   </div>;
 }

@@ -21,22 +21,40 @@ final class NotificationController
     public function deliver(Request $request): array
     {
         $issuer = $request->attributes->get('issuer');
-        abort_unless(in_array($issuer, ['calendar', 'chat'], true), 403);
+        abort_unless(in_array($issuer, ['calendar', 'chat', 'records'], true), 403);
         $data = $request->validate($issuer === 'calendar' ? [
             'organization_id' => 'required|uuid', 'user_id' => 'required|uuid',
             'event_id' => 'required|uuid', 'title' => 'required|string|min:2|max:160',
             'title_en' => 'sometimes|nullable|string|min:2|max:160',
             'kind' => 'required|in:invitation,event_changed,event_cancelled,reminder_24h,reminder_1h',
             'delivery_key' => 'required|regex:/^[a-f0-9]{64}$/',
+        ] : ($issuer === 'chat' ? [
+            'organization_id' => 'required|uuid', 'user_id' => 'required|uuid',
+            'conversation_id' => 'required|uuid', 'kind' => 'required|in:chat_message,chat_call,chat_missed',
+            'sender_id' => 'sometimes|nullable|uuid', 'sender_name' => 'sometimes|nullable|string|max:120',
+            'message_id' => 'sometimes|nullable|uuid',
+            'delivery_key' => 'required|regex:/^[a-f0-9]{64}$/',
         ] : [
             'organization_id' => 'required|uuid', 'user_id' => 'required|uuid',
-            'conversation_id' => 'required|uuid', 'kind' => 'required|in:chat_message',
+            'export_job_id' => 'required|uuid', 'kind' => 'required|in:export_ready',
             'delivery_key' => 'required|regex:/^[a-f0-9]{64}$/',
-        ]);
+        ]));
         $data['event_id'] = $issuer === 'calendar' ? $data['event_id'] : null;
         $data['conversation_id'] = $issuer === 'chat' ? $data['conversation_id'] : null;
-        $data['title'] = $issuer === 'chat' ? 'Nuevo mensaje' : $data['title'];
-        $data['title_en'] = $issuer === 'chat' ? 'New message' : ($data['title_en'] ?? null);
+        $data['export_job_id'] = $issuer === 'records' ? $data['export_job_id'] : null;
+        $name = trim((string) ($data['sender_name'] ?? ''));
+        $data['sender_name'] = $issuer === 'chat' && $name !== '' ? $name : null;
+        $data['sender_id'] = $issuer === 'chat' ? ($data['sender_id'] ?? null) : null;
+        $data['message_id'] = $issuer === 'chat' && $data['kind'] === 'chat_message' ? ($data['message_id'] ?? null) : null;
+        $chatTitles = [
+            'chat_message' => ['Nuevo mensaje', 'New message'],
+            'chat_call' => ['Llamada entrante', 'Incoming call'],
+            'chat_missed' => ['Llamada perdida', 'Missed call'],
+        ];
+        $data['title'] = $issuer === 'chat' ? $chatTitles[$data['kind']][0].($name !== '' ? ' de '.$name : '')
+            : ($issuer === 'records' ? 'Tu exportación de personas está lista' : $data['title']);
+        $data['title_en'] = $issuer === 'chat' ? $chatTitles[$data['kind']][1].($name !== '' ? ' from '.$name : '')
+            : ($issuer === 'records' ? 'Your people export is ready' : ($data['title_en'] ?? null));
         $principal = $request->attributes->get('principal', []);
         abort_unless(($principal['organization_id'] ?? null) === $data['organization_id'], 403);
         return DB::transaction(function () use ($data) {
@@ -116,9 +134,11 @@ final class NotificationController
         $total = (clone $base)->count();
         $unread = (clone $base)->whereNull('read_at')->count();
         $items = $base->orderByDesc('created_at')->orderByDesc('id')->forPage($page, 25)
-            ->get(['id', 'event_id', 'conversation_id', 'kind', 'title', 'title_en', 'created_at', 'read_at']);
+            ->get(['id', 'event_id', 'conversation_id', 'export_job_id', 'sender_id', 'sender_name', 'message_id', 'kind', 'title', 'title_en', 'created_at', 'read_at']);
         return ['data' => ['items' => $items->map(fn ($item) => [
-            'id' => $item->id, 'event_id' => $item->event_id, 'conversation_id' => $item->conversation_id, 'kind' => $item->kind,
+            'id' => $item->id, 'event_id' => $item->event_id, 'conversation_id' => $item->conversation_id,
+            'export_job_id' => $item->export_job_id, 'kind' => $item->kind,
+            'sender_id' => $item->sender_id, 'sender_name' => $item->sender_name, 'message_id' => $item->message_id,
             'title' => $item->title, 'title_en' => $item->title_en,
             'created_at' => CarbonImmutable::parse($item->created_at, 'UTC')->toIso8601String(),
             'read_at' => $item->read_at ? CarbonImmutable::parse($item->read_at, 'UTC')->toIso8601String() : null,

@@ -44,6 +44,7 @@ test('birth dates filter inclusively and the visibility setting controls the lis
     await create('2000-03-01','male');await create(null);
     await navigate(page,'Lista');
     const form=page.getByRole('form',{name:'Filtros de personas'});
+    await form.locator('.person-advanced summary').click();
     await expect(form.getByLabel('Nacimiento desde',{exact:true})).toBeVisible();
     await form.getByLabel('Nacimiento desde',{exact:true}).fill('2000-02-29');
     await form.getByLabel('Nacimiento hasta',{exact:true}).fill('2000-03-01');

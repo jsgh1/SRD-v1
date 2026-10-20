@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Application\PersonService;
+use App\Application\PersonExportJobs;
 use App\Http\Validation\PersonInput;
 use Illuminate\Http\Request;
 use Srd\Access;
@@ -29,6 +30,31 @@ final class PersonController
             'language' => 'sometimes|in:es,en',
         ]);
         return $this->service->export($p, $filters, $name['filename'] ?? null, (bool) ($name['confirm_filename'] ?? false), $name['language'] ?? 'es');
+    }
+
+    public function queueExport(Request $r, PersonExportJobs $jobs): array
+    {
+        abort_unless($r->attributes->get('issuer') === 'gateway', 403);
+        $p = Access::require('persons.export');
+        $filters = PersonInput::filters($r);
+        $name = $r->validate(['filename' => 'sometimes|nullable|string|max:100',
+            'confirm_filename' => 'sometimes|boolean', 'language' => 'sometimes|in:es,en',
+            'format' => 'sometimes|in:xlsx,pdf']);
+        return $jobs->create($p, $filters, $name['filename'] ?? null,
+            (bool) ($name['confirm_filename'] ?? false), $name['language'] ?? 'es', $name['format'] ?? 'xlsx');
+    }
+
+    public function exportJob(Request $r, string $id, PersonExportJobs $jobs): array
+    {
+        abort_unless($r->attributes->get('issuer') === 'gateway', 403);
+        return $jobs->status(Access::require('persons.export'), $id);
+    }
+
+    public function downloadExportJob(Request $r, string $id, PersonExportJobs $jobs): array
+    {
+        abort_unless($r->attributes->get('issuer') === 'gateway', 403);
+        $ticket = $r->validate(['ticket' => ['required', 'string', 'regex:/^[0-9]{10}\.[0-9a-f]{64}$/D']]);
+        return $jobs->download(Access::require('persons.export'), $id, $ticket['ticket']);
     }
 
     public function exportIndividual(Request $r, string $id): array

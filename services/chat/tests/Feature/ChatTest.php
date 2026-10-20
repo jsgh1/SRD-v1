@@ -19,6 +19,70 @@ final class ChatTest extends TestCase
     private string $user = '22222222-2222-4222-8222-222222222222';
     private string $contact = '33333333-3333-4333-8333-333333333333';
 
+    public function test_message_actions_are_persistent_and_private_to_each_participant(): void
+    {
+        $id = $this->internal('POST', 'conversations', ['user_id' => $this->contact], $this->principal())->assertOk()->json('data.id');
+        $first = $this->internal('POST', "conversations/$id/messages", ['client_id' => (string) Str::uuid(), 'body' => 'Acta reservada'], $this->principal())->assertOk()->json('data');
+        $replyClient = (string) Str::uuid();
+        $reply = $this->internal('POST', "conversations/$id/messages", ['client_id' => $replyClient, 'body' => 'Recibido', 'reply_to_id' => $first['id']], $this->principal($this->contact))->assertOk()->json('data');
+        $this->internal('POST', "conversations/$id/messages", ['client_id' => $replyClient, 'body' => 'Recibido', 'reply_to_id' => $first['id']], $this->principal($this->contact))->assertJsonPath('data.id', $reply['id']);
+        $this->internal('GET', "conversations/$id/search", ['q' => 'Acta'], $this->principal())->assertOk()->assertJsonPath('data.items.0.id', $first['id']);
+        $this->internal('POST', "conversations/$id/messages/{$first['id']}/pin", [], $this->principal())->assertOk()->assertJsonPath('data.pinned', true);
+        $this->internal('GET', "conversations/$id/pinned", [], $this->principal())->assertJsonPath('data.items.0.id', $first['id']);
+        $this->internal('GET', "conversations/$id/pinned", [], $this->principal($this->contact))->assertJsonCount(0, 'data.items');
+        $this->internal('DELETE', "conversations/$id/messages/{$first['id']}", [], $this->principal($this->contact))->assertOk();
+        $this->internal('GET', "conversations/$id/messages", [], $this->principal($this->contact))->assertJsonCount(1, 'data.items')->assertJsonPath('data.items.0.id', $reply['id']);
+        $this->internal('GET', "conversations/$id/messages", [], $this->principal())->assertJsonCount(2, 'data.items');
+        $this->internal('POST', "conversations/$id/messages/{$first['id']}/pin", [], $this->principal(null, $this->otherOrg))->assertNotFound();
+        $this->internal('DELETE', "conversations/$id/messages", [], $this->principal())->assertOk();
+        $this->internal('GET', "conversations/$id/messages", [], $this->principal())->assertJsonCount(0, 'data.items');
+        $this->internal('GET', "conversations/$id/pinned", [], $this->principal())->assertJsonCount(0, 'data.items');
+        $this->internal('GET', "conversations/$id/messages", [], $this->principal($this->contact))->assertJsonCount(1, 'data.items');
+        $this->internal('POST', "conversations/$id/messages", ['client_id' => (string) Str::uuid(), 'body' => 'Mensaje nuevo'], $this->principal($this->contact))->assertOk();
+        $this->internal('GET', "conversations/$id/messages", [], $this->principal())->assertJsonCount(1, 'data.items')->assertJsonPath('data.items.0.body', 'Mensaje nuevo');
+        $this->assertDatabaseCount('messages', 3);
+    }
+
+    public function test_sender_deletes_for_both_and_recipient_deletes_only_for_self(): void
+    {
+        $id = $this->internal('POST', 'conversations', ['user_id' => $this->contact], $this->principal())->json('data.id');
+        $clientId = (string) Str::uuid();
+        $mine = $this->internal('POST', "conversations/$id/messages", ['client_id' => $clientId, 'body' => 'Eliminar para ambos'], $this->principal())->json('data');
+        $other = $this->internal('POST', "conversations/$id/messages", ['client_id' => (string) Str::uuid(), 'body' => 'Ocultar solo aquí'], $this->principal($this->contact))->json('data');
+        $this->internal('DELETE', "conversations/$id/messages/{$other['id']}", [], $this->principal())->assertOk();
+        $this->internal('GET', "conversations/$id/messages", ['visible_ids' => [$mine['id'], $other['id']]], $this->principal())
+            ->assertJsonCount(1, 'data.items')->assertJsonPath('data.removed_ids.0', $other['id']);
+        $this->internal('GET', "conversations/$id/messages", [], $this->principal($this->contact))->assertJsonCount(2, 'data.items');
+        $this->internal('DELETE', "conversations/$id/messages/{$mine['id']}", [], $this->principal())->assertOk();
+        $this->internal('DELETE', "conversations/$id/messages/{$mine['id']}", [], $this->principal())->assertOk();
+        $this->internal('GET', "conversations/$id/messages", ['visible_ids' => [$mine['id']]], $this->principal($this->contact))
+            ->assertJsonCount(1, 'data.items')->assertJsonPath('data.removed_ids.0', $mine['id']);
+        $this->internal('GET', "conversations/$id/search", ['q' => 'Eliminar'], $this->principal($this->contact))
+            ->assertJsonCount(0, 'data.items');
+        $this->internal('POST', "conversations/$id/messages", ['client_id' => $clientId, 'body' => 'Eliminar para ambos'], $this->principal())->assertStatus(409);
+        $this->assertDatabaseHas('messages', ['id' => $mine['id'], 'body' => 'Eliminar para ambos']);
+        $this->assertNotNull(DB::table('messages')->where('id', $mine['id'])->value('deleted_for_all_at'));
+    }
+
+    public function test_temporary_activity_is_visible_only_to_the_other_participant_and_expires(): void
+    {
+        $id = $this->internal('POST', 'conversations', ['user_id' => $this->contact], $this->principal())->json('data.id');
+        $this->internal('POST', "conversations/$id/activity", ['kind' => 'typing'], $this->principal())->assertOk();
+        $this->internal('GET', "conversations/$id", [], $this->principal($this->contact))
+            ->assertJsonPath('data.contact_activity', 'typing');
+        $this->internal('GET', 'conversations', [], $this->principal($this->contact))
+            ->assertJsonPath('data.items.0.contact_activity', 'typing');
+        $this->internal('GET', "conversations/$id", [], $this->principal())->assertJsonPath('data.contact_activity', null);
+        $this->internal('POST', "conversations/$id/activity", ['kind' => 'recording'], $this->principal())->assertOk();
+        $this->internal('GET', "conversations/$id", [], $this->principal($this->contact))
+            ->assertJsonPath('data.contact_activity', 'recording');
+        DB::table('conversation_activities')->where('conversation_id', $id)->update(['expires_at' => now()->subSecond()]);
+        $this->internal('GET', "conversations/$id", [], $this->principal($this->contact))->assertJsonPath('data.contact_activity', null);
+        $this->internal('POST', "conversations/$id/activity", ['kind' => 'idle'], $this->principal())->assertOk();
+        $this->assertDatabaseCount('conversation_activities', 0);
+        $this->internal('POST', "conversations/$id/activity", ['kind' => 'typing'], $this->principal(null, $this->otherOrg))->assertNotFound();
+    }
+
     private function principal(?string $user = null, ?string $org = null): array
     {
         return ['user_id' => $user ?? $this->user, 'organization_id' => $org ?? $this->org,
@@ -74,6 +138,42 @@ final class ChatTest extends TestCase
         $this->assertDatabaseCount('outbox_events', 27);
         $audit = DB::table('outbox_events')->where('action', 'chat.message_sent')->first();
         $this->assertObjectNotHasProperty('body', $audit);
+    }
+
+    public function test_attachment_download_requires_exact_participant_and_retry_does_not_reupload(): void
+    {
+        $id = $this->internal('POST', 'conversations', ['user_id' => $this->contact], $this->principal())->assertOk()->json('data.id');
+        $uploads = 0;
+        Http::swap(new \Illuminate\Http\Client\Factory);
+        Http::fake(function ($request) use (&$uploads) {
+            if (str_contains($request->url(), 'chat-contacts/resolve'))
+                return Http::response(['data' => ['id' => $this->contact, 'name' => 'Receptor', 'role' => 'viewer']]);
+            if (str_ends_with($request->url(), '/chat-attachments')) {
+                $uploads++;
+                return Http::response(['data' => ['id' => $request->data()['id'], 'name' => 'Prueba.png', 'mime' => 'image/png', 'bytes' => 8]]);
+            }
+            return Http::response(['data' => ['id' => basename($request->url()), 'name' => 'Prueba.png',
+                'mime' => 'image/png', 'bytes' => 8, 'content' => base64_encode('PNG test')]]);
+        });
+        $client = (string) Str::uuid();
+        $payload = ['client_id' => $client, 'body' => '', 'attachment' => ['name' => 'Prueba.png', 'content' => base64_encode('PNG test')]];
+        $sent = $this->internal('POST', 'conversations/'.$id.'/messages', $payload, $this->principal())
+            ->assertOk()->assertJsonPath('data.attachment.name', 'Prueba.png')->json('data');
+        $this->internal('POST', 'conversations/'.$id.'/messages', $payload, $this->principal())
+            ->assertOk()->assertJsonPath('data.id', $sent['id']);
+        $this->assertSame(1, $uploads);
+        $this->internal('POST', 'conversations/'.$id.'/messages', array_replace($payload, ['attachment' => ['name' => 'Prueba.png', 'content' => base64_encode('different')]]), $this->principal())->assertConflict();
+        $path = 'conversations/'.$id.'/messages/'.$sent['id'].'/attachment';
+        $this->internal('GET', $path, [], $this->principal($this->contact))->assertOk()->assertJsonPath('data.content', base64_encode('PNG test'));
+        $this->internal('GET', $path, [], $this->principal('44444444-4444-4444-8444-444444444444'))->assertNotFound();
+        $this->internal('GET', $path, [], $this->principal(null, $this->otherOrg))->assertNotFound();
+        $this->assertDatabaseHas('messages', ['id' => $sent['id'], 'attachment_id' => $sent['attachment']['id']]);
+        $reference = 'chat-attachment-references/'.$sent['attachment']['id'];
+        $this->internal('GET', $reference, [], $this->principal(), 'files')->assertOk()
+            ->assertJsonPath('data.referenced', true);
+        $this->internal('GET', $reference, [], $this->principal(null, $this->otherOrg), 'files')->assertOk()
+            ->assertJsonPath('data.referenced', false);
+        $this->internal('GET', $reference, [], $this->principal(), 'gateway')->assertForbidden();
     }
 
     public function test_socket_failure_does_not_undo_a_committed_message(): void

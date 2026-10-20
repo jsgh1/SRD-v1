@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from './api';
 import { ErrorBox, Loading } from './ui';
+import { t } from './i18n';
+import { confirmInApp } from './ConfirmHost';
 
 type Account = { id: string; name: string; email: string; active: boolean | number; memberships_count: number };
 type Listing = { items: Account[]; total: number; page: number; page_size: number };
@@ -31,10 +33,10 @@ export function PlatformAccounts() {
 
   async function change(account: Account) {
     const active = !Boolean(account.active);
-    const action = active ? 'Reactivar' : 'Suspender';
-    if (!window.confirm(`${action} la cuenta de ${account.name} (${account.email})? ${active
-      ? 'Las sesiones anteriores no volverán a activarse.'
-      : 'Se cerrarán sus sesiones en todas las juntas y sus accesos pendientes.'}`)) return;
+    if (!await confirmInApp(t(active
+      ? '¿Reactivar la cuenta de {name} ({email})? Las sesiones anteriores no volverán a activarse.'
+      : '¿Suspender la cuenta de {name} ({email})? Se cerrarán sus sesiones en todas las juntas y sus accesos pendientes.',
+    {name: account.name, email: account.email}))) return;
     setBusy(true); setError(undefined); setNotice('');
     try {
       await api(`platform/accounts/${account.id}`, 'PATCH', { active, expected_active: Boolean(account.active) });
@@ -48,25 +50,25 @@ export function PlatformAccounts() {
   }
 
   return <section className="panel">
-    <h2>Cuentas de la plataforma</h2>
-    <p>Acceso exclusivo del superadministrador. Suspender una cuenta revoca sus sesiones en todas las juntas. No se puede suspender al último administrador activo de una junta.</p>
+    <h2>{t('Cuentas de la plataforma')}</h2>
+    <p>{t('Acceso exclusivo del superadministrador. Suspender una cuenta revoca sus sesiones en todas las juntas. No se puede suspender al último administrador activo de una junta.')}</p>
     <ErrorBox error={error} />
-    {notice && <p role="status">{notice}</p>}
+    {notice && <p role="status">{t(notice)}</p>}
     <form onSubmit={submit} className="filters">
-      <label className="grow">Buscar por nombre o correo<input value={searchInput} onChange={event => setSearchInput(event.target.value)} maxLength={120} /></label>
-      <button disabled={busy}>Buscar cuentas</button>
+      <label className="grow">{t('Buscar por nombre o correo')}<input value={searchInput} onChange={event => setSearchInput(event.target.value)} maxLength={120} placeholder={t('Nombre o correo de la cuenta')} /></label>
+      <button disabled={busy}>{t('Buscar cuentas')}</button>
     </form>
-    {!result ? <Loading /> : <>
-      <p>{result.total} cuenta{result.total === 1 ? '' : 's'} encontrada{result.total === 1 ? '' : 's'}.</p>
-      <div className="table-wrap"><table><thead><tr><th>Cuenta</th><th>Correo</th><th>Juntas</th><th>Estado</th><th>Acción</th></tr></thead><tbody>
+    {!result ? error ? <button type="button" onClick={() => { setError(undefined); load().catch(setError); }}>{t('Actualizar cuentas')}</button> : <Loading /> : <>
+      <p>{t(result.total === 1 ? '{count} cuenta encontrada.' : '{count} cuentas encontradas.', {count: result.total})}</p>
+      <div className="table-wrap"><table><thead><tr><th>{t('Cuenta')}</th><th>{t('Correo')}</th><th>{t('Juntas')}</th><th>{t('Estado')}</th><th>{t('Acción')}</th></tr></thead><tbody>
         {result.items.map(account => <tr key={account.id}><td>{account.name}</td><td>{account.email}</td>
-          <td>{account.memberships_count}</td><td>{account.active ? 'Activa' : 'Suspendida'}</td>
-          <td><button disabled={busy} onClick={() => change(account)}>{account.active ? 'Suspender cuenta' : 'Reactivar cuenta'}</button></td></tr>)}
+          <td>{account.memberships_count}</td><td>{t(account.active ? 'Activa' : 'Suspendida')}</td>
+          <td><button disabled={busy} onClick={() => change(account)}>{t(account.active ? 'Suspender cuenta' : 'Reactivar cuenta')}</button></td></tr>)}
       </tbody></table></div>
-      <div className="actions"><button disabled={busy || page <= 1} onClick={() => setPage(page - 1)}>Anterior</button>
-        <span>Página {page} de {Math.max(1, Math.ceil(result.total / result.page_size))}</span>
-        <button disabled={busy || page * result.page_size >= result.total} onClick={() => setPage(page + 1)}>Siguiente</button>
-        <button disabled={busy} onClick={() => load().catch(setError)}>Actualizar cuentas</button></div>
+      <div className="actions"><button disabled={busy || page <= 1} onClick={() => setPage(page - 1)}>{t('Anterior')}</button>
+        <span>{t('Página {page} de {total}', {page, total: Math.max(1, Math.ceil(result.total / result.page_size))})}</span>
+        <button disabled={busy || page * result.page_size >= result.total} onClick={() => setPage(page + 1)}>{t('Siguiente')}</button>
+        <button disabled={busy} onClick={() => load().catch(setError)}>{t('Actualizar cuentas')}</button></div>
     </>}
   </section>;
 }

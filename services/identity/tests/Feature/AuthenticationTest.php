@@ -63,6 +63,90 @@ final class AuthenticationTest extends TestCase
         $this->assertDatabaseHas('users', ['id' => $this->user, 'language' => 'en']);
     }
 
+    public function test_security_code_and_recovery_email_use_the_saved_english_language(): void
+    {
+        DB::table('users')->where('id', $this->user)->update([
+            'email' => 'language-mail@example.test', 'language' => 'en',
+        ]);
+        $this->internal('POST', 'auth/login', [
+            'email' => 'language-mail@example.test', 'password' => 'Clave-de-prueba-123',
+            'organization_code' => 'prueba', 'terms_version_id' => $this->terms, 'accepted' => true,
+        ])->assertOk();
+        $codeMail = Mail::getSymfonyTransport()->messages()->last()->getOriginalMessage();
+        $this->assertSame('Your SRD security code', $codeMail->getSubject());
+        $this->assertStringContainsString('<html lang="en">', $codeMail->getHtmlBody());
+        $this->assertStringContainsString('Enter this code in SRD.', $codeMail->getHtmlBody());
+        $this->assertStringNotContainsString('Escribe este código', $codeMail->getHtmlBody());
+        $this->assertMatchesRegularExpression('/>\s*\d{6}\s*</', $codeMail->getHtmlBody());
+
+        $this->internal('POST', 'auth/recover', [
+            'email' => 'language-mail@example.test', 'organization_code' => 'prueba',
+        ])->assertOk();
+        $resetMail = Mail::getSymfonyTransport()->messages()->last()->getOriginalMessage();
+        $this->assertSame('Reset your SRD access', $resetMail->getSubject());
+        $this->assertStringContainsString('<html lang="en">', $resetMail->getHtmlBody());
+        $this->assertStringContainsString('This link works once and expires in 15 minutes.', $resetMail->getHtmlBody());
+        $this->assertStringContainsString('Reset password', $resetMail->getHtmlBody());
+        $this->assertMatchesRegularExpression('/\/reset#[a-f0-9-]+\.[a-f0-9]{64}/', $resetMail->getHtmlBody());
+
+        app(\App\Application\ChallengeService::class)->issue(
+            DB::table('users')->where('id', $this->user)->first(), $this->org,
+            'email_change', 'new-language-mail@example.test',
+        );
+        $changeMail = Mail::getSymfonyTransport()->messages()->last()->getOriginalMessage();
+        $this->assertSame('Your SRD security code', $changeMail->getSubject());
+        $this->assertStringContainsString('Confirm this address to change your sign-in email.', $changeMail->getHtmlBody());
+        $this->assertSame('new-language-mail@example.test', $changeMail->getTo()[0]->getAddress());
+    }
+
+    public function test_security_email_keeps_spanish_for_the_default_language(): void
+    {
+        $this->login();
+        $mail = Mail::getSymfonyTransport()->messages()->last()->getOriginalMessage();
+        $this->assertSame('Tu código de seguridad de SRD', $mail->getSubject());
+        $this->assertStringContainsString('<html lang="es">', $mail->getHtmlBody());
+        $this->assertStringContainsString('Escribe este código en SRD.', $mail->getHtmlBody());
+    }
+
+    public function test_email_change_notice_uses_the_saved_english_language(): void
+    {
+        DB::table('users')->where('id', $this->user)->update(['language' => 'en']);
+        DB::table('security_notices')->insert([
+            'id' => '77777777-7777-4777-8777-777777777777',
+            'organization_id' => $this->org, 'user_id' => $this->user,
+            'destination_encrypted' => \Illuminate\Support\Facades\Crypt::encryptString('previous@example.test'),
+            'kind' => 'email_changed', 'next_attempt_at' => now(), 'created_at' => now(),
+        ]);
+        $this->artisan('srd:security-notices')->assertExitCode(0);
+        $mail = Mail::getSymfonyTransport()->messages()->last()->getOriginalMessage();
+        $this->assertSame('SRD email change notice', $mail->getSubject());
+        $this->assertSame('previous@example.test', $mail->getTo()[0]->getAddress());
+        $this->assertStringContainsString('<html lang="en">', $mail->getHtmlBody());
+        $this->assertStringContainsString('Your sign-in email changed', $mail->getHtmlBody());
+        $this->assertStringNotContainsString('Tu correo de acceso cambió', $mail->getHtmlBody());
+        $this->assertNotNull(DB::table('security_notices')->value('sent_at'));
+    }
+
+    public function test_profile_title_requires_both_languages_and_stays_with_its_council(): void
+    {
+        $sessions = app(\App\Application\SessionService::class);
+        $token = $sessions->create(DB::table('users')->where('id', $this->user)->first(), $this->org, $this->terms)['token'];
+        $principal = $sessions->resolve($token);
+        $base = ['name' => 'Cuenta de prueba', 'theme' => 'light', 'presence' => 'online', 'language' => 'en'];
+        $this->internal('PATCH', 'profile', $base + ['title' => 'Coordinadora'], $principal)->assertUnprocessable();
+        $this->internal('PATCH', 'profile', $base + ['title' => 'Coordinadora', 'title_en' => 'Coordinator'], $principal)
+            ->assertOk()->assertJsonPath('data.title_en', 'Coordinator');
+        $this->assertSame('Coordinator', $sessions->resolve($token)['user']['title_en']);
+
+        $other = '55555555-5555-4555-8555-555555555555';
+        DB::table('memberships')->insert(['id' => '66666666-6666-4666-8666-666666666666',
+            'user_id' => $this->user, 'organization_id' => $other, 'role' => 'viewer']);
+        $otherToken = $sessions->create(DB::table('users')->where('id', $this->user)->first(), $other, $this->terms)['token'];
+        $this->assertNull($sessions->resolve($otherToken)['user']['title']);
+        $this->internal('PATCH', 'profile', $base + ['title' => '', 'title_en' => ''], $principal)->assertOk();
+        $this->assertNull($sessions->resolve($token)['user']['title']);
+    }
+
     public function test_passive_principal_checks_do_not_extend_idle_session(): void
     {
         $sessions = app(\App\Application\SessionService::class);

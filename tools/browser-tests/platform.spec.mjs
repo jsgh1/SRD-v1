@@ -89,12 +89,17 @@ test('superadmin creates a junta, invites its administrator, suspends and reacti
   expect(principal.data.organization.code).toBe(code);
   expect(principal.data.role).toBe('admin');
   expect((await guestContext.request.get('/api/v1/platform/organizations')).status()).toBe(403);
-  page.on('dialog', dialog => dialog.accept());
   await row.getByRole('button', { name: 'Suspender', exact: true }).click();
+  const suspendConfirmation = page.getByRole('dialog', { name: 'Confirmar acción' });
+  await expect(suspendConfirmation).toContainText('¿Suspender');
+  await suspendConfirmation.getByRole('button', { name: 'Confirmar' }).click();
   await expect(row.getByRole('cell', { name: 'Suspendida', exact: true })).toBeVisible();
   expect((await request.get(`/api/v1/organizations/${code}`)).status()).toBe(404);
   expect((await guestContext.request.get('/api/v1/persons')).status()).toBe(403);
   await row.getByRole('button', { name: 'Activar', exact: true }).click();
+  const reactivateConfirmation = page.getByRole('dialog', { name: 'Confirmar acción' });
+  await expect(reactivateConfirmation).toContainText('¿Activar');
+  await reactivateConfirmation.getByRole('button', { name: 'Confirmar' }).click();
   await expect(row.getByRole('cell', { name: 'Activa', exact: true })).toBeVisible();
   expect((await request.get(`/api/v1/organizations/${code}`)).status()).toBe(200);
   expect((await guestContext.request.get('/api/v1/persons')).status()).toBe(200);

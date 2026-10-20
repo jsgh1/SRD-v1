@@ -52,6 +52,7 @@ export type Person = Record<string, any> & {
   version: number;
 };
 type Workbook = { filename: string; mime: string; content: string; count: number };
+type PersonExportJob = { id: string; status: 'queued' | 'processing' | 'ready' | 'failed' | 'expired'; format: 'xlsx' | 'pdf'; count: number; cutoff_at: string; filename: string; ticket?: string };
 export function Status({ value }: { value: string }) {
   return (
     <span className={"status " + value}>
@@ -72,7 +73,7 @@ export function PersonTable({
 }) {
   useLanguage();
   return (
-    <div className="table-scroll">
+    <><div className="table-scroll person-desktop-table">
       <table>
         <thead>
           <tr>
@@ -138,21 +139,43 @@ export function PersonTable({
         </tbody>
       </table>
     </div>
+    <ul className="person-mobile-list" aria-label={t('Lista de personas')}>
+      {rows.map(p => <li className="person-mobile-card" key={p.id}>
+        <div className="person-mobile-heading"><strong>{p.first_names} {p.last_names}</strong><Status value={p.status} /></div>
+        <dl>
+          <div><dt>{t('Documento')}</dt><dd>{p.document_type} {p.document_number}</dd></div>
+          <div><dt>{t('Fecha de registro')}</dt><dd>{new Date(p.created_at.replace(' ', 'T') + 'Z').toLocaleDateString(formatLocale(), { timeZone: 'America/Bogota' })}</dd></div>
+        </dl>
+        <div className="person-mobile-actions">
+          <button type="button" aria-label={t('Ver {name}', { name: p.first_names })} onClick={() => onView(p)}><Eye size={16} aria-hidden="true" />{t('Ver detalle')}</button>
+          {onEdit && <button type="button" aria-label={t('Editar {name}', { name: p.first_names })} onClick={() => onEdit(p)}><Pencil size={16} aria-hidden="true" />{t('Editar')}</button>}
+          {onDelete && <button type="button" className="danger" aria-label={t('Eliminar {name}', { name: p.first_names })} onClick={() => onDelete(p)}><Trash2 size={16} aria-hidden="true" />{t('Eliminar')}</button>}
+        </div>
+      </li>)}
+    </ul></>
   );
 }
 export function PersonDetail({
   id,
   onClose,
+  principal,
 }: {
   id: string;
   onClose: () => void;
+  principal: Principal;
 }) {
   const language = useLanguage();
   const [person, setPerson] = useState<Person>(),
     [error, setError] = useState<unknown>();
+  const [detailRevision, setDetailRevision] = useState(0);
+  const [portrait, setPortrait] = useState<string>();
   const [individualName, setIndividualName] = useState<ExportFilenameChoice>({ name: '', confirmed: false });
   const [individualBusy, setIndividualBusy] = useState(false), [individualError, setIndividualError] = useState<unknown>();
   const [includePdfPhotos, setIncludePdfPhotos] = useState(false);
+  const [inviteRole, setInviteRole] = useState('viewer');
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteError, setInviteError] = useState<unknown>();
+  const [inviteNotice, setInviteNotice] = useState('');
   useEffect(() => {
     setPerson(undefined); setError(undefined); setIndividualError(undefined);
     setIndividualName({ name: '', confirmed: false });
@@ -162,6 +185,31 @@ export function PersonDetail({
       .then(data => { if (active) setPerson(data); })
       .catch(value => { if (active) setError(value); });
     return () => { active = false; };
+  }, [id, detailRevision]);
+  async function invitePerson() {
+    if (!person?.email || inviteBusy) return;
+    setInviteBusy(true); setInviteError(undefined); setInviteNotice('');
+    try {
+      await api('invitations', 'POST', { person_id: id, email: person.email, role: inviteRole });
+      setInviteNotice('Invitación creada. La persona recibirá un correo para activar su cuenta.');
+    } catch (cause) { setInviteError(cause); }
+    finally { setInviteBusy(false); }
+  }
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const photos = await api<{items: {slot: string; present: boolean}[]}>(`persons/${id}/photos`);
+        if (!photos.items.some(photo => photo.slot === 'person' && photo.present)) { if (active) setPortrait(undefined); return; }
+        const image = await api<{content: string; mime: string}>(`persons/${id}/photos/person`);
+        if (active) setPortrait(image.mime === 'image/png' ? `data:image/png;base64,${image.content}` : undefined);
+      } catch { if (active) setPortrait(undefined); }
+    };
+    const updated = (event: Event) => { if ((event as CustomEvent<string>).detail === id) void load(); };
+    setPortrait(undefined);
+    void load();
+    window.addEventListener('srd-person-photo-updated', updated);
+    return () => { active = false; window.removeEventListener('srd-person-photo-updated', updated); };
   }, [id]);
   async function downloadIndividual(format: 'xlsx' | 'pdf' = 'xlsx') {
     if (!person || individualBusy || !exportFilenameReady(individualName)) return;
@@ -198,7 +246,7 @@ export function PersonDetail({
     phone: "Teléfono",
     email: "Correo electrónico",
     position_code: "Cargo",
-    descriptive_role: "Rol descriptivo",
+    descriptive_role: "Rol en la comunidad",
     property_name: "Predio",
     address: "Dirección",
     neighborhood: "Barrio",
@@ -218,13 +266,14 @@ export function PersonDetail({
   return (
     <Modal title={t('Detalle de persona')} onClose={onClose}>
       <ErrorBox error={error} />
+      {!!error && <button type="button" onClick={() => setDetailRevision(value => value + 1)}>{t('Reintentar detalle')}</button>}
       {!person && !error ? (
         <Loading />
       ) : (
         person && (
           <>
             <div className="person-title">
-              <span className="avatar">{person.first_names.slice(0, 1)}</span>
+              <span className="avatar person-detail-avatar">{portrait ? <img src={portrait} alt={t('Foto de la persona')} /> : person.first_names.slice(0, 1)}</span>
               <div>
                 <h3>
                   {person.first_names} {person.last_names}
@@ -247,18 +296,33 @@ export function PersonDetail({
               </section>
             )}
             <AdditionalDetail values={person.custom_fields} />
+            {canWrite(principal.role) && <section className="person-invite">
+              <h3>{t('Acceso al sistema')}</h3>
+              <p className="muted">{t('Invita a esta persona con el correo guardado en su ficha. La invitación le permitirá crear su contraseña.')}</p>
+              {person.email ? <div className="actions">
+                <label>{t('Rol de acceso')}
+                  <select value={inviteRole} onChange={event => setInviteRole(event.target.value)}>
+                    {(principal.role === 'registrar' ? ['viewer'] : ['viewer', 'registrar', 'treasurer', 'auditor', 'admin']).map(role =>
+                      <option key={role} value={role}>{t(roleNames[role])}</option>)}
+                  </select>
+                </label>
+                <button type="button" disabled={inviteBusy} onClick={() => void invitePerson()}>{t('Enviar invitación')}</button>
+              </div> : <p className="muted">{t('Agrega un correo a la ficha antes de invitar.')}</p>}
+              <ErrorBox error={inviteError} />
+              {inviteNotice && <p className="notice" role="status">{t(inviteNotice)}</p>}
+            </section>}
             <section aria-label={t('Exportar ficha individual')}>
               <h3>{t('Descargar ficha')}</h3>
               <p className="muted">{t('Incluye los datos base y campos adicionales guardados. No incluye notas internas ni autorizaciones. Excel contiene solo texto.')}</p>
               <label className="check-label"><input type="checkbox" checked={includePdfPhotos} disabled={individualBusy} onChange={event => setIncludePdfPhotos(event.target.checked)} />{t('Incluir fotografías en el PDF')}</label>
-              <ExportFilename value={individualName} onChange={setIndividualName} type="ficha_persona" defaultDescription="Si dejas el nombre vacío, se descargará como ficha_persona_AAAA-MM-DD.xlsx o ficha_persona_AAAA-MM-DD.pdf, según el formato, con la fecha de Colombia." />
+              <ExportFilename value={individualName} onChange={setIndividualName} type="ficha_persona" />
               <ErrorBox error={individualError} />
               <button type="button" disabled={individualBusy || !exportFilenameReady(individualName)} onClick={() => void downloadIndividual()}>{t(individualBusy ? 'Preparando ficha…' : 'Descargar ficha Excel')}</button>
               <button type="button" disabled={individualBusy || !exportFilenameReady(individualName)} onClick={() => void downloadIndividual('pdf')}>{t(individualBusy ? 'Preparando ficha…' : 'Descargar ficha PDF')}</button>
             </section>
             <PersonPhotos key={id} id={id} />
             <p className="muted">
-              {t('Versión {version} · El cargo y el rol descriptivo no conceden acceso al sistema.', {version: person.version})}
+              {t('Versión {version} · El rol de acceso se concede con una invitación.', {version: person.version})}
             </p>
           </>
         )
@@ -288,7 +352,7 @@ function BasePersonFilters({ value, onChange, visible }: { value: BaseFilters; o
     <div className="person-extra-filter">
       {select('document_type', 'Tipo de documento', documents)}
       {select('gender', 'Género', genders)}
-      {select('descriptive_role', 'Rol descriptivo', Object.fromEntries(Object.entries(roleNames).filter(([code]) => code !== 'superadmin')))}
+      {select('descriptive_role', 'Rol en la comunidad', Object.fromEntries(Object.entries(roleNames).filter(([code]) => code !== 'superadmin')))}
       {visible.includes('position_code') && <label>{t('Cargo')}<select value={value.position_code} disabled={!catalog} onChange={e => onChange({ ...value, position_code: e.target.value })}>
         <option value="">{catalog ? t('Todos') : t('Cargando cargos…')}</option>
         {catalog?.items.map(item => <option key={item.code} value={item.code}>{localizedLabel(item)}{item.active ? '' : ` ${t('(inactivo)')}`}</option>)}
@@ -305,10 +369,14 @@ export function Persons({
   principal,
   mode,
   onCreate,
+  openExportJobId,
+  onExportOpened,
 }: {
   principal: Principal;
   mode: "list" | "lookup";
   onCreate: () => void;
+  openExportJobId?: string;
+  onExportOpened?: () => void;
 }) {
   const language = useLanguage();
   const [result, setResult] = useState<any>(),
@@ -318,6 +386,7 @@ export function Persons({
     [affiliated, setAffiliated] = useState(""),
     [baseFilters, setBaseFilters] = useState<BaseFilters>(emptyBaseFilters),
     [customFilters, setCustomFilters] = useState<ExtraFilter[]>([]),
+    [advancedOpen, setAdvancedOpen] = useState(false),
     [page, setPage] = useState(1),
     [size, setSize] = useState(10),
     [applied, setApplied] = useState(""),
@@ -329,8 +398,31 @@ export function Persons({
     [refresh, setRefresh] = useState(0);
   const [exporting, setExporting] = useState(false), [exportError, setExportError] = useState<unknown>();
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportJob, setExportJob] = useState<PersonExportJob>();
+  const jobStorageKey = `srd-person-export:${principal.organization.id}:${principal.user_id}`;
   const [exportName, setExportName] = useState<ExportFilenameChoice>({ name: '', confirmed: false });
   const [filterSettings,setFilterSettings]=useState<FilterSettings>(), [filterError,setFilterError]=useState<unknown>(), [filterRevision,setFilterRevision]=useState(0);
+  useEffect(() => {
+    if (mode !== 'list') return;
+    const id = openExportJobId || localStorage.getItem(jobStorageKey);
+    if (!id || !/^[0-9a-f-]{36}$/i.test(id)) return;
+    if (openExportJobId) localStorage.setItem(jobStorageKey, openExportJobId);
+    let active = true;
+    void api<PersonExportJob>(`persons/export-jobs/${id}`)
+      .then(value => { if (active) { setExportJob(value); if (openExportJobId) onExportOpened?.(); } })
+      .catch(() => { if (active) { localStorage.removeItem(jobStorageKey); if (openExportJobId) onExportOpened?.(); } });
+    return () => { active = false; };
+  }, [jobStorageKey, mode, openExportJobId]);
+  useEffect(() => {
+    if (!exportJob || !['queued', 'processing'].includes(exportJob.status)) return;
+    let active = true;
+    const timer = setTimeout(() => {
+      void api<PersonExportJob>(`persons/export-jobs/${exportJob.id}`)
+        .then(value => { if (active) setExportJob(value); })
+        .catch(value => { if (active) setExportError(value); });
+    }, 5000);
+    return () => { active = false; clearTimeout(timer); };
+  }, [exportJob]);
   useEffect(()=>{
     if(mode !== 'list') return;
     let active=true;
@@ -359,6 +451,12 @@ export function Persons({
       const params = new URLSearchParams(applied);
       addExportFilename(params, exportName);
       params.set('language', language);
+      if (result.total > 500) {
+        const queued = await api<PersonExportJob>(`persons/export-jobs?${params}`, 'POST');
+        setExportJob(queued);
+        localStorage.setItem(jobStorageKey, queued.id);
+        return;
+      }
       const file = await api<Workbook>(`persons/export?${params}`);
       if (!safeXlsxFilename(file.filename)
         || file.mime !== 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
@@ -373,6 +471,49 @@ export function Persons({
     } catch (value) { setExportError(value); }
     finally { setExporting(false); }
   }
+  async function downloadExportJob() {
+    if (!exportJob || exportJob.status !== 'ready') return;
+    setExportError(undefined);
+    try {
+      // Cada consulta emite un enlace nuevo de 15 minutos; el permiso se comprueba también al descargar.
+      const current = await api<PersonExportJob>(`persons/export-jobs/${exportJob.id}`);
+      setExportJob(current);
+      if (!current.ticket) throw new Error(t('El archivo ya no está disponible.'));
+      if (current.format === 'pdf') {
+        const data = await api<PersonExportPdfData | Workbook>(`persons/export-jobs/${current.id}/download?ticket=${current.ticket}`);
+        if ('content' in data) {
+          if (!/^[A-Za-z0-9][A-Za-z0-9._ -]{0,119}\.pdf$/.test(data.filename)
+            || data.mime !== 'application/pdf' || data.count !== current.count) {
+            throw new Error(t('La exportación no tiene un formato válido.'));
+          }
+          const bytes = Uint8Array.from(atob(data.content), char => char.charCodeAt(0));
+          if (bytes.length < 5 || new TextDecoder().decode(bytes.slice(0, 5)) !== '%PDF-') {
+            throw new Error(t('La exportación no tiene un formato válido.'));
+          }
+          const url = URL.createObjectURL(new Blob([bytes], { type: data.mime }));
+          const link = document.createElement('a');
+          link.href = url; link.download = data.filename;
+          document.body.append(link); link.click(); link.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } else {
+          const { downloadPersonExportPdf } = await import('./PersonExportPdf');
+          await downloadPersonExportPdf(data, principal.organization.name);
+        }
+        return;
+      }
+      const file = await api<Workbook>(`persons/export-jobs/${current.id}/download?ticket=${current.ticket}`);
+      if (!safeXlsxFilename(file.filename)
+        || file.mime !== 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+        throw new Error(t('La exportación no tiene un formato válido.'));
+      }
+      const bytes = Uint8Array.from(atob(file.content), char => char.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: file.mime }));
+      const link = document.createElement('a');
+      link.href = url; link.download = file.filename;
+      document.body.append(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (value) { setExportError(value); }
+  }
   async function exportPdf() {
     if (exportingPdf) return;
     setExportingPdf(true); setExportError(undefined);
@@ -380,6 +521,13 @@ export function Persons({
       const params = new URLSearchParams(applied);
       addExportFilename(params, exportName);
       params.set('language', language);
+      if (result.total > 500) {
+        params.set('format', 'pdf');
+        const queued = await api<PersonExportJob>(`persons/export-jobs?${params}`, 'POST');
+        setExportJob(queued);
+        localStorage.setItem(jobStorageKey, queued.id);
+        return;
+      }
       const data = await api<PersonExportPdfData>(`persons/export-pdf?${params}`);
       const { downloadPersonExportPdf } = await import('./PersonExportPdf');
       await downloadPersonExportPdf(data, principal.organization.name);
@@ -414,6 +562,7 @@ export function Persons({
       setRefresh(value => value + 1);
     } else {
       setBusy(true);
+      setResult(undefined);
       try {
         const data = await api(
           "persons/lookup?" +
@@ -471,7 +620,6 @@ export function Persons({
     <>
       <div className="page-heading">
         <div>
-          <span className="eyebrow">{t('REGISTRO COMUNITARIO')}</span>
           <h1>{t(mode === "list" ? "Lista de personas" : "Consultar persona")}</h1>
           <p className="muted">
             {t(mode === "list"
@@ -487,6 +635,7 @@ export function Persons({
         )}
       </div>
       <ErrorBox error={error} />
+      {mode === 'list' && error && <div className="actions"><button type="button" onClick={() => setRefresh(value => value + 1)}>{t('Reintentar personas')}</button></div>}
       <section className="panel">
         <form className="filters" onSubmit={search} aria-label={t('Filtros de personas')}>
           {mode === "list" ? (
@@ -519,8 +668,11 @@ export function Persons({
                 </select>
               </label>}
               {filterSettings?.base.includes('affiliated') && <label>{t('Afiliación')}<select value={affiliated} onChange={e => setAffiliated(e.target.value)}><option value="">{t('Todas')}</option><option value="1">{t('Afiliados')}</option><option value="0">{t('No afiliados')}</option></select></label>}
-              {filterSettings ? <><BasePersonFilters value={baseFilters} onChange={setBaseFilters} visible={filterSettings.base} />
-              <PersonFilters value={customFilters} onChange={setCustomFilters} allowed={filterSettings.custom} /></> : filterError ? <div className="person-extra-filters"><ErrorBox error={filterError}/><button type="button" onClick={()=>setFilterRevision(v=>v+1)}>{t('Reintentar configuración de filtros')}</button></div> : <Loading/>}
+              {filterSettings ? <details className="person-advanced" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}>
+                <summary>{t('Más filtros de la ficha')}{(Object.values(baseFilters).some(Boolean) || customFilters.length > 0) && <span className="person-advanced-active">{t('Filtros seleccionados')}</span>}</summary>
+                <BasePersonFilters value={baseFilters} onChange={setBaseFilters} visible={filterSettings.base} />
+                <PersonFilters value={customFilters} onChange={setCustomFilters} allowed={filterSettings.custom} />
+              </details> : filterError ? <div className="person-extra-filters"><ErrorBox error={filterError}/><button type="button" onClick={()=>setFilterRevision(v=>v+1)}>{t('Reintentar configuración de filtros')}</button></div> : <Loading/>}
             </>
           ) : (
             <>
@@ -536,7 +688,7 @@ export function Persons({
               </label>
               <label className="grow">
                 {t('Número de documento')}
-                <input name="document_number" required maxLength={30} />
+                <input name="document_number" required maxLength={30} placeholder={t('Ej.: 1234567890')} />
               </label>
             </>
           )}
@@ -544,17 +696,9 @@ export function Persons({
             <Search size={18} />
             {t(mode === "list" ? "Aplicar filtros" : "Consultar")}
           </button>
-          {mode === 'list' && <button type="button" onClick={() => { setQuery(''); setStatus(''); setZone(''); setAffiliated(''); setBaseFilters(emptyBaseFilters); setCustomFilters([]); setPage(1); setApplied(''); setRefresh(value => value + 1); }}>{t('Limpiar filtros')}</button>}
+          {mode === 'list' && <button type="button" onClick={() => { setQuery(''); setStatus(''); setZone(''); setAffiliated(''); setBaseFilters(emptyBaseFilters); setCustomFilters([]); setAdvancedOpen(false); setPage(1); setApplied(''); setRefresh(value => value + 1); }}>{t('Limpiar filtros')}</button>}
         </form>
-        {mode === 'list' && <>
-          <section aria-label={t('Exportación de personas')}>
-            <ExportFilename value={exportName} onChange={setExportName} type="personas" />
-            <ErrorBox error={exportError} />
-            <div className="pagination"><button type="button" disabled={busy || exporting || exportingPdf || !result || result.total > 2000 || !exportFilenameReady(exportName)} onClick={() => void exportExcel()}>{t(exporting ? 'Preparando Excel…' : 'Exportar Excel')}</button><button type="button" disabled={busy || exporting || exportingPdf || !result || result.total > 2000 || !exportFilenameReady(exportName)} onClick={() => void exportPdf()}>{t(exportingPdf ? 'Preparando PDF…' : 'Exportar PDF')}</button><span>{t('Usa los filtros aplicados e incluye todas las páginas, hasta 2000 personas. No incluye notas ni fotografías.')}</span></div>
-          </section>
-          <Planilla applied={applied} total={result?.total} busy={busy} organizationName={principal.organization.name} />
-        </>}
-        {result ? (
+        {mode === 'lookup' && busy ? <Loading /> : result ? (
           <>
             {result.items.length ? (
               <PersonTable
@@ -568,7 +712,7 @@ export function Persons({
                 {t('Prueba con otros criterios o crea el primer registro de tu junta.')}
               </Empty>
             )}
-            <div className="pagination">
+            <div className="pagination person-results-pagination">
               <span>{t('{count} registros encontrados', {count: result.total})}</span>
               {mode === "list" && (
                 <>
@@ -606,14 +750,30 @@ export function Persons({
           </>
         ) : mode === "list" ? (
           error ? null : <Loading />
-        ) : (
+        ) : error ? null : (
           <Empty title={t('Consulta exacta')}>
             {t('Completa los dos campos para buscar.')}
           </Empty>
         )}
+        {mode === 'list' && <div className="person-exports">
+          <section aria-label={t('Exportación de personas')}>
+            <h2>{t('Exportación de personas')}</h2>
+            <ExportFilename value={exportName} onChange={setExportName} type="personas" />
+            <ErrorBox error={exportError} />
+            {exportJob && <div className="notice" role="status">
+              <strong>{t(exportJob.status === 'queued' ? 'En cola' : exportJob.status === 'processing' ? 'Procesando' : exportJob.status === 'ready' ? 'Lista para descargar' : exportJob.status === 'expired' ? 'Vencida' : 'Fallida')}</strong>
+              <span> · {exportJob.count} {t('personas')} · {t('Corte')}: {new Date(exportJob.cutoff_at).toLocaleString(formatLocale(), { timeZone: 'America/Bogota' })}</span>
+              {exportJob.status === 'ready' && <button type="button" onClick={() => void downloadExportJob()}>{t(exportJob.format === 'pdf' ? 'Descargar PDF preparado' : 'Descargar Excel preparado')}</button>}
+              {exportJob.status === 'expired' && <p>{t('El archivo venció después de 24 horas. Exporta de nuevo para crear otro.')}</p>}
+              {exportJob.status !== 'ready' && exportJob.status !== 'expired' && <button type="button" onClick={() => void api<PersonExportJob>(`persons/export-jobs/${exportJob.id}`).then(setExportJob).catch(setExportError)}>{t('Actualizar estado')}</button>}
+            </div>}
+            <div className="pagination"><button type="button" disabled={busy || exporting || exportingPdf || !result || result.total > 2000 || !exportFilenameReady(exportName)} onClick={() => void exportExcel()}>{t(exporting ? 'Preparando Excel…' : 'Exportar Excel')}</button><button type="button" disabled={busy || exporting || exportingPdf || !result || result.total > 2000 || !exportFilenameReady(exportName)} onClick={() => void exportPdf()}>{t(exportingPdf ? 'Preparando PDF…' : 'Exportar PDF')}</button><span className="export-help">{t('Descarga hasta 2000 personas según los filtros, sin notas ni fotografías.')}</span></div>
+          </section>
+          <Planilla applied={applied} total={result?.total} busy={busy} organizationName={principal.organization.name} />
+        </div>}
       </section>
       {detail && (
-        <PersonDetail id={detail} onClose={() => setDetail(undefined)} />
+        <PersonDetail id={detail} principal={principal} onClose={() => setDetail(undefined)} />
       )}
       {remove && (
         <Modal title={t('Eliminar registro')} onClose={() => setRemove(undefined)}>
@@ -661,12 +821,31 @@ export function PersonForm({
   const [schema, setSchema] = useState<FieldSchema>(), [schemaError, setSchemaError] = useState<unknown>(), [schemaBusy, setSchemaBusy] = useState(false);
   const [catalog, setCatalog] = useState<PositionCatalog>();
   const [createdId, setCreatedId] = useState<string>();
+  const [inviteAccess, setInviteAccess] = useState(false);
+  const [inviteFailure, setInviteFailure] = useState<{person_id: string; email: string; role: string}>();
+  const [inviteNotice, setInviteNotice] = useState('');
+  async function retryInvitation() {
+    if (!inviteFailure) return;
+    setBusy(true); setError(undefined);
+    try {
+      await api('invitations', 'POST', inviteFailure);
+      setInviteFailure(undefined);
+      setInviteNotice('Invitación creada. La persona recibirá un correo para activar su cuenta.');
+    } catch (e) { setError(e); }
+    finally { setBusy(false); }
+  }
   async function loadSchema() {
     setSchemaBusy(true); setSchemaError(undefined);
     try { const [fields, cargos] = await Promise.all([api<FieldSchema>('person-fields'), api<PositionCatalog>('person-positions')]); setSchema(fields); setCatalog(cargos); } catch (e) { setSchemaError(e); }
     finally { setSchemaBusy(false); }
   }
   useEffect(() => { loadSchema(); }, []);
+  function todayInBogota() {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date()).map(part => [part.type, part.value]));
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  }
   function field(
     name: string,
     label: string,
@@ -674,6 +853,13 @@ export function PersonForm({
     required = false,
     max = 120,
   ) {
+    const examples: Record<string, string> = {
+      document_number: 'Ej.: 1234567890',
+      first_names: 'Ej.: María Elena',
+      last_names: 'Ej.: Pérez López',
+      phone: 'Ej.: 300 123 4567',
+      email: 'nombre@ejemplo.com',
+    };
     return (
       <label>
         {t(label)}
@@ -684,6 +870,8 @@ export function PersonForm({
           defaultValue={initial?.[name] ?? ""}
           required={required}
           maxLength={max}
+          max={name === 'birth_date' ? todayInBogota() : undefined}
+          placeholder={examples[name] ? t(examples[name]) : undefined}
         />
       </label>
     );
@@ -722,6 +910,13 @@ export function PersonForm({
     setError(null);
     setBusy(true);
     const d: any = Object.fromEntries(new FormData(e.currentTarget));
+    const requestedRole = d.invite_role || 'viewer';
+    delete d.invite_role;
+    if (!initial && inviteAccess && !String(d.email || '').trim()) {
+      setError(new Error(t('Escribe el correo de la persona para enviar la invitación.')));
+      setBusy(false);
+      return;
+    }
     if (!schema || !catalog || schemaBusy || schemaError) { setBusy(false); return; }
     d.schema_version = schema.version;
     d.positions_version = catalog.version;
@@ -736,7 +931,17 @@ export function PersonForm({
         initial ? "PATCH" : "POST",
         d,
       );
-      if (addPhotos) setCreatedId(saved.id);
+      if (!initial && inviteAccess && d.email) {
+        const request = {person_id: saved.id, email: String(d.email), role: requestedRole};
+        setCreatedId(saved.id);
+        try {
+          await api('invitations', 'POST', request);
+          setInviteNotice('Invitación creada. La persona recibirá un correo para activar su cuenta.');
+        } catch (inviteError) {
+          setInviteFailure(request);
+          setError(inviteError);
+        }
+      } else if (addPhotos) setCreatedId(saved.id);
       else onSaved();
     } catch (e) {
       setError(e);
@@ -747,6 +952,9 @@ export function PersonForm({
   if (createdId) return <>
     <div className="page-heading"><div><span className="eyebrow">{principal.organization.name}</span><h1>{t('Fotografías del nuevo registro')}</h1>
       <p role="status">{t('El registro ya está guardado. Puedes añadir sus fotografías ahora o hacerlo después desde la lista.')}</p></div></div>
+    <ErrorBox error={error} />
+    {inviteNotice && <p className="notice" role="status">{t(inviteNotice)}</p>}
+    {inviteFailure && <button type="button" disabled={busy} onClick={retryInvitation}>{t('Reintentar invitación')}</button>}
     <div className="panel"><PersonPhotos id={createdId} /></div>
     <div className="actions end"><button type="button" className="primary" onClick={onSaved}>{t('Terminar e ir a la lista')}</button></div>
   </>;
@@ -839,7 +1047,7 @@ export function PersonForm({
               : localizedLabel(i)])), complete)}
             {select(
               "descriptive_role",
-              "Rol descriptivo",
+              "Rol en la comunidad",
               Object.fromEntries(
                 Object.entries(roleNames).filter(([v]) => v !== "superadmin"),
               ),
@@ -851,9 +1059,24 @@ export function PersonForm({
             </label>
           </div>
           <p className="muted">
-            {t('El cargo y el rol de esta ficha son descriptivos; no crean una cuenta ni conceden permisos.')}
+            {t('El cargo describe su función. El acceso real se concede mediante una invitación con un rol de cuenta, después de guardar la ficha.')}
           </p>
         </section>
+        {!initial && <section className="panel">
+          <h2>{t('Acceso al sistema')}</h2>
+          <label className="inline">
+            <input type="checkbox" checked={inviteAccess} onChange={e => setInviteAccess(e.target.checked)} />
+            {t('Enviar invitación al correo de esta persona después de guardar')}
+          </label>
+          {inviteAccess && <div className="form-grid"><label>
+            {t('Rol de acceso')}
+            <select name="invite_role" defaultValue="viewer">
+              {(principal.role === 'registrar' ? ['viewer'] : ['viewer', 'registrar', 'treasurer', 'auditor', 'admin']).map(role =>
+                <option key={role} value={role}>{t(roleNames[role])}</option>)}
+            </select>
+          </label></div>}
+          <p className="muted">{t('Se requiere un correo en la ficha. La persona confirma la invitación, acepta los términos y crea su propia contraseña. El registrador solo puede invitar con rol Consultor.')}</p>
+        </section>}
         <section className="panel">
           <h2>{t('03 · Contacto')}</h2>
           <div className="form-grid">
@@ -865,26 +1088,28 @@ export function PersonForm({
           <h2>{t('04 · Autorización de tratamiento')}</h2>
           <div className="form-grid">
             <label>
-              {t('Fundamento o referencia del soporte')} *
+              {t('Fundamento o referencia del soporte')}{complete ? ' *' : ''}
               <input
                 name="authorization_basis"
-                required
+                required={complete}
                 maxLength={120}
+                placeholder={t('Ej.: consentimiento firmado el 10/10/2026')}
                 defaultValue={initial?.authorization?.basis || ""}
               />
             </label>
             <label>
-              {t('Finalidad de la captura')} *
+              {t('Finalidad de la captura')}{complete ? ' *' : ''}
               <input
                 name="authorization_purpose"
-                required
+                required={complete}
                 maxLength={1000}
+                placeholder={t('Ej.: gestionar el registro de la junta')}
                 defaultValue={initial?.authorization?.purpose || ""}
               />
             </label>
           </div>
           <p className="muted">
-            {t('La aceptación de términos del usuario no sustituye la autorización de la persona registrada.')}
+            {t('Indica cómo autorizó la persona el uso de sus datos y para qué se usarán. En Pendiente puedes dejar ambos campos vacíos; para completar la ficha debes diligenciarlos.')} {t('La aceptación de términos del usuario no sustituye la autorización de la persona registrada.')}
           </p>
         </section>
         {schema && <AdditionalInputs schema={schema} previous={initial?.custom_fields} complete={complete} />}

@@ -20,17 +20,19 @@ export function Folders({canManage,initialFolder}:{canManage:boolean;initialFold
   const [removing, setRemoving] = useState<FolderItem>(), [status, setStatus] = useState('');
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
     setLoading(true); setListing(undefined); setError(undefined);
     const query = new URLSearchParams({ page: String(page) });
     if (parent) query.set('parent_id', parent);
-    api<Listing>(`folders?${query}`).then(data => {
+    api<Listing>(`folders?${query}`, 'GET', undefined, { signal: controller.signal }).then(data => {
       if (!active) return;
       const last = Math.max(1, Math.ceil(data.total / data.page_size));
       if (page > last) { setPage(last); return; }
       setListing(data);
     })
-      .catch(err => { if (active) setError(err); }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+      .catch(err => { if (active) setError(err); }).finally(() => { window.clearTimeout(timeout); if (active) setLoading(false); });
+    return () => { active = false; window.clearTimeout(timeout); controller.abort(); };
   }, [parent, page, revision]);
   function navigate(id?: string) { setParent(id); setPage(1); }
   function edit(item?: FolderItem) {
@@ -49,36 +51,35 @@ export function Folders({canManage,initialFolder}:{canManage:boolean;initialFold
     } catch (err) { setSaveError(err); }
     finally { setSaving(false); }
   }
-  return <section>
+  return <section className="folders-page">
     <header className="page-heading"><div><h1>{t('Carpeta')}</h1><p className="muted">{t('Organiza las carpetas internas de tu junta.')}</p></div>
       {canManage&&<button className="primary" type="button" disabled={loading || !!error} onClick={() => edit()}><FolderPlus size={18} /> {t('Nueva carpeta')}</button>}</header>
-    <nav aria-label={t('Ruta de carpetas')} className="actions">
+    <nav aria-label={t('Ruta de carpetas')} className="folder-breadcrumbs">
       <button type="button" onClick={() => navigate()} disabled={loading}>{t('Inicio')}</button>
       {listing?.breadcrumbs.map(item => <button type="button" key={item.id} onClick={() => navigate(item.id)}>{folderName(item, language)}</button>)}
     </nav>
     <ErrorBox error={error} />
-    <p role="status">{t(status)}</p>
-    <button type="button" disabled={loading} onClick={() => setRevision(value => value + 1)}>{t('Actualizar carpetas')}</button>
+    {status && <p className="notice" role="status">{t(status)}</p>}
+    <div className="folder-toolbar">{listing && listing.total > 0 && <p>{t(listing.total === 1 ? '{count} carpeta en esta ubicación.' : '{count} carpetas en esta ubicación.', { count: listing.total })}</p>}
+      <button type="button" disabled={loading} onClick={() => setRevision(value => value + 1)}>{t('Actualizar carpetas')}</button></div>
     {loading && <Loading />}
     {listing && <>
-      <p>{t(listing.total === 1 ? '{count} carpeta en esta ubicación.' : '{count} carpetas en esta ubicación.', { count: listing.total })}</p>
       {listing.items.length === 0 ? <Empty title={t('No hay carpetas en esta ubicación')}>{t(canManage?'Puedes crear una carpeta para organizar el trabajo de la junta.':'Aún no hay carpetas disponibles.')}</Empty> :
-        <div className="table-wrap"><table><thead><tr><th>{t('Nombre')}</th>{canManage&&<th>{t('Acciones')}</th>}</tr></thead><tbody>
-          {listing.items.map(item => <tr key={item.id}><td><button type="button" onClick={() => navigate(item.id)}><Folder size={18} /> {folderName(item, language)}</button></td>
-            {canManage&&<td><div className="actions"><button type="button" onClick={() => edit(item)} aria-label={t('Renombrar {name}', { name: folderName(item, language) })}>{t('Renombrar')}</button>
+        <ul className="folder-grid">{listing.items.map(item => <li className="folder-card" key={item.id}>
+          <button className="folder-card-open" type="button" onClick={() => navigate(item.id)}><span className="folder-card-icon"><Folder size={20} /></span><strong>{folderName(item, language)}</strong></button>
+            {canManage&&<div className="folder-card-actions"><button type="button" onClick={() => edit(item)} aria-label={t('Renombrar {name}', { name: folderName(item, language) })}>{t('Renombrar')}</button>
               <button type="button" onClick={() => setMoving(item)} aria-label={t('Mover {name}', { name: folderName(item, language) })}>{t('Mover')}</button>
-              <button type="button" onClick={() => { setStatus(''); setRemoving(item); }} aria-label={t('Eliminar carpeta {name}', { name: folderName(item, language) })}>{t('Eliminar')}</button></div></td>}</tr>)}
-        </tbody></table></div>}
-      <div className="actions"><button type="button" disabled={page === 1} onClick={() => setPage(value => value - 1)}>{t('Anterior')}</button>
+              <button type="button" onClick={() => { setStatus(''); setRemoving(item); }} aria-label={t('Eliminar carpeta {name}', { name: folderName(item, language) })}>{t('Eliminar')}</button></div>}</li>)}</ul>}
+      {listing.total > listing.page_size && <div className="pagination folder-pages"><button type="button" disabled={page === 1} onClick={() => setPage(value => value - 1)}>{t('Anterior')}</button>
         <span>{t('Página {page} de {total}', { page, total: Math.max(1, Math.ceil(listing.total / listing.page_size)) })}</span>
-        <button type="button" disabled={page * listing.page_size >= listing.total} onClick={() => setPage(value => value + 1)}>{t('Siguiente')}</button></div>
+        <button type="button" disabled={page * listing.page_size >= listing.total} onClick={() => setPage(value => value + 1)}>{t('Siguiente')}</button></div>}
     </>}
     {!error && <FolderDocuments key={parent ?? 'root'} folder={parent} readOnly={!canManage} />}
     {editor && <Modal title={t(editor.version ? 'Renombrar carpeta' : 'Nueva carpeta')} onClose={() => { if (!saving) setEditor(undefined); }}>
-      <form onSubmit={save}><p className="muted">{t('Escribe el nombre de la carpeta en español e inglés. Las carpetas antiguas necesitan su versión inglesa antes de guardarse desde la web.')}</p>
-        <label>{t('Nombre de carpeta (ES)')}<input autoFocus required maxLength={120} value={editor.name} disabled={saving}
+      <form onSubmit={save}><p className="muted">{t('Completa el nombre en ambos idiomas para que cada persona vea el que eligió.')}</p>
+        <label>{t('Nombre de carpeta (ES)')}<input autoFocus required maxLength={120} placeholder={t('Ej.: Actas de asamblea')} value={editor.name} disabled={saving}
         onChange={event => setEditor({ ...editor, name: event.target.value })} /></label>
-        <label>{t('Nombre de carpeta (EN)')}<input required maxLength={120} value={editor.name_en} disabled={saving}
+        <label>{t('Nombre de carpeta (EN)')}<input required maxLength={120} placeholder={t('E.g.: Meeting minutes')} value={editor.name_en} disabled={saving}
           onChange={event => setEditor({ ...editor, name_en: event.target.value })} /></label>
         <ErrorBox error={saveError} /><div className="actions"><button type="button" disabled={saving} onClick={() => setEditor(undefined)}>{t('Cancelar')}</button>
           <button disabled={saving}>{t(saving ? 'Guardando…' : 'Guardar carpeta')}</button></div></form>
@@ -119,17 +120,19 @@ function FolderMove({ item, onClose, onMoved }: { item: FolderItem; onClose: () 
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
     setLoading(true); setListing(undefined); setError(undefined);
     const query = new URLSearchParams({ page: String(page) });
     if (parent) query.set('parent_id', parent);
-    api<Listing>(`folders?${query}`).then(data => {
+    api<Listing>(`folders?${query}`, 'GET', undefined, { signal: controller.signal }).then(data => {
       if (!active) return;
       const last = Math.max(1, Math.ceil(data.total / data.page_size));
       if (page > last) { setPage(last); return; }
       setListing(data);
     })
-      .catch(err => { if (active) setError(err); }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+      .catch(err => { if (active) setError(err); }).finally(() => { window.clearTimeout(timeout); if (active) setLoading(false); });
+    return () => { active = false; window.clearTimeout(timeout); controller.abort(); };
   }, [parent, page, revision]);
   function navigate(id?: string) { setParent(id); setPage(1); }
   async function move() {

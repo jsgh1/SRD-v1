@@ -28,10 +28,10 @@ test('private Office documents upload rename and download with version guards', 
   await login(page);
   await page.getByRole('button',{name:'Carpeta',exact:true}).click();
   const panel=page.getByRole('region',{name:'Archivos privados'});
-  await expect(panel.getByText('0 archivos en esta ubicación.')).toBeVisible();
+  await expect(panel.getByRole('heading', { name: 'No hay archivos en esta ubicación' })).toBeVisible();
   for(const ext of ['docx','xlsx']){
     const bytes=fs.readFileSync(`.local/office-fixture.${ext}`);
-    await panel.getByLabel('Documento, imagen o audio',{exact:true}).setInputFiles({name:`Prueba.${ext}`,mimeType:'application/octet-stream',buffer:bytes});
+    await panel.locator('input.folder-file-input').setInputFiles({name:`Prueba.${ext}`,mimeType:'application/octet-stream',buffer:bytes});
     if(ext==='docx'){
       await Promise.all([page.waitForResponse(response=>new URL(response.url()).pathname==='/api/v1/folders'&&response.request().method()==='GET'),page.getByRole('button',{name:'Actualizar carpetas',exact:true}).click()]);
       await expect(panel.getByLabel('Nombre del archivo')).toHaveValue('Prueba.docx');
@@ -93,7 +93,7 @@ test('private Office documents upload rename and download with version guards', 
   await page.reload();await page.getByRole('button',{name:'Abrir menú',exact:true}).click();
   await page.getByRole('button',{name:'Carpeta',exact:true}).click();
   await expect(panel.getByRole('button',{name:'Descargar Informe vigente.docx',exact:true})).toBeVisible();
-  await panel.getByLabel('Documento, imagen o audio',{exact:true}).setInputFiles({name:'falso.docx',mimeType:'application/octet-stream',buffer:Buffer.from('fake Office document')});
+  await panel.locator('input.folder-file-input').setInputFiles({name:'falso.docx',mimeType:'application/octet-stream',buffer:Buffer.from('fake Office document')});
   await panel.getByRole('button',{name:'Guardar archivo',exact:true}).click();
   await expect(panel.getByRole('alert')).toBeVisible();
   await expect(panel.getByText('2 archivos en esta ubicación.')).toBeVisible();

@@ -53,6 +53,7 @@ test('date intervals include both endpoints, paginate and preserve exact filters
     expect((await mutation(page,'PUT','/api/v1/person-fields',{version:1,fields:[field]})).status()).toBe(200);
     await navigate(page,'Lista');
     const form=page.getByRole('form',{name:'Filtros de personas'});
+    await form.locator('summary').filter({hasText:'Más filtros de la ficha'}).click();
     await form.getByRole('combobox',{name:'Género',exact:true}).selectOption('female');
     await page.getByRole('button',{name:'Agregar filtro adicional',exact:true}).click();
     await page.getByLabel('Comparación del filtro 1').selectOption('between');

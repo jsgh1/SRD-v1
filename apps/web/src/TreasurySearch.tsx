@@ -22,9 +22,10 @@ export function TreasurySearch({ query }: { query: string }) {
   const [page, setPage] = useState(1), [retry, setRetry] = useState(0);
   const [data, setData] = useState<Page>(), [error, setError] = useState<unknown>();
   const [selected, setSelected] = useState<Receipt>(), [detailError, setDetailError] = useState<unknown>();
+  const [failedDetailId, setFailedDetailId] = useState<string>();
   const [detailBusy, setDetailBusy] = useState(false);
   useEffect(() => {
-    let active = true; setData(undefined); setError(undefined);
+    let active = true; setData(undefined); setError(undefined); setDetailError(undefined); setFailedDetailId(undefined);
     api<Page>(`treasury?${new URLSearchParams({ q: query, page: String(page) })}`)
       .then(result => { if (active) setData(result); })
       .catch(value => { if (active) setError(value); });
@@ -33,8 +34,8 @@ export function TreasurySearch({ query }: { query: string }) {
 
   async function open(id: string) {
     const current = ++generation.current;
-    setDetailBusy(true); setDetailError(undefined); setSelected(undefined);
-    try { const value = await api<Receipt>(`treasury/movements/${id}`); if (current === generation.current) setSelected(value); }
+    setFailedDetailId(id); setDetailBusy(true); setDetailError(undefined); setSelected(undefined);
+    try { const value = await api<Receipt>(`treasury/movements/${id}`); if (current === generation.current) { setSelected(value); setFailedDetailId(undefined); } }
     catch (value) { if (current === generation.current) setDetailError(value); }
     finally { if (current === generation.current) setDetailBusy(false); }
   }
@@ -56,6 +57,7 @@ export function TreasurySearch({ query }: { query: string }) {
         <span>{t('Página {page}', { page })}</span><button disabled={page * data.page_size >= data.total} onClick={() => setPage(value => value + 1)}>{t('Siguiente')}</button></div>
     </>}
     <ErrorBox error={detailError} />
+    {!!detailError && failedDetailId && <button type="button" onClick={() => void open(failedDetailId)}>{t('Reintentar comprobante')}</button>}
     {detailBusy && <Loading />}
     {selected && <Modal title={t('Comprobante {receipt}', { receipt: selected.receipt })} onClose={() => { generation.current++; setSelected(undefined); setDetailBusy(false); setDetailError(undefined); }}>
       <dl className="treasury-receipt">

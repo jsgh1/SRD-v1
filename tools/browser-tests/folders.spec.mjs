@@ -27,7 +27,7 @@ test('folders persist hierarchy and rename through gateway with MySQL and audit'
   test.setTimeout(240000);
   await login(page);
   await page.getByRole('button', { name: 'Carpeta', exact: true }).click();
-  await expect(page.getByText('0 carpetas en esta ubicación.')).toBeVisible();
+  await expect(page.getByText('No hay carpetas en esta ubicación')).toBeVisible();
   await page.getByRole('button', { name: 'Nueva carpeta', exact: true }).click();
   await page.getByLabel('Nombre de carpeta (ES)').fill('Actas de prueba');
   await page.getByLabel('Nombre de carpeta (EN)').fill('Test minutes');
@@ -36,7 +36,7 @@ test('folders persist hierarchy and rename through gateway with MySQL and audit'
   await page.reload();
   await page.getByRole('button', { name: 'Carpeta', exact: true }).click();
   await page.getByRole('button', { name: 'Actas de prueba', exact: true }).click();
-  await expect(page.getByText('0 carpetas en esta ubicación.')).toBeVisible();
+  await expect(page.getByText('No hay carpetas en esta ubicación')).toBeVisible();
   await page.getByRole('button', { name: 'Nueva carpeta', exact: true }).click();
   await page.getByLabel('Nombre de carpeta (ES)').fill('Septiembre');
   await page.getByLabel('Nombre de carpeta (EN)').fill('September');
@@ -110,7 +110,7 @@ test('folders persist hierarchy and rename through gateway with MySQL and audit'
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Moviendo…', exact: true })).toBeDisabled();
   } finally { release(); }
-  await expect(page.getByText('0 carpetas en esta ubicación.', { exact: true })).toBeVisible();
+  await expect(page.getByText('No hay carpetas en esta ubicación', { exact: true })).toBeVisible();
   await page.unroute(moveUrl);
   const moved = await (await page.request.get(`/api/v1/folders?parent_id=${target.id}`)).json();
   expect(moved.data.items[0].id).toBe(child.id);
@@ -138,6 +138,6 @@ test('folders persist hierarchy and rename through gateway with MySQL and audit'
   await lastDialog.getByRole('button', { name: 'Abrir destino Archivo de prueba', exact: true }).click();
   await expect(lastDialog.getByText('Destino: Archivo de prueba', { exact: true })).toBeVisible();
   await lastDialog.getByRole('button', { name: 'Mover a esta ubicación', exact: true }).click();
-  await expect(page.getByText('Página 1 de 1', { exact: true })).toBeVisible();
+  await expect(page.getByText('Página 1 de 1', { exact: true })).toHaveCount(0);
   await expect(page.getByText('25 carpetas en esta ubicación.', { exact: true })).toBeVisible();
 });

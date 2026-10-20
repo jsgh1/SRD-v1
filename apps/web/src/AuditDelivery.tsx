@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import { ErrorBox, Loading } from './ui';
 import { t, useLanguage } from './i18n';
+import { confirmInApp } from './ConfirmHost';
 
 type Delivery = { published: number; pending: number; due: number; deferred: number; exhausted: number; exhausted_events: { id: string; action: string; attempts: number; occurred_at: string }[] };
 const services = [{ id: 'identity', name: 'Identidad' }, { id: 'configuration', name: 'Configuración' }, { id: 'records', name: 'Registros' }, { id: 'files', name: 'Archivos' }, { id: 'calendar', name: 'Calendario' }, { id: 'notifications', name: 'Notificaciones' }, { id: 'treasury', name: 'Tesorería' }, { id: 'inventory', name: 'Inventario' }, { id: 'chat', name: 'Chat' }];
@@ -19,7 +20,7 @@ export function AuditDelivery({ canRetry }: { canRetry: boolean }) {
     finally { setBusy(false); }
   }
   async function retry(service: string, id: string) {
-    if (!window.confirm(t('¿Programar un nuevo intento de entrega de este evento agotado?'))) return;
+    if (!await confirmInApp(t('¿Programar un nuevo intento de entrega de este evento agotado?'))) return;
     setRetrying(id); setRetryError(undefined); setNotice(false);
     try {
       await api(`audit-delivery/${service}/${id}/retry`, 'POST');

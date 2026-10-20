@@ -36,7 +36,7 @@ test('planilla configuration persists headings and limits optional columns', asy
   await settings.getByLabel('H2 de la planilla en inglés').fill('North <area>');
   await settings.getByLabel('H3 de la planilla', { exact: true }).fill('ASISTENCIA');
   await settings.getByLabel('H3 de la planilla en inglés').fill('ATTENDANCE');
-  const logo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lZkAAAAASUVORK5CYII=', 'base64');
+  const logo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAC0lEQVQImWNgQAYAAA4AAbGa6gYAAAAASUVORK5CYII=', 'base64');
   await settings.getByLabel('Logo de la junta para la planilla (PNG, máximo 128 KB)').setInputFiles({ name: 'junta.png', mimeType: 'image/png', buffer: logo });
   await expect(settings.getByRole('img', { name: 'Vista previa del logo de la junta' })).toBeVisible();
   for (const name of ['Correo electrónico', 'Teléfono', 'Nombre del predio', 'Cargo', 'Rol descriptivo', 'Estado del registro', 'Afiliado']) {

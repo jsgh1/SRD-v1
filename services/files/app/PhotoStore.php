@@ -33,7 +33,7 @@ final class PhotoStore implements PhotoStorage, AssetPhotoStorage, UserPhotoStor
     private function guard(array $p,string $person,string $action,?string $slot=null): string {
         $org=$p['organization_id']??'';$this->uuid($org);$this->uuid($p['user_id']??'');$this->uuid($person);
         if($slot!==null && !in_array($slot,$this->slots,true)) throw new \InvalidArgumentException('Tipo de fotografía inválido.');
-        if(($this->authorize)($p,$person,$action)!==true) throw new PhotoNotFound('Recurso no disponible.');
+        if(($this->authorize)($p,$person,$action,$slot)!==true) throw new PhotoNotFound('Recurso no disponible.');
         return $org;
     }
     private function path(string $id): string {
@@ -81,7 +81,7 @@ final class PhotoStore implements PhotoStorage, AssetPhotoStorage, UserPhotoStor
                 if($reserved+$image['size']>$this->quota)throw new PhotoQuotaExceeded('La junta no tiene espacio disponible.');
                 $handle=@fopen($path,'xb');if(!$handle)throw new \RuntimeException('No se pudo crear el objeto privado.');$written=true;
                 try{if(!chmod($path,0600)||fwrite($handle,$image['content'])!==$image['size']||!fflush($handle)||!fsync($handle))throw new \RuntimeException('Escritura incompleta.');}finally{fclose($handle);}
-                if($old && $old['blob_id']!==null)$this->sql('INSERT INTO file_garbage (blob_id,organization_id,bytes) VALUES (?,?,?)',[$old['blob_id'],$org,$old['bytes']]);
+                if($old && $old['blob_id']!==null)$this->sql('INSERT INTO file_garbage (blob_id,organization_id,bytes,person_id) VALUES (?,?,?,?)',[$old['blob_id'],$org,$old['bytes'],$this->resource==='person'?$person:null]);
                 $this->sql("INSERT INTO {$this->table} (organization_id,{$this->idColumn},slot,version,blob_id,bytes,sha256,width,height) VALUES (?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE version=VALUES(version),blob_id=VALUES(blob_id),bytes=VALUES(bytes),sha256=VALUES(sha256),width=VALUES(width),height=VALUES(height)",[$org,$person,$slot,$version+1,$blob,$image['size'],$image['sha256'],$image['width'],$image['height']]);
                 $this->sql('UPDATE file_quotas SET reserved_bytes=reserved_bytes+? WHERE organization_id=?',[$image['size'],$org]);
                 $this->event($p,$person,match ($this->resource) { 'person' => 'photo.', 'asset' => 'asset_photo.', 'user' => 'user_photo.' }.($old&&$old['blob_id']!==null?'replaced':'created'));
@@ -108,7 +108,7 @@ final class PhotoStore implements PhotoStorage, AssetPhotoStorage, UserPhotoStor
             $this->account($org);$old=$this->row($org,$person,$slot);
             if(!$old||$old['blob_id']===null)throw new PhotoNotFound('Fotografía no disponible.');
             if((int)$old['version']!==$version)throw new PhotoConflict('La fotografía cambió.');
-            $this->sql('INSERT INTO file_garbage (blob_id,organization_id,bytes) VALUES (?,?,?)',[$old['blob_id'],$org,$old['bytes']]);
+            $this->sql('INSERT INTO file_garbage (blob_id,organization_id,bytes,person_id) VALUES (?,?,?,?)',[$old['blob_id'],$org,$old['bytes'],$this->resource==='person'?$person:null]);
             $this->sql("UPDATE {$this->table} SET blob_id=NULL,bytes=0,sha256=NULL,width=NULL,height=NULL,version=version+1 WHERE organization_id=? AND {$this->idColumn}=? AND slot=?",[$org,$person,$slot]);
             $this->event($p,$person,match ($this->resource) { 'person' => 'photo.deleted', 'asset' => 'asset_photo.deleted', 'user' => 'user_photo.deleted' });return $this->view($this->row($org,$person,$slot));
         });
@@ -121,9 +121,26 @@ final class PhotoStore implements PhotoStorage, AssetPhotoStorage, UserPhotoStor
             $this->account($org);
             if($this->sql('SELECT 1 FROM file_deleted_persons WHERE organization_id=? AND person_id=?',[$org,$person])->fetchColumn())return;
             $this->sql('INSERT INTO file_deleted_persons (organization_id,person_id,deleted_at) VALUES (?,?,?)',[$org,$person,gmdate('Y-m-d H:i:s')]);
-            $this->sql('INSERT INTO file_garbage (blob_id,organization_id,bytes) SELECT blob_id,organization_id,bytes FROM person_photos WHERE organization_id=? AND person_id=? AND blob_id IS NOT NULL',[$org,$person]);
+            $this->sql('INSERT INTO file_garbage (blob_id,organization_id,bytes,person_id) SELECT blob_id,organization_id,bytes,person_id FROM person_photos WHERE organization_id=? AND person_id=? AND blob_id IS NOT NULL',[$org,$person]);
+            $this->sql('INSERT INTO file_deleted_person_blobs (blob_id,organization_id,person_id) SELECT blob_id,organization_id,person_id FROM file_garbage WHERE organization_id=? AND person_id=?',[$org,$person]);
             $this->sql('DELETE FROM person_photos WHERE organization_id=? AND person_id=?',[$org,$person]);
             $this->event($p,$person,'photo.person_deleted');
+        });
+        $blobs=$this->sql('SELECT blob_id FROM file_deleted_person_blobs WHERE organization_id=? AND person_id=? ORDER BY blob_id LIMIT 25',[$org,$person])->fetchAll(PDO::FETCH_COLUMN);
+        foreach($blobs as $blob)$this->collectPersonBlob($org,$blob);
+        if($this->sql('SELECT 1 FROM file_deleted_person_blobs WHERE organization_id=? AND person_id=? LIMIT 1',[$org,$person])->fetchColumn())throw new \RuntimeException('La limpieza de fotos aún no ha terminado.');
+    }
+    private function collectPersonBlob(string $org,string $blob): void {
+        $this->transaction(function()use($org,$blob){
+            $reserved=$this->account($org);
+            $row=$this->sql('SELECT * FROM file_garbage WHERE organization_id=? AND blob_id=? FOR UPDATE',[$org,$blob])->fetch(PDO::FETCH_ASSOC);
+            if(!$row)return; // The scheduled collector already removed the blob and its tracking row.
+            if($this->sql('SELECT 1 FROM person_photos WHERE blob_id=?',[$blob])->fetchColumn() || $this->sql('SELECT 1 FROM asset_photos WHERE blob_id=?',[$blob])->fetchColumn() || $this->sql('SELECT 1 FROM user_photos WHERE blob_id=?',[$blob])->fetchColumn())throw new \RuntimeException('Un objeto vigente no puede retirarse.');
+            $path=$this->path($blob);
+            if($reserved<(int)$row['bytes'])throw new \RuntimeException('La cuota requiere conciliación.');
+            if(file_exists($path)&&(!is_file($path)||!@unlink($path)))throw new \RuntimeException('No se pudo retirar el objeto.');
+            $this->sql('DELETE FROM file_garbage WHERE blob_id=?',[$blob]);
+            $this->sql('UPDATE file_quotas SET reserved_bytes=reserved_bytes-? WHERE organization_id=?',[$row['bytes'],$org]);
         });
     }
     /** Trusted maintenance job only. Not a client action. Quota stays reserved on any cleanup failure. */

@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
+test.use({ channel: 'chrome' });
+
 const root = path.resolve(import.meta.dirname, '../..');
 const fixture = JSON.parse(fs.readFileSync(process.env.SRD_BROWSER_FIXTURE || path.join(root, '.local/e2e-fixture.json')));
 
@@ -32,7 +34,7 @@ async function noHorizontalOverflow(page) {
 test('responsive access and persistent per-user English preference', async ({ page, request, context }) => {
   for (const width of [320, 375, 768, 1280]) {
     await page.setViewportSize({ width, height: 800 });
-    await page.goto(`/j/${fixture.codeA}/login`);
+    await page.goto(`/j/${fixture.codeA || 'srd-e2e-a'}/login`);
     await expect(page.getByRole('heading', { name: 'Iniciar sesión' })).toBeVisible();
     await noHorizontalOverflow(page);
     if (width === 320 || width === 1280) {
@@ -59,7 +61,7 @@ test('responsive access and persistent per-user English preference', async ({ pa
   await expect(page.getByRole('heading', { name: 'Hello, Administrator' })).toBeVisible();
   await expect(page.getByText('Registered people', { exact: true })).toBeVisible();
   await page.locator('.sidebar').getByRole('button', { name: 'List', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'People' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'People', exact: true })).toBeVisible();
   const peopleFilters = page.getByRole('form', { name: 'People filters' });
   await expect(peopleFilters.getByRole('button', { name: 'Apply filters' })).toBeVisible();
   await expect(peopleFilters.getByLabel('Search', { exact: true })).toBeVisible();
@@ -78,8 +80,8 @@ test('responsive access and persistent per-user English preference', async ({ pa
   const viewerCard=page.locator('.contact-card').filter({hasText:'Prueba Viewer'});
   await viewerCard.getByRole('button',{name:'Open chat'}).click();
   const messagesPanel=page.getByRole('region',{name:'Messages'});
-  await expect(messagesPanel.getByRole('heading',{name:'Prueba Viewer'})).toBeVisible();
-  await messagesPanel.getByLabel('Message').fill('Texto propio de la junta');
+  await expect(messagesPanel.locator('.chat-contact-profile')).toContainText('Prueba Viewer');
+  await messagesPanel.getByRole('textbox', { name: 'Message', exact: true }).fill('Texto propio de la junta');
   await messagesPanel.getByRole('button',{name:'Send',exact:true}).click();
   await expect(messagesPanel.getByText('Texto propio de la junta')).toBeVisible();
   await expect(messagesPanel.locator('.chat-messages li').filter({hasText:'Texto propio de la junta'})).toContainText('Sent');

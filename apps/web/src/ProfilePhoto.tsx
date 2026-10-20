@@ -5,7 +5,7 @@ import { ErrorBox, Loading } from './ui';
 
 type Photo = { slot: string; version: number; present: boolean; size: number; width: number | null; height: number | null };
 
-export function ProfilePhoto({ userId }: { userId: string }) {
+export function ProfilePhoto({ userId, personId }: { userId: string; personId?: string | null }) {
   useLanguage();
   const [photo, setPhoto] = useState<Photo>();
   const [src, setSrc] = useState<string>();
@@ -13,13 +13,15 @@ export function ProfilePhoto({ userId }: { userId: string }) {
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [revision, setRevision] = useState(0);
-  const path = `users/${userId}/photos/avatar`;
+  const target = personId ? `persons/${personId}/photos` : `users/${userId}/photos`;
+  const slot = personId ? 'person' : 'avatar';
+  const path = `${target}/${slot}`;
 
   useEffect(() => {
     let active = true;
     setPhoto(undefined); setSrc(undefined); setError(undefined);
-    api<{items: Photo[]}>(`users/${userId}/photos`).then(async data => {
-      const current = data.items.find(item => item.slot === 'avatar');
+    api<{items: Photo[]}>(target).then(async data => {
+      const current = data.items.find(item => item.slot === slot);
       if (!current) throw new Error(t('No se pudo consultar la foto de perfil.'));
       const image = current.present ? await api<{content: string; mime: string; version: number}>(path) : null;
       if (!active) return;
@@ -30,7 +32,7 @@ export function ProfilePhoto({ userId }: { userId: string }) {
       setSrc(image ? `data:image/png;base64,${image.content}` : undefined);
     }).catch(value => { if (active) setError(value); });
     return () => { active = false; };
-  }, [path, revision, userId]);
+  }, [path, revision, target, slot]);
 
   async function save(file?: File) {
     if (!file || !photo || busy) return;
@@ -48,6 +50,7 @@ export function ProfilePhoto({ userId }: { userId: string }) {
       await api<Photo>(path, 'PUT', { name: file.name, content, version: photo.version });
       setRevision(value => value + 1);
       window.dispatchEvent(new Event('srd-profile-photo-updated'));
+      if (personId) window.dispatchEvent(new CustomEvent('srd-person-photo-updated', { detail: personId }));
     } catch (value) { setError(value); }
     finally { setBusy(false); }
   }
@@ -59,6 +62,7 @@ export function ProfilePhoto({ userId }: { userId: string }) {
       await api<Photo>(path, 'DELETE', { confirmed: true, version: photo.version });
       setConfirm(false); setRevision(value => value + 1);
       window.dispatchEvent(new Event('srd-profile-photo-updated'));
+      if (personId) window.dispatchEvent(new CustomEvent('srd-person-photo-updated', { detail: personId }));
     } catch (value) { setError(value); }
     finally { setBusy(false); }
   }
@@ -72,10 +76,11 @@ export function ProfilePhoto({ userId }: { userId: string }) {
     {photo && <div className="profile-photo-controls">
       {src ? <img src={src} alt={t('Mi foto de perfil')} /> : <div className="profile-photo-empty">{t('Sin foto de perfil')}</div>}
       <div>
-        <label className="photo-upload">{t(photo.present ? 'Reemplazar fotografía' : 'Agregar fotografía')}
-          <input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={event => {
+        <label className="photo-upload folder-file-label">{t(photo.present ? 'Reemplazar fotografía' : 'Agregar fotografía')}
+          <input className="folder-file-input" type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={event => {
             const file = event.target.files?.[0]; event.target.value = ''; void save(file);
           }} />
+          <span className="folder-file-picker" aria-hidden="true"><span className="folder-file-button">{t('Seleccionar archivo')}</span><span className="folder-file-name">{t('Ningún archivo seleccionado')}</span></span>
         </label>
         {photo.present && <button type="button" disabled={busy} onClick={() => setConfirm(true)}>{t('Eliminar foto de perfil')}</button>}
         {confirm && <div className="photo-confirm"><p>{t('¿Eliminar tu foto de perfil de esta junta?')}</p>

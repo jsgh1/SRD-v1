@@ -5,6 +5,7 @@ export type PersonExportPdfData = {
   rows: string[][];
   count: number;
   language?: 'es' | 'en';
+  logo_data?: string | null;
 };
 
 export function personExportPdfDefinition(data: PersonExportPdfData, organizationName: string) {
@@ -12,7 +13,8 @@ export function personExportPdfDefinition(data: PersonExportPdfData, organizatio
     || !/^\d{4}-\d{2}-\d{2}$/.test(data.date)
     || data.headers.length !== 12 || data.rows.length > 2000 || data.count !== data.rows.length
     || data.rows.some(row => row.length !== 12 || row.some(value => typeof value !== 'string'))
-    || data.headers.some(value => typeof value !== 'string')) {
+    || data.headers.some(value => typeof value !== 'string')
+    || (data.logo_data != null && !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(data.logo_data))) {
     throw new Error('La exportación PDF recibida no tiene un formato válido.');
   }
   const weights = [3, 10, 10, 12, 11, 7, 7, 7, 9, 9, 12, 19];
@@ -24,9 +26,18 @@ export function personExportPdfDefinition(data: PersonExportPdfData, organizatio
     info: { title: data.filename.slice(0, -4), subject: english ? 'SRD people list' : 'Listado de personas SRD' },
     defaultStyle: { font: 'Roboto', fontSize: 7.5, color: '#111827' },
     content: [
-      { text: english ? 'People list' : 'Listado de personas', bold: true, fontSize: 16, margin: [0, 0, 0, 3] },
-      { text: organizationName, fontSize: 10, margin: [0, 0, 0, 3] },
-      { text: english ? `Date (Colombia): ${data.date}    People: ${data.count}` : `Fecha (Colombia): ${data.date}    Personas: ${data.count}`, margin: [0, 0, 0, 10] },
+      ...(data.logo_data ? [{ columns: [
+        { image: data.logo_data, fit: [54, 54], width: 60 },
+        { stack: [
+          { text: english ? 'People list' : 'Listado de personas', bold: true, fontSize: 16, margin: [0, 0, 0, 3] },
+          { text: organizationName, fontSize: 10, margin: [0, 0, 0, 3] },
+          { text: english ? `Date (Colombia): ${data.date}    People: ${data.count}` : `Fecha (Colombia): ${data.date}    Personas: ${data.count}` },
+        ] },
+      ], columnGap: 10, margin: [0, 0, 0, 10] }] : [
+        { text: english ? 'People list' : 'Listado de personas', bold: true, fontSize: 16, margin: [0, 0, 0, 3] },
+        { text: organizationName, fontSize: 10, margin: [0, 0, 0, 3] },
+        { text: english ? `Date (Colombia): ${data.date}    People: ${data.count}` : `Fecha (Colombia): ${data.date}    Personas: ${data.count}`, margin: [0, 0, 0, 10] },
+      ]),
       { table: {
         headerRows: 1, dontBreakRows: true,
         widths: weights.map(value => available * value / total),

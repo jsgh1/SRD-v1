@@ -30,9 +30,9 @@ test('historial cargado permanece al sondear mensajes nuevos', async ({ page }) 
   await page.locator('.sidebar').getByRole('button', { name: 'Contactos', exact: true }).click();
   await page.locator('.contact-card').filter({ hasText: 'Prueba Viewer' }).getByRole('button', { name: 'Abrir chat' }).click();
   const panel = page.getByRole('region', { name: 'Mensajes' });
-  await expect(panel.getByRole('heading', { name: 'Prueba Viewer' })).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Ver perfil de Prueba Viewer' })).toBeVisible();
   const oldestBody = `Inicio del historial ${Date.now()}`;
-  await panel.getByLabel('Mensaje').fill(oldestBody);
+  await panel.getByRole('textbox', { name: 'Mensaje' }).fill(oldestBody);
   await panel.getByRole('button', { name: 'Enviar', exact: true }).click();
   await expect(panel.getByText(oldestBody)).toHaveCount(1);
 
@@ -59,4 +59,12 @@ test('historial cargado permanece al sondear mensajes nuevos', async ({ page }) 
   expect(response.status()).toBe(200);
   await expect(panel.getByText(newBody)).toHaveCount(1, { timeout: 30000 });
   await expect(panel.getByText(oldestBody)).toHaveCount(1);
+  const oldMessage = panel.locator('.chat-messages li').filter({ hasText: oldestBody });
+  await oldMessage.locator('.chat-message-menu summary').click();
+  await oldMessage.getByRole('button', { name: 'Fijar mensaje' }).click();
+  const pinned = panel.locator('.chat-pinned');
+  await expect(pinned).toContainText(oldestBody);
+  await pinned.locator('summary').click();
+  await pinned.getByRole('button', { name: 'Ir al mensaje' }).click();
+  await expect(oldMessage).toBeVisible();
 });

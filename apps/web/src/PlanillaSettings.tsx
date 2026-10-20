@@ -16,6 +16,7 @@ export function PlanillaSettings({ organizationName }: { organizationName: strin
   const [h3En, setH3En] = useState('');
   const [roles, setRoles] = useState<string[]>([]);
   const [logo, setLogo] = useState<string | null>(null);
+  const [logoName, setLogoName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   const [saved, setSaved] = useState(false);
@@ -23,14 +24,14 @@ export function PlanillaSettings({ organizationName }: { organizationName: strin
 
   useEffect(() => {
     let active = true;
-    setBusy(true); setError(undefined); setSaved(false);
+    setBusy(true); setSettings(undefined); setError(undefined); setSaved(false);
     api<PlanillaConfiguration>('planilla-settings').then(value => {
       if (!active) return;
       setSettings(value); setColumns(value.allowed_columns);
       setH1(value.h1); setH2(value.h2 || organizationName); setH3(value.h3);
       setH1En(value.h1_en ?? ''); setH2En(value.h2_en ?? (value.version === 0 ? organizationName : '')); setH3En(value.h3_en ?? '');
       setRoles(value.delegated_roles);
-      setLogo(value.logo_data);
+      setLogo(value.logo_data); setLogoName('');
     }).catch(value => { if (active) setError(value); })
       .finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
@@ -43,6 +44,7 @@ export function PlanillaSettings({ organizationName }: { organizationName: strin
     <h2>{t('Planilla de firmas')}</h2>
     <p className="muted">{t('Define los encabezados iniciales y qué columnas adicionales puede elegir la junta. Las cinco columnas obligatorias y el límite de cinco adicionales no cambian.')}</p>
     <ErrorBox error={error} />
+    {!settings && !!error && <button type="button" onClick={() => setRevision(value => value + 1)}>{t('Reintentar configuración de planilla')}</button>}
     {saved && <p role="status">{t('Configuración de planilla guardada. Se aplicará al volver a abrir Lista.')}</p>}
     {!settings && busy && <Loading />}
     {settings && <form onSubmit={async event => {
@@ -62,13 +64,14 @@ export function PlanillaSettings({ organizationName }: { organizationName: strin
       <legend>{t('Composición y columnas disponibles')}</legend>
       <div className="planilla-logo-settings">
         <p className="muted">{t('El logo se mostrará en el acceso público de esta junta, el encabezado y la planilla.')}</p>
-        <label>{t('Logo de la junta para la planilla (PNG, máximo 128 KB)')}
-          <input type="file" accept="image/png" onChange={async event => {
+        <label className="folder-file-label">{t('Logo de la junta para la planilla (PNG, máximo 128 KB)')}
+          <input className="folder-file-input" type="file" accept="image/png" onChange={async event => {
             const file = event.target.files?.[0];
             if (!file) return;
             setSaved(false); setError(undefined);
             if (file.type !== 'image/png' || file.size > 131072) {
               setError(new Error(t('El logo debe ser PNG de hasta 128 KB y 1024 × 1024 píxeles.')));
+              setLogoName('');
               event.target.value = '';
               return;
             }
@@ -86,12 +89,12 @@ export function PlanillaSettings({ organizationName }: { organizationName: strin
                 image.src = value;
               });
               if (dimensions.width > 1024 || dimensions.height > 1024) throw new Error(t('El logo debe ser PNG de hasta 128 KB y 1024 × 1024 píxeles.'));
-              setLogo(value);
-            } catch (value) { setError(value); }
+              setLogo(value); setLogoName(file.name);
+            } catch (value) { setLogoName(''); setError(value); }
             event.target.value = '';
-          }} />
+          }} /><span className="folder-file-picker" aria-hidden="true"><span className="folder-file-button">{t('Seleccionar archivo')}</span><span className="folder-file-name">{logoName || t('Ningún archivo seleccionado')}</span></span>
         </label>
-        {logo && <div className="planilla-logo-preview"><img src={logo} alt={t('Vista previa del logo de la junta')} /><button type="button" onClick={() => { setLogo(null); setSaved(false); }}>{t('Quitar logo')}</button></div>}
+        {logo && <div className="planilla-logo-preview"><img src={logo} alt={t('Vista previa del logo de la junta')} /><button type="button" onClick={() => { setLogo(null); setLogoName(''); setSaved(false); }}>{t('Quitar logo')}</button></div>}
       </div>
       <div className="form-grid">
         <label>{t('H1 de la planilla')}<input required maxLength={120} value={h1} onChange={event => { setSaved(false); setH1(event.target.value); setH1En(''); }} /></label>

@@ -90,7 +90,8 @@ test('inventory furniture count, adjustments, historical retirement and permissi
   await page.locator('.profile-trigger').click();
   await page.getByLabel('Idioma', { exact: true }).selectOption('en');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-  const englishAsset = page.getByRole('row').filter({ hasText: 'SILLAS-E2E' });
+  await expect(page.locator('.record-desktop-table')).toBeHidden();
+  const englishAsset = page.locator('.record-mobile-card').filter({ hasText: 'SILLAS-E2E' });
   await expect(englishAsset).toContainText('Community chairs');
   await expect(englishAsset).toContainText('Community hall');
   await englishAsset.getByRole('button', { name: 'View asset' }).click();

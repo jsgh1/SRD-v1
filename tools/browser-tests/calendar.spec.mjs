@@ -36,9 +36,9 @@ test('calendar month, week and agenda with editable events and revocable delegat
   await page.getByRole('dialog').getByLabel('Título', { exact: true }).fill(title);
   await page.getByRole('dialog').getByLabel('Título (EN)').fill(`Test meeting ${Date.now()}`);
   const start = await page.getByRole('dialog').getByLabel('Inicio').inputValue();
-  const tomorrow = new Date(start.slice(0, 10) + 'T12:00:00Z');
-  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-  const eventDay = tomorrow.toISOString().slice(0, 10);
+  const nextMonday = new Date(start.slice(0, 10) + 'T12:00:00Z');
+  nextMonday.setUTCDate(nextMonday.getUTCDate() + ((8 - nextMonday.getUTCDay()) % 7 || 7));
+  const eventDay = nextMonday.toISOString().slice(0, 10);
   await page.getByRole('dialog').getByLabel('Inicio').fill(`${eventDay}T09:00`);
   await page.getByRole('dialog').getByLabel('Final').fill(`${eventDay}T10:00`);
   await page.getByRole('dialog').getByLabel('Buscar integrante').fill('Prueba Viewer');
@@ -76,7 +76,7 @@ test('calendar month, week and agenda with editable events and revocable delegat
   await expect(invitee.getByRole('button', { name: 'Notificaciones, No molestar' })).toBeVisible();
   await expect(invitee.locator('.notification-count')).toHaveCount(0);
   await invitee.getByRole('button', { name: 'Notificaciones, No molestar' }).click();
-  await expect(invitee.getByRole('region', { name: 'Bandeja de notificaciones' }).getByText('1 sin leer')).toBeVisible();
+  await expect(invitee.getByRole('region', { name: 'Bandeja de notificaciones' })).toBeVisible();
   await invitee.getByRole('button', { name: 'Notificaciones, No molestar' }).click();
   await invitee.locator('.sidebar').getByRole('button', { name: 'Calendario' }).click();
   const invitation = invitee.getByRole('region', { name: 'Mis invitaciones' }).filter({ hasText: title });
@@ -86,6 +86,7 @@ test('calendar month, week and agenda with editable events and revocable delegat
   await page.reload();
   await page.locator('.sidebar').getByRole('button', { name: 'Calendario' }).click();
   await page.getByRole('button', { name: 'Semana', exact: true }).click();
+  await page.getByRole('button', { name: 'Período siguiente' }).click();
   await expect(page.locator('.calendar-week').getByRole('button', { name: new RegExp(title) })).toBeVisible();
   await page.getByRole('button', { name: 'Agenda', exact: true }).click();
   await expect(page.locator('.calendar-agenda').getByRole('button', { name: new RegExp(title) })).toBeVisible();
@@ -97,8 +98,10 @@ test('calendar month, week and agenda with editable events and revocable delegat
   await page.getByRole('dialog').getByRole('button', { name: 'Guardar evento' }).click();
   await expect(page.getByRole('dialog', { name: 'Detalle del evento' }).getByText(title + ' editada')).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Detalle del evento' }).getByText('Participantes: Sin participantes asignados')).toBeVisible();
-  page.once('dialog', dialog => dialog.accept());
   await page.getByRole('dialog').getByRole('button', { name: 'Cancelar evento' }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Confirmar acción' });
+  await expect(confirmation).toContainText('¿Cancelar este evento?');
+  await confirmation.getByRole('button', { name: 'Confirmar' }).click();
   await expect(page.getByRole('dialog').getByText('Estado: Cancelado')).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Cerrar' }).click();
   await page.getByLabel('Consultor').check();

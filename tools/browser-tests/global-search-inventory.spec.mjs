@@ -32,6 +32,7 @@ async function createAsset(page, code, name) {
     headers: { 'X-CSRF-TOKEN': token },
   });
   expect(response.status()).toBe(200);
+  return (await response.json()).data.asset;
 }
 
 test('authorized inventory search is literal, independent, and hidden from viewers', async ({ page, browser }) => {
@@ -39,7 +40,7 @@ test('authorized inventory search is literal, independent, and hidden from viewe
   await login(page, 'admin');
   const marker = String(Date.now()).slice(-8);
   const code = 'FIND-' + marker;
-  await createAsset(page, code, `Equipo 50%_! ${marker}`);
+  const wanted = await createAsset(page, code, `Equipo 50%_! ${marker}`);
   await createAsset(page, 'OTHER-' + marker, `Equipo 50ABC! ${marker}`);
   await page.getByRole('button', { name: 'Buscar en la junta', exact: true }).click();
   const form = page.getByRole('form', { name: 'Búsqueda de la junta' });
@@ -53,6 +54,19 @@ test('authorized inventory search is literal, independent, and hidden from viewe
   await expect(page.getByRole('dialog', { name: new RegExp(code) })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Fotografías del bien' })).toBeVisible();
   await page.getByRole('dialog', { name: new RegExp(code) }).getByRole('button', { name: 'Cerrar' }).click();
+  let detailFailed = false;
+  await page.route(`**/api/v1/assets/${wanted.id}`, async route => {
+    if (!detailFailed) {
+      detailFailed = true;
+      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Bien no disponible.' } }) });
+    } else await route.continue();
+  });
+  await assets.getByRole('button', { name: `Ver bien ${code}` }).click();
+  await expect(assets).toContainText('Bien no disponible.');
+  await assets.getByRole('button', { name: 'Reintentar bien' }).click();
+  await expect(page.getByRole('dialog', { name: new RegExp(code) })).toBeVisible();
+  await page.getByRole('dialog', { name: new RegExp(code) }).getByRole('button', { name: 'Cerrar' }).click();
+  await page.unroute(`**/api/v1/assets/${wanted.id}`);
   await page.route('**/api/v1/assets?*', route => route.fulfill({ status: 503, contentType: 'application/json',
     body: JSON.stringify({ error: { message: 'Fallo simulado de inventario' } }) }));
   await form.getByRole('button', { name: 'Buscar', exact: true }).click();

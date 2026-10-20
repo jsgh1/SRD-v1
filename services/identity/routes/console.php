@@ -31,8 +31,10 @@ Artisan::command('srd:security-notices', function () {
             }
             try {
                 $destination = Crypt::decryptString($notice->destination_encrypted);
-                Mail::send('email-changed', [], function ($mail) use ($destination) {
-                    $mail->to($destination)->subject('Aviso de cambio de correo en SRD');
+                $language = DB::table('users')->where('id', $notice->user_id)->value('language') === 'en' ? 'en' : 'es';
+                Mail::send('email-changed', ['language' => $language], function ($mail) use ($destination, $language) {
+                    $mail->to($destination)->subject($language === 'en'
+                        ? 'SRD email change notice' : 'Aviso de cambio de correo en SRD');
                 });
                 DB::table('security_notices')->where('id', $id)->update(['sent_at' => now(), 'destination_encrypted' => null]);
                 Outbox::record('profile.email_notice_sent', $notice->organization_id, $notice->user_id, $id);

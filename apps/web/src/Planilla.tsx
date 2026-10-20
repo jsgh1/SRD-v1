@@ -106,13 +106,13 @@ export function Planilla({ applied, total, busy, organizationName }: { applied: 
 
   return <section className="panel" aria-label={t('Planilla de firmas')}>
     <h3>{t('Planilla de firmas')}</h3>
-    <p className="muted">{t('Usa los filtros aplicados a la lista e incluye todas sus páginas. Las cinco columnas fijas son N.º, Nombres y apellidos, Tipo de documento, Número de documento y Firma; Firma queda vacía y al final.')}</p>
+    <p className="muted">{t('Descarga una planilla con las personas que coinciden con tus filtros. Puedes añadir hasta cinco columnas.')}</p>
     <div className="form-grid">
       <label>{t('Encabezado principal')}<input maxLength={120} value={h1} onChange={event => setH1(event.target.value)} /></label>
       <label>{t('Segundo encabezado')}<input maxLength={120} value={h2} onChange={event => setH2(event.target.value)} /></label>
       <label>{t('Tercer encabezado')}<input maxLength={120} value={h3} onChange={event => setH3(event.target.value)} /></label>
     </div>
-    <p className="muted">{t('La fecha de Colombia se agrega al descargar, entre el segundo y el tercer encabezado. Estos encabezados parten de la configuración de la junta y puedes ajustarlos para esta descarga. El logo configurado se incluye en Excel, PDF y la vista imprimible.')}</p>
+    <p className="muted">{t('La fecha y el logo de la junta se añaden al descargar. Los encabezados solo cambian para esta planilla.')}</p>
     <fieldset>
       <legend>{t('Columnas adicionales')}</legend>
       <div className="form-grid">{planillaColumns.filter(([key]) => settings?.allowed_columns.includes(key)).map(([key, label]) => <label className="checkbox-label" key={key}>
@@ -133,7 +133,7 @@ export function Planilla({ applied, total, busy, organizationName }: { applied: 
     <button type="button" disabled={busy || pdfExporting || !settings || total === undefined || total > 2000 || !exportFilenameReady(name)} onClick={() => void downloadPdf()}>
       {t(pdfExporting ? 'Preparando PDF…' : 'Descargar planilla PDF')}
     </button>
-    <p className="muted">{t('La vista se abre en una ventana local. Allí puedes imprimir o elegir «Guardar como PDF» en el navegador; el nombre del archivo es una sugerencia que puedes ajustar en ese diálogo.')}</p>
+    <p className="muted">{t('La vista imprimible se abre en otra pestaña. Desde allí puedes imprimir o guardar en PDF.')}</p>
     {limitAlert && <Modal title={t('Límite de selección')} onClose={() => setLimitAlert(false)}>
       <p>{t('Solo puedes seleccionar máximo 5 campos.')}</p>
       <button type="button" onClick={() => setLimitAlert(false)}>{t('Aceptar')}</button>

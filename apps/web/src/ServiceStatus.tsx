@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { ErrorBox, Loading } from './ui';
 import { formatLocale, t } from './i18n';
+import { confirmInApp } from './ConfirmHost';
 
 type Status = { items: { service: string; available: boolean }[]; antivirus_available: boolean; checked_at: string };
 type SchedulerStatus = { items: { service: string; available: boolean; cycle_recent: boolean; outbox_recent: boolean }[]; checked_at: string };
 type CalendarDeliveries = { delivered: number; pending: number; due: number; deferred: number; exhausted: number; exhausted_jobs: { id: string; kind: string; attempts: number; due_at: string }[] };
 type MailItem = { id: string; attempts: number; created_at: string; retryable: boolean };
 type MailDeliveries = { invitations: { pending: number; due: number; deferred: number; exhausted: number; expired: number; exhausted_items: MailItem[] }; security_notices: { pending: number; due: number; deferred: number; exhausted: number; exhausted_items: MailItem[] } };
+type ErasureStatus = { approved_pending: number; in_progress: number; photo_jobs_pending: number; photo_jobs_due: number; photo_jobs_stalled: number; checked_at: string };
 const labels: Record<string, string> = {
   identity: 'Identidad', configuration: 'Configuración', records: 'Registros', files: 'Archivos',
   audit: 'Auditoría', calendar: 'Calendario', notifications: 'Notificaciones',
@@ -19,6 +21,7 @@ export function ServiceStatus() {
   const [schedulers, setSchedulers] = useState<SchedulerStatus>(), [schedulerError, setSchedulerError] = useState<unknown>();
   const [calendar, setCalendar] = useState<CalendarDeliveries>(), [calendarError, setCalendarError] = useState<unknown>();
   const [mail, setMail] = useState<MailDeliveries>(), [mailError, setMailError] = useState<unknown>();
+  const [erasures, setErasures] = useState<ErasureStatus>(), [erasureError, setErasureError] = useState<unknown>();
   const [retrying, setRetrying] = useState<string>(), [retryError, setRetryError] = useState<unknown>();
   const [retryNotice, setRetryNotice] = useState('');
   const [mailRetrying, setMailRetrying] = useState<string>(), [mailRetryError, setMailRetryError] = useState<unknown>();
@@ -27,11 +30,11 @@ export function ServiceStatus() {
   useEffect(() => { active.current = true; void refresh(); return () => { active.current = false; }; }, []);
   async function refresh() {
     if (busy) return;
-    setBusy(true); setError(undefined); setSchedulerError(undefined); setCalendarError(undefined); setMailError(undefined);
+    setBusy(true); setError(undefined); setSchedulerError(undefined); setCalendarError(undefined); setMailError(undefined); setErasureError(undefined);
     try {
-      const [services, schedulerHealth, deliveries, mailDeliveries] = await Promise.allSettled([
+      const [services, schedulerHealth, deliveries, mailDeliveries, erasureHealth] = await Promise.allSettled([
         api<Status>('system/services'), api<SchedulerStatus>('system/schedulers'), api<CalendarDeliveries>('system/calendar-deliveries'),
-        api<MailDeliveries>('system/mail-deliveries'),
+        api<MailDeliveries>('system/mail-deliveries'), api<ErasureStatus>('system/privacy-erasures'),
       ]);
       if (active.current) {
         if (services.status === 'fulfilled') setData(services.value);
@@ -42,12 +45,14 @@ export function ServiceStatus() {
         else { setCalendar(undefined); setCalendarError(deliveries.reason); }
         if (mailDeliveries.status === 'fulfilled') setMail(mailDeliveries.value);
         else { setMail(undefined); setMailError(mailDeliveries.reason); }
+        if (erasureHealth.status === 'fulfilled') setErasures(erasureHealth.value);
+        else { setErasures(undefined); setErasureError(erasureHealth.reason); }
       }
     }
     finally { if (active.current) setBusy(false); }
   }
   async function retry(id: string) {
-    if (!window.confirm(t('¿Programar un nuevo intento de este aviso agotado?'))) return;
+    if (!await confirmInApp(t('¿Programar un nuevo intento de este aviso agotado?'))) return;
     setRetrying(id); setRetryError(undefined); setRetryNotice('');
     try {
       await api(`system/calendar-deliveries/${id}/retry`, 'POST');
@@ -57,7 +62,7 @@ export function ServiceStatus() {
     finally { if (active.current) setRetrying(undefined); }
   }
   async function retryMail(type: 'invitations' | 'security-notices', id: string) {
-    if (!window.confirm(t('¿Programar un nuevo intento de envío de este correo agotado?'))) return;
+    if (!await confirmInApp(t('¿Programar un nuevo intento de envío de este correo agotado?'))) return;
     setMailRetrying(id); setMailRetryError(undefined); setMailRetryNotice('');
     try {
       await api(`system/mail-deliveries/${type}/${id}/retry`, 'POST');
@@ -87,6 +92,18 @@ export function ServiceStatus() {
           <p>{t('Ciclo: {status}', {status: t(item.cycle_recent ? 'reciente' : 'sin señal reciente')})}</p>
           <p>{t('Auditoría: {status}', {status: t(item.outbox_recent ? 'reciente' : 'sin señal reciente')})}</p>
         </article>)}</div></>}
+    </section>
+    <section aria-label={t('Estado de supresiones')}>
+      <h3>{t('Supresiones de datos')}</h3>
+      <p className="muted">{t('Seguimiento de solicitudes aprobadas y limpieza de fotos de esta junta. Las tareas demoradas llevan más de quince minutos pendientes.')}</p>
+      <ErrorBox error={erasureError} />
+      {erasures && <dl className="delivery-grid">{[
+        ['Aprobadas sin ejecutar', erasures.approved_pending],
+        ['Supresiones en curso', erasures.in_progress],
+        ['Limpiezas de fotos pendientes', erasures.photo_jobs_pending],
+        ['Limpiezas listas para reintento', erasures.photo_jobs_due],
+        ['Limpiezas demoradas', erasures.photo_jobs_stalled],
+      ].map(([label, value]) => <div className="delivery-card" key={label}><dt>{t(String(label))}</dt><dd>{value}</dd></div>)}</dl>}
     </section>
     <section aria-label={t('Entregas de calendario')}>
       <h3>{t('Avisos de calendario')}</h3>

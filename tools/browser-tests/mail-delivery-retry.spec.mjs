@@ -39,15 +39,19 @@ test('administrador reintenta invitación y aviso de seguridad agotados', async 
   await panel.getByText(/Invitaciones agotadas \(/).click();
   const invitation = panel.getByRole('row', { name: new RegExp(fixture.mail_retry_invitation_id) });
   await expect(invitation).toBeVisible();
-  page.once('dialog', dialog => dialog.accept());
   await invitation.getByRole('button', { name: 'Reintentar correo' }).click();
+  const invitationConfirmation = page.getByRole('dialog', { name: 'Confirmar acción' });
+  await expect(invitationConfirmation).toContainText('¿Programar un nuevo intento');
+  await invitationConfirmation.getByRole('button', { name: 'Confirmar' }).click();
   await expect(panel.getByText('Reintento de correo programado para el próximo ciclo.')).toBeVisible();
 
   await panel.getByText(/Avisos de seguridad agotados \(/).click();
   const notice = panel.getByRole('row', { name: new RegExp(fixture.mail_retry_notice_id) });
   await expect(notice).toBeVisible();
-  page.once('dialog', dialog => dialog.accept());
   await notice.getByRole('button', { name: 'Reintentar correo' }).click();
+  const noticeConfirmation = page.getByRole('dialog', { name: 'Confirmar acción' });
+  await expect(noticeConfirmation).toContainText('¿Programar un nuevo intento');
+  await noticeConfirmation.getByRole('button', { name: 'Confirmar' }).click();
   await expect.poll(async () => {
     const response = await page.request.get('/api/v1/system/mail-deliveries');
     const data = (await response.json()).data;

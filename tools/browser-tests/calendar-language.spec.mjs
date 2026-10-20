@@ -53,7 +53,8 @@ test('calendar saves and displays both authored languages', async ({ page }) => 
   await page.locator('.profile-trigger').click();
   await page.getByLabel('Idioma', { exact: true }).selectOption('en');
   await expect(page.getByRole('heading', { name: 'Calendar', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Agenda', exact: true }).click();
+  await page.locator('.profile-trigger').click();
+  await page.getByRole('button', { name: 'Agenda', exact: true }).click({ timeout: 10000 });
   await expect(page.locator('.calendar-agenda').getByRole('button', { name: new RegExp(titleEn) })).toBeVisible();
   await page.locator('.calendar-agenda').getByRole('button', { name: new RegExp(titleEn) }).click();
   const englishDetail = page.getByRole('dialog', { name: 'Event details' });

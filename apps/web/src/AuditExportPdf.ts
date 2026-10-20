@@ -1,8 +1,9 @@
 import { t } from './i18n';
+import { pdfLogoBlock } from './pdfLogo';
 
 export type AuditExportPdfData = { filename: string; date: string; count: number; headers: string[]; rows: string[][] };
 
-export function auditExportPdfDefinition(data: AuditExportPdfData, organizationName: string) {
+export function auditExportPdfDefinition(data: AuditExportPdfData, organizationName: string, logoData?: string | null) {
   if (!/^[A-Za-z0-9][A-Za-z0-9._ -]{0,119}\.pdf$/.test(data.filename)
     || !/^\d{4}-\d{2}-\d{2}$/.test(data.date) || data.headers.length !== 8
     || data.count !== data.rows.length || data.rows.length > 2000
@@ -16,6 +17,7 @@ export function auditExportPdfDefinition(data: AuditExportPdfData, organizationN
     defaultStyle: { font: 'Roboto', fontSize: 8, color: '#111827' },
     header: { text: t('Auditoría · {name}', { name: organizationName }), margin: [28, 14, 28, 0], fontSize: 9, color: '#475569' },
     content: [
+      ...pdfLogoBlock(logoData),
       { text: t('Auditoría de la junta'), bold: true, fontSize: 18, margin: [0, 0, 0, 6] },
       { text: t('Fecha de descarga (Colombia): {date} · Eventos: {count}', { date: data.date, count: data.count }), fontSize: 10, margin: [0, 0, 0, 6] },
       { text: t('Las fechas de los eventos y los filtros por día corresponden a UTC. Los identificadores no conceden acceso al recurso asociado.'), fontSize: 9, margin: [0, 0, 0, 12] },
@@ -32,8 +34,8 @@ export function auditExportPdfDefinition(data: AuditExportPdfData, organizationN
   };
 }
 
-export async function downloadAuditExportPdf(data: AuditExportPdfData, organizationName: string): Promise<void> {
-  const definition = auditExportPdfDefinition(data, organizationName);
+export async function downloadAuditExportPdf(data: AuditExportPdfData, organizationName: string, logoData?: string | null): Promise<void> {
+  const definition = auditExportPdfDefinition(data, organizationName, logoData);
   const [{ default: pdfMake }, { default: fonts }] = await Promise.all([
     import('pdfmake/build/pdfmake.js'), import('pdfmake/build/vfs_fonts.js'),
   ]);

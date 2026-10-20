@@ -67,6 +67,9 @@ final class PersonService
     {
         $filename = ExportFilename::xlsx('personas', $requestedFilename, $confirmed);
         $rows = $this->exportRows($p, $filters);
+        if ($rows->count() > 500) {
+            throw ValidationException::withMessages(['export' => 'Para más de 500 personas, solicita una exportación en segundo plano.']);
+        }
         $content = base64_encode(PersonWorkbook::create($rows, $language));
         Outbox::record('person.export', $p['organization_id'], $p['user_id'], null);
         return ['data' => [
@@ -95,7 +98,8 @@ final class PersonService
         $filename = ExportFilename::pdf('ficha_persona', $requestedFilename, $confirmed);
         $table = PersonWorkbook::individualTable((array) $row, $this->fields->snapshots($p['organization_id'], $id), $language);
         Outbox::record('person.individual_export', $p['organization_id'], $p['user_id'], $id);
-        return ['data' => ['filename' => $filename, 'date' => now('America/Bogota')->toDateString(), 'count' => 1, 'language' => $language] + $table];
+        return ['data' => ['filename' => $filename, 'date' => now('America/Bogota')->toDateString(), 'count' => 1, 'language' => $language,
+            'logo_data' => DB::table('planilla_settings')->where('organization_id', $p['organization_id'])->value('logo_data')] + $table];
     }
 
     public function exportPdf(array $p, array $filters, ?string $requestedFilename, bool $confirmed, string $language = 'es'): array
@@ -105,6 +109,7 @@ final class PersonService
         $table = PersonWorkbook::table($rows, $language);
         Outbox::record('person.export', $p['organization_id'], $p['user_id'], null);
         return ['data' => ['filename' => $filename, 'date' => now('America/Bogota')->toDateString(), 'language' => $language,
+            'logo_data' => DB::table('planilla_settings')->where('organization_id', $p['organization_id'])->value('logo_data'),
             'headers' => $table['headers'], 'rows' => $table['rows'], 'count' => $rows->count()]];
     }
 
@@ -118,6 +123,11 @@ final class PersonService
             throw ValidationException::withMessages(['export' => 'La consulta supera 2000 personas. Acota los filtros antes de exportar.']);
         }
         return $rows;
+    }
+
+    public function snapshotExportRows(array $p, array $filters)
+    {
+        return $this->exportRows($p, $filters);
     }
 
     public function exportPlanilla(array $p, array $filters, array $columns, array $headings, string $language, ?string $requestedFilename, bool $confirmed): array
@@ -231,8 +241,8 @@ final class PersonService
             $values = $this->fields->validateValues($schema, $d['custom_values'] ?? [], $id ? $this->fields->snapshots($p['organization_id'], $id) : [], $d['status'] === 'complete');
             unset($d['custom_values'], $d['schema_version']);
             $note = $d['note'] ?? null;
-            $basis = $d['authorization_basis'];
-            $purpose = $d['authorization_purpose'];
+            $basis = $d['authorization_basis'] ?? null;
+            $purpose = $d['authorization_purpose'] ?? null;
             unset($d['note'],$d['authorization_basis'],$d['authorization_purpose']);
             $d['version'] = $existing ? $existing->version + 1 : 1;
             if (($d['zone'] ?? null) === 'rural') {
@@ -251,7 +261,9 @@ final class PersonService
                 // Notes remain separate from additional fields and their read permissions.
                 DB::table('person_notes')->updateOrInsert(['person_id' => $personId, 'organization_id' => $p['organization_id']], ['body' => $note, 'updated_by' => $p['user_id'], 'updated_at' => now()]);
             }
-            DB::table('data_authorizations')->updateOrInsert(['person_id' => $personId, 'organization_id' => $p['organization_id']], ['basis' => $basis, 'purpose' => $purpose, 'captured_by' => $p['user_id'], 'captured_at' => now()]);
+            if ($basis !== null && $purpose !== null) {
+                DB::table('data_authorizations')->updateOrInsert(['person_id' => $personId, 'organization_id' => $p['organization_id']], ['basis' => $basis, 'purpose' => $purpose, 'captured_by' => $p['user_id'], 'captured_at' => now()]);
+            }
             Outbox::record($id ? 'person.updated' : 'person.created', $p['organization_id'], $p['user_id'], $personId);
             $this->fields->persist($p['organization_id'], $personId, $values);
 
@@ -265,6 +277,10 @@ final class PersonService
             $row = $this->query($p)->where('id', $id)->lockForUpdate()->first();
             abort_unless($row, 404);
             abort_unless($row->version === $d['version'], 409);
+            abort_if(DB::table('privacy_requests')->where('organization_id', $p['organization_id'])
+                ->where('person_id', $id)->where('kind', 'erasure')
+                ->whereIn('status', ['open', 'in_review', 'approved_pending_erasure', 'erasure_in_progress'])
+                ->exists(), 409, 'Resuelve la solicitud de supresión antes de borrar esta ficha.');
             $this->query($p)->where('id', $id)->delete();
             DB::table('photo_deletions')->insert([
                 'id' => (string) Str::uuid(), 'organization_id' => $p['organization_id'],

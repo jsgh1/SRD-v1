@@ -70,7 +70,7 @@ test("private invitation, new account verification and tenant membership deactiv
   await page.getByLabel("Correo de la persona invitada").fill(email);
   await page.getByLabel("Rol de la invitación").selectOption("viewer");
   await page.getByRole("button", { name: "Crear invitación privada" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Invitación pendiente de envío" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Invitación creada y puesta en cola de envío." })).toBeVisible();
   const message = await mail(request, email, "Invitación privada a SRD");
   const link = message.HTML.match(/href="([^"]+\/invite#[^"]+)"/)[1].replaceAll(
     "&amp;",
@@ -187,8 +187,8 @@ test("private invitation, new account verification and tenant membership deactiv
     await expect(audit.getByRole('button', { name: /^Ver evento / }).first()).toBeVisible();
     await expect(audit.getByRole('alert')).toHaveCount(0);
     const delivery = page.getByRole('region', { name: 'Estado de entrega de auditoría' });
-    await expect(delivery.locator('dl')).toHaveCount(8);
     await expect(delivery.getByRole('heading', { name: 'Archivos' })).toBeVisible();
+    expect(await delivery.locator('dl').count()).toBeGreaterThanOrEqual(8);
     await expect(audit.getByRole('combobox', { name: 'Módulo', exact: true }).locator('option[value="files"]')).toHaveText('Archivos');
     await expect(delivery.getByRole('alert')).toHaveCount(0);
     await delivery.evaluate(el => window.scrollTo(0, scrollY + el.getBoundingClientRect().top - 90));

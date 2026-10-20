@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   Building2,
   ShieldCheck,
@@ -16,8 +16,9 @@ import { privateLink } from './privateLink';
 import { localizedTerms, t } from './i18n';
 
 export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
-  const initialCode =
-    location.pathname.match(/^\/j\/([a-z0-9-]+)\/login/)?.[1] || "";
+  const [initialCode] = useState(() =>
+    location.pathname.match(/^\/j\/([a-z0-9-]+)\/login/)?.[1] || "",
+  );
   const [code, setCode] = useState(initialCode),
     [org, setOrg] = useState<Organization | null>(null),
     [error, setError] = useState<unknown>(),
@@ -30,15 +31,25 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
     [visible, setVisible] = useState(false),
     [terms, setTerms] = useState(false),
     [accepted, setAccepted] = useState(false),
-    [notice, setNotice] = useState("");
+    [notice, setNotice] = useState(""),
+    [sceneTurned, setSceneTurned] = useState(false);
   const [resetCredential] = useState(() => {
     return [privateLink.id, privateLink.secret];
   });
+  const codeValue = useRef(initialCode);
+  const organizationLookup = useRef(0);
   useEffect(() => {
-    if (initialCode)
+    if (initialCode) {
+      const version = ++organizationLookup.current;
       api<Organization>("organizations/" + initialCode)
-        .then(setOrg)
-        .catch(setError);
+        .then(value => {
+          if (version === organizationLookup.current && codeValue.current === initialCode) setOrg(value);
+        })
+        .catch(cause => {
+          if (version === organizationLookup.current && codeValue.current === initialCode) setError(cause);
+        });
+      return () => { organizationLookup.current++; };
+    }
   }, [initialCode]);
   useEffect(() => {
     if (!wait) return;
@@ -50,11 +61,16 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
     setError(null);
     setBusy(true);
     const d = Object.fromEntries(new FormData(e.currentTarget));
+    let lookupVersion: number | undefined;
     try {
       if (!org && step !== "reset") {
+        const requestedCode = code.trim();
+        const version = ++organizationLookup.current;
+        lookupVersion = version;
         const o = await api<Organization>(
-          "organizations/" + encodeURIComponent(code),
+          "organizations/" + encodeURIComponent(requestedCode),
         );
+        if (version !== organizationLookup.current || codeValue.current.trim() !== requestedCode) return;
         setOrg(o);
         history.replaceState(null, "", "/j/" + o.code + "/login");
         return;
@@ -78,11 +94,11 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
           }),
         );
       if (step === "recover") {
-        const r = await api("auth/recover", "POST", {
+        await api("auth/recover", "POST", {
           ...d,
           organization_code: org!.code,
         });
-        setNotice(r.message);
+        setNotice('Si la cuenta está habilitada, recibirás instrucciones para recuperar el acceso.');
       }
       if (step === "reset") {
         await api("auth/reset", "POST", {
@@ -90,13 +106,14 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
           challenge_id: resetCredential[0],
           secret: resetCredential[1],
         });
+        history.replaceState(null, "", "/");
         setStep("login");
         setNotice(
           t('Contraseña actualizada. Inicia sesión con tu nueva contraseña.'),
         );
       }
     } catch (e) {
-      setError(e);
+      if (lookupVersion === undefined || lookupVersion === organizationLookup.current) setError(e);
     } finally {
       setBusy(false);
     }
@@ -118,6 +135,7 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
   async function back() {
     setError(null);
     setNotice("");
+    if (step === "reset") history.replaceState(null, "", "/");
     if (step === "verify") {
       setBusy(true);
       try {
@@ -147,22 +165,22 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
       </div>
       <div className="access-card">
         <section className="access-intro">
-          <span className="eyebrow">{t('COMUNIDAD · ORGANIZACIÓN · CONFIANZA')}</span>
           <h1>
             {step === "verify"
-              ? t('Un paso más para cuidar tu información.')
-              : t('Una comunidad conectada. Una gestión más clara.')}
+              ? t('Verifica tu correo para continuar.')
+              : t('Organiza los registros de tu junta.')}
           </h1>
           <p>
             {step === "verify"
               ? t('Verifica tu correo para acceder a los registros de tu junta. Solo tú debes conocer este código.')
-              : t('El espacio de tu junta para organizar registros, trabajar en equipo y dar seguimiento a lo que importa.')}
+              : t('Consulta personas, carpetas, eventos y movimientos según los permisos de tu cuenta.')}
           </p>
           <button
-            className="community-scene"
+            className={`community-scene${sceneTurned ? ' turned' : ''}`}
             type="button"
             aria-label={t('Girar la ilustración de la comunidad')}
-            onClick={(e) => e.currentTarget.classList.toggle("turned")}
+            aria-pressed={sceneTurned}
+            onClick={() => setSceneTurned(value => !value)}
           >
             <div className="scene-ground" />
             <div className="house house-one">
@@ -179,14 +197,14 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
             </span>
             <span className="scene-dot d1" />
             <span className="scene-dot d2" />
-            <span className="scene-caption">{t('Juntos, mejor organizados')}</span>
+            <span className="scene-caption">{t('Registros de la junta')}</span>
           </button>
           <div className="intro-foot">
             <ShieldCheck size={20} />
             <span>
-              {t('Información protegida.')}
+              {t('Acceso solo para cuentas autorizadas.')}
               <br />
-              <strong>{t('Acceso exclusivo para tu equipo.')}</strong>
+              <strong>{t('Usa el correo asignado a tu junta.')}</strong>
             </span>
           </div>
         </section>
@@ -209,7 +227,7 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
           <ErrorBox error={error} />
           {notice && (
             <p className="notice" role="status">
-              {notice}
+              {t(notice)}
             </p>
           )}
           <form onSubmit={submit}>
@@ -219,10 +237,13 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
                 <input
                   value={code}
                   onChange={(e) => {
+                    codeValue.current = e.target.value;
+                    organizationLookup.current++;
                     setCode(e.target.value);
                     setAccepted(false);
+                    setError(null);
                   }}
-                  placeholder="codigo-de-junta"
+                placeholder={t('codigo-de-junta')}
                   required
                   pattern="[a-z0-9-]{3,40}"
                   autoComplete="organization"
@@ -238,7 +259,7 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
                       <input
                         name="email"
                         type="email"
-                        placeholder="usuario@correo.com"
+                placeholder={t('usuario@correo.com')}
                         autoComplete="username"
                         required
                         maxLength={254}
@@ -257,7 +278,7 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
                         placeholder={
                           step === "reset"
                             ? t('Mínimo 12 caracteres')
-                            : undefined
+                            : t('Escribe tu contraseña')
                         }
                         autoComplete={
                           step === "reset" ? "new-password" : "current-password"
@@ -292,22 +313,20 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
                 )}
                 {step === "login" && (
                   <div className="login-options">
-                    <label className="check-label">
-                      <input
-                        type="checkbox"
-                        checked={accepted}
-                        onChange={(e) => setAccepted(e.target.checked)}
-                        required
-                      />
-                      {t('Acepto los')}{' '}
-                      <button
-                        className="text-button"
-                        type="button"
-                        onClick={() => setTerms(true)}
-                      >
+                    <div className="terms-choice">
+                      <label className="check-label">
+                        <input
+                          type="checkbox"
+                          checked={accepted}
+                          onChange={(e) => setAccepted(e.target.checked)}
+                          required
+                        />
+                        {t('Acepto los')}
+                      </label>
+                      <button className="text-button" type="button" onClick={() => setTerms(true)}>
                         {t('términos y condiciones')}
                       </button>
-                    </label>
+                    </div>
                     <button
                       type="button"
                       className="text-button"
@@ -371,6 +390,7 @@ export function Login({ onLogin }: { onLogin: (p: Principal) => void }) {
             <button
               className="text-button back"
               onClick={() => {
+                organizationLookup.current++;
                 setOrg(null);
                 setAccepted(false);
                 history.replaceState(null, "", "/");

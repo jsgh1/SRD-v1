@@ -1,4 +1,4 @@
-param([switch]$Compose,[switch]$Tls,[string]$Php='G:\xampp\php\php.exe',[ValidatePattern('^[a-z0-9-]+[.]spec[.]mjs$')][string]$Spec)
+param([switch]$Compose,[switch]$Tls,[string]$Php='G:\xampp\php\php.exe',[ValidatePattern('^[a-z0-9-]+[.]spec[.]mjs$')][string]$Spec,[ValidatePattern('^[a-z0-9-]+[.]spec[.]mjs$')][string[]]$Specs)
 $ErrorActionPreference='Stop'
 $SrdRoot=Split-Path $PSScriptRoot -Parent
 Set-Location -LiteralPath $SrdRoot
@@ -11,9 +11,14 @@ $SrdRunDirectory=Join-Path $SrdRoot ('.local/browser-runs/'+[guid]::NewGuid().To
 New-Item -ItemType Directory -Path $SrdRunDirectory -Force | Out-Null
 $SrdAllSpecs=@(Get-ChildItem -LiteralPath (Join-Path $SrdRoot 'tools/browser-tests') -Filter '*.spec.mjs' -File | Sort-Object Name | Select-Object -ExpandProperty Name)
 $SrdSpecs=@($SrdAllSpecs | Where-Object { $_ -ne 'chat-latency.spec.mjs' })
+if($Spec -and $Specs){throw 'Usa -Spec o -Specs, no ambos.'}
 if($Spec){
     if($Spec -notin $SrdAllSpecs){throw 'No existe la prueba solicitada.'}
     $SrdSpecs=@($Spec)
+} elseif($Specs) {
+    $SrdMissing=@($Specs | Where-Object { $_ -notin $SrdAllSpecs })
+    if($SrdMissing.Count){throw ('No existen estas pruebas: '+($SrdMissing -join ', '))}
+    $SrdSpecs=@($Specs | Select-Object -Unique)
 }
 $SrdFailed=$false
 try {

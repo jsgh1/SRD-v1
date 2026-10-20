@@ -36,6 +36,29 @@ final class NotificationTest extends TestCase
             ->assertUnprocessable();
     }
 
+    public function test_chat_notices_include_sender_and_call_outcomes_without_message_content(): void
+    {
+        $principal = $this->principal();
+        $base = ['organization_id' => $principal['organization_id'], 'user_id' => $principal['user_id'],
+            'conversation_id' => '33333333-3333-4333-8333-333333333333',
+            'sender_id' => '44444444-4444-4444-8444-444444444444', 'sender_name' => 'Ana Gómez'];
+        $messageId = '55555555-5555-4555-8555-555555555555';
+        $this->internal('POST', 'deliveries', $base + ['kind' => 'chat_message', 'message_id' => $messageId,
+            'delivery_key' => str_repeat('c', 64)], $principal, 'chat')->assertOk();
+        $this->internal('POST', 'deliveries', $base + ['kind' => 'chat_call',
+            'delivery_key' => str_repeat('d', 64)], $principal, 'chat')->assertOk();
+        $this->internal('POST', 'deliveries', $base + ['kind' => 'chat_missed',
+            'delivery_key' => str_repeat('e', 64)], $principal, 'chat')->assertOk();
+        $items = $this->internal('GET', 'notifications', [], $principal)->assertOk()->json('data.items');
+        $titles = array_column($items, 'title');
+        sort($titles);
+        $this->assertSame(['Llamada entrante de Ana Gómez', 'Llamada perdida de Ana Gómez', 'Nuevo mensaje de Ana Gómez'], $titles);
+        $message = collect($items)->firstWhere('kind', 'chat_message');
+        $this->assertSame($messageId, $message['message_id']);
+        $this->assertSame($base['sender_id'], $message['sender_id']);
+        $this->assertSame('Ana Gómez', $message['sender_name']);
+    }
+
     public function test_delivery_is_idempotent_private_and_read_dismiss_are_scoped(): void
     {
         $principal = $this->principal();
@@ -58,12 +81,30 @@ final class NotificationTest extends TestCase
         $this->assertDatabaseCount('outbox_events', 3);
     }
 
-    public function test_only_calendar_can_deliver_and_context_must_match(): void
+    public function test_only_authorized_services_can_deliver_and_context_must_match(): void
     {
         $this->internal('POST', 'deliveries', $this->delivery(), $this->principal(), 'gateway')->assertForbidden();
         $this->internal('POST', 'deliveries', $this->delivery(), $this->principal(org: '55555555-5555-4555-8555-555555555555'), 'calendar')->assertForbidden();
         $this->internal('GET', 'notifications', [], $this->principal(), 'calendar')->assertUnauthorized();
         $this->assertDatabaseCount('notifications', 0);
+    }
+
+    public function test_records_export_notice_is_idempotent_bilingual_and_private(): void
+    {
+        $principal = $this->principal();
+        $delivery = ['organization_id' => $principal['organization_id'], 'user_id' => $principal['user_id'],
+            'export_job_id' => '66666666-6666-4666-8666-666666666666',
+            'kind' => 'export_ready', 'delivery_key' => str_repeat('b', 64)];
+        $id = $this->internal('POST', 'deliveries', $delivery, $principal, 'records')->assertOk()->json('data.id');
+        $this->internal('POST', 'deliveries', $delivery, $principal, 'records')->assertOk()->assertJsonPath('data.id', $id);
+        $this->internal('GET', 'notifications', [], $principal)->assertOk()
+            ->assertJsonPath('data.items.0.export_job_id', $delivery['export_job_id'])
+            ->assertJsonPath('data.items.0.title_en', 'Your people export is ready');
+        $this->internal('GET', 'notifications', [], $this->principal('44444444-4444-4444-8444-444444444444'))
+            ->assertJsonPath('data.total', 0);
+        $this->internal('POST', 'deliveries', $delivery, $principal, 'gateway')->assertForbidden();
+        $this->internal('POST', 'deliveries', $delivery,
+            $this->principal(org: '55555555-5555-4555-8555-555555555555'), 'records')->assertForbidden();
     }
 
     public function test_preferences_are_private_and_suppress_only_optional_calendar_notices(): void

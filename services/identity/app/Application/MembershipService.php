@@ -27,12 +27,21 @@ final class MembershipService
             ->where('organization_id', $organizationId)->where('active', true)->where('role', 'admin')->exists();
     }
 
+    public function canInvite(string $userId, string $organizationId, string $role, ?string $personId): bool
+    {
+        if ($this->canManage($userId, $organizationId)) return true;
+        return $role === 'viewer' && $personId !== null
+            && DB::table('users')->where('id', $userId)->where('active', true)->exists()
+            && DB::table('memberships')->where('user_id', $userId)->where('organization_id', $organizationId)
+                ->where('active', true)->where('role', 'registrar')->exists();
+    }
+
     public function listing(array $principal, int $page): array
     {
         $query = DB::table('memberships as m')->join('users as u', 'u.id', '=', 'm.user_id')
             ->where('m.organization_id', $principal['organization_id']);
 
-        return ['items' => (clone $query)->select('m.id', 'm.user_id', 'm.role', 'm.active', 'm.version', 'u.name', 'u.email', 'u.superadmin')
+        return ['items' => (clone $query)->select('m.id', 'm.user_id', 'm.person_id', 'm.role', 'm.active', 'm.version', 'u.name', 'u.email', 'u.superadmin')
             ->orderBy('u.name')->orderBy('m.id')->forPage($page, 25)->get(), 'total' => $query->count(), 'page' => $page, 'page_size' => 25];
     }
 

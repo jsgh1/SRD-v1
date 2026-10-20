@@ -1,5 +1,5 @@
 export type PersonIndividualPdfData = {
-  filename: string; date: string; count: number; headers: string[]; rows: string[][]; language?: 'es' | 'en';
+  filename: string; date: string; count: number; headers: string[]; rows: string[][]; language?: 'es' | 'en'; logo_data?: string | null;
 };
 
 export function personIndividualPdfDefinition(data: PersonIndividualPdfData, photos?: PersonPdfPhoto[]) {
@@ -7,7 +7,8 @@ export function personIndividualPdfDefinition(data: PersonIndividualPdfData, pho
     || !/^\d{4}-\d{2}-\d{2}$/.test(data.date) || data.count !== 1
     || data.headers.length !== 2 || data.rows.length < 21
     || data.headers.some(value => typeof value !== 'string')
-    || data.rows.some(row => row.length !== 2 || row.some(value => typeof value !== 'string'))) {
+    || data.rows.some(row => row.length !== 2 || row.some(value => typeof value !== 'string'))
+    || (data.logo_data != null && !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(data.logo_data))) {
     throw new Error('La ficha PDF recibida no tiene un formato válido.');
   }
   if (photos && (photos.length > 3 || new Set(photos.map(photo => photo.slot)).size !== photos.length
@@ -21,8 +22,16 @@ export function personIndividualPdfDefinition(data: PersonIndividualPdfData, pho
     info: { title: data.filename.slice(0, -4), subject: english ? 'SRD individual person record' : 'Ficha individual de persona SRD' },
     defaultStyle: { font: 'Roboto', fontSize: 10, color: '#111827' },
     content: [
-      { text: english ? 'Individual person record' : 'Ficha individual de persona', bold: true, fontSize: 19, margin: [0, 0, 0, 6] },
-      { text: english ? `Download date (Colombia): ${data.date}` : `Fecha de descarga (Colombia): ${data.date}`, margin: [0, 0, 0, 14] },
+      ...(data.logo_data ? [{ columns: [
+        { image: data.logo_data, fit: [64, 64], width: 70 },
+        { stack: [
+          { text: english ? 'Individual person record' : 'Ficha individual de persona', bold: true, fontSize: 19, margin: [0, 0, 0, 6] },
+          { text: english ? `Download date (Colombia): ${data.date}` : `Fecha de descarga (Colombia): ${data.date}` },
+        ] },
+      ], columnGap: 12, margin: [0, 0, 0, 14] }] : [
+        { text: english ? 'Individual person record' : 'Ficha individual de persona', bold: true, fontSize: 19, margin: [0, 0, 0, 6] },
+        { text: english ? `Download date (Colombia): ${data.date}` : `Fecha de descarga (Colombia): ${data.date}`, margin: [0, 0, 0, 14] },
+      ]),
       { table: {
         headerRows: 1, dontBreakRows: true, widths: [150, '*'],
         body: [data.headers.map(text => ({ text, bold: true, fillColor: '#edf4fa' })),

@@ -76,19 +76,24 @@ test('superadministrador suspende y reactiva una cuenta sin restaurar su sesión
     await expect(page.getByRole('heading', { name: 'Cuentas de la plataforma' })).toBeVisible();
     await page.getByLabel('Buscar por nombre o correo').fill(fixture.users.viewer.email);
     await page.getByRole('button', { name: 'Buscar cuentas' }).click();
-    const row = page.getByRole('row', { name: new RegExp(fixture.users.viewer.email) });
+    const accountsPanel = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Cuentas de la plataforma', exact: true }) });
+    const row = accountsPanel.getByRole('row', { name: new RegExp(fixture.users.viewer.email) });
     await expect(row).toBeVisible();
     await expect(row).toContainText('2');
-    page.once('dialog', dialog => dialog.accept());
     await row.getByRole('button', { name: 'Suspender cuenta' }).click();
+    const suspendConfirmation = page.getByRole('dialog', { name: 'Confirmar acción' });
+    await expect(suspendConfirmation).toContainText('¿Suspender la cuenta');
+    await suspendConfirmation.getByRole('button', { name: 'Confirmar' }).click();
     await expect(page.getByText('Cuenta suspendida. Sus sesiones quedaron revocadas.')).toBeVisible();
     await expect.poll(() => closed, { timeout: 5000 }).toBe(true);
     await expect.poll(() => viewer.evaluate(async () =>
       (await fetch('/api/v1/me', { credentials: 'same-origin' })).status),
     { timeout: 10000 }).toBe(401);
 
-    page.once('dialog', dialog => dialog.accept());
     await row.getByRole('button', { name: 'Reactivar cuenta' }).click();
+    const reactivateConfirmation = page.getByRole('dialog', { name: 'Confirmar acción' });
+    await expect(reactivateConfirmation).toContainText('¿Reactivar la cuenta');
+    await reactivateConfirmation.getByRole('button', { name: 'Confirmar' }).click();
     await expect(page.getByText('Cuenta reactivada. Deberá iniciar sesión de nuevo.')).toBeVisible();
     expect(await viewer.evaluate(async () =>
       (await fetch('/api/v1/me', { credentials: 'same-origin' })).status)).toBe(401);

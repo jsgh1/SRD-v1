@@ -81,12 +81,13 @@ function PhotoCard({ id, prefix, initial, writable, label }: { id: string; prefi
       });
       const saved = await api<Photo>(path, 'PUT', { name: file.name, content, version: photo.version });
       setPhoto(saved); setMessage('Fotografía guardada.');
+      if (prefix === 'persons' && photo.slot === 'person') window.dispatchEvent(new CustomEvent('srd-person-photo-updated', { detail: id }));
     } catch (e) { setError(e); setReloadRequired(true); }
     finally { setBusy(false); }
   }
   async function remove() {
     setBusy(true); setError(undefined); setMessage('');
-    try { setPhoto(await api<Photo>(path, 'DELETE', { confirmed: true, version: photo.version })); setSrc(undefined); setMessage('Fotografía eliminada.'); }
+    try { setPhoto(await api<Photo>(path, 'DELETE', { confirmed: true, version: photo.version })); setSrc(undefined); setMessage('Fotografía eliminada.'); if (prefix === 'persons' && photo.slot === 'person') window.dispatchEvent(new CustomEvent('srd-person-photo-updated', { detail: id })); }
     catch (e) { setError(e); setReloadRequired(true); }
     finally { setBusy(false); setConfirm(false); }
   }
@@ -101,8 +102,9 @@ function PhotoCard({ id, prefix, initial, writable, label }: { id: string; prefi
     <div className="photo-actions">
       <button type="button" disabled={busy} onClick={reload}>{t('Recargar fotografía')}</button>
       {writable && <>
-        <label className="photo-upload">{t(photo.present ? 'Reemplazar fotografía' : 'Agregar fotografía')}
-          <input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy || reloadRequired} onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; void save(file); }} />
+        <label className="photo-upload folder-file-label">{t(photo.present ? 'Reemplazar fotografía' : 'Agregar fotografía')}
+          <input className="folder-file-input" type="file" accept="image/jpeg,image/png,image/webp" disabled={busy || reloadRequired} onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; void save(file); }} />
+          <span className="folder-file-picker" aria-hidden="true"><span className="folder-file-button">{t('Seleccionar archivo')}</span><span className="folder-file-name">{t('Ningún archivo seleccionado')}</span></span>
         </label>
         {photo.present && <button type="button" disabled={busy || reloadRequired} onClick={() => setConfirm(true)}>{t('Eliminar fotografía')}</button>}
       </>}

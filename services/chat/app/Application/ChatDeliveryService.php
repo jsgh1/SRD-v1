@@ -18,7 +18,20 @@ final class ChatDeliveryService
         DB::table('chat_delivery_jobs')->insertOrIgnore([
             'id' => (string) Str::uuid(), 'organization_id' => $organizationId,
             'conversation_id' => $conversationId, 'message_id' => $messageId, 'user_id' => $recipientId,
+            'kind' => 'chat_message',
             'delivery_key' => hash('sha256', implode('|', ['chat_message', $organizationId, $messageId, $recipientId])),
+            'next_attempt_at' => now(), 'attempts' => 0, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    public function enqueueCall(string $organizationId, string $conversationId, string $callId, string $recipientId, string $kind): void
+    {
+        if (!in_array($kind, ['chat_call', 'chat_missed'], true)) throw new \InvalidArgumentException('Tipo de aviso de llamada inválido.');
+        DB::table('chat_delivery_jobs')->insertOrIgnore([
+            'id' => (string) Str::uuid(), 'organization_id' => $organizationId,
+            'conversation_id' => $conversationId, 'message_id' => $callId, 'user_id' => $recipientId,
+            'kind' => $kind,
+            'delivery_key' => hash('sha256', implode('|', [$kind, $organizationId, $callId, $recipientId])),
             'next_attempt_at' => now(), 'attempts' => 0, 'created_at' => now(), 'updated_at' => now(),
         ]);
     }
@@ -29,18 +42,23 @@ final class ChatDeliveryService
             $job = DB::table('chat_delivery_jobs')->where('id', $id)->lockForUpdate()->first();
             if (!$job || $job->delivered_at !== null || $job->attempts >= 8
                 || CarbonImmutable::parse($job->next_attempt_at, 'UTC')->isFuture()) return 'skipped';
-            $message = DB::table('messages')->where('id', $job->message_id)
-                ->where('organization_id', $job->organization_id)->where('conversation_id', $job->conversation_id)->first();
+            $message = $job->kind === 'chat_message' ? DB::table('messages')->where('id', $job->message_id)
+                ->where('organization_id', $job->organization_id)->where('conversation_id', $job->conversation_id)->first() : null;
+            $call = $job->kind !== 'chat_message' ? DB::table('voice_calls')->where('id', $job->message_id)
+                ->where('organization_id', $job->organization_id)->where('conversation_id', $job->conversation_id)->first() : null;
             $conversation = DB::table('conversations')->where('id', $job->conversation_id)
                 ->where('organization_id', $job->organization_id)->first();
-            if (!$message || !$conversation || !in_array($job->user_id, [$conversation->user_a_id, $conversation->user_b_id], true)
-                || $message->sender_id === $job->user_id) {
+            $senderId = $message?->sender_id ?? $call?->caller_id;
+            $valid = $job->kind === 'chat_message' ? $message && $message->deleted_for_all_at === null
+                : $call && $call->callee_id === $job->user_id && ($job->kind === 'chat_call' ? $call->status === 'ringing' : $call->status === 'missed');
+            if (!$valid || !$conversation || !in_array($job->user_id, [$conversation->user_a_id, $conversation->user_b_id], true)
+                || $senderId === $job->user_id) {
                 DB::table('chat_delivery_jobs')->where('id', $id)->delete();
                 return 'discarded';
             }
             try {
                 $this->client->call('identity', 'POST', 'chat-contacts/resolve', ['user_id' => $job->user_id],
-                    ['organization_id' => $job->organization_id, 'user_id' => $message->sender_id]);
+                    ['organization_id' => $job->organization_id, 'user_id' => $senderId]);
             } catch (ValidationException) {
                 DB::table('chat_delivery_jobs')->where('id', $id)->delete();
                 return 'discarded';
@@ -50,7 +68,10 @@ final class ChatDeliveryService
             try {
                 $result = $this->client->call('notifications', 'POST', 'deliveries', [
                     'organization_id' => $job->organization_id, 'conversation_id' => $job->conversation_id,
-                    'user_id' => $job->user_id, 'kind' => 'chat_message', 'delivery_key' => $job->delivery_key,
+                    'user_id' => $job->user_id, 'kind' => $job->kind, 'delivery_key' => $job->delivery_key,
+                    'sender_id' => $senderId,
+                    'sender_name' => $senderId === $conversation->user_a_id ? $conversation->user_a_name : $conversation->user_b_name,
+                    'message_id' => $job->kind === 'chat_message' ? $job->message_id : null,
                 ], ['organization_id' => $job->organization_id]);
                 if (empty($result['id'])) throw new DependencyFailure;
             } catch (\Throwable) {

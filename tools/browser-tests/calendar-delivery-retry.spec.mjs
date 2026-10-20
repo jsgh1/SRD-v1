@@ -35,8 +35,10 @@ test('administrador reintenta un aviso agotado y llega una sola vez', async ({ p
   await panel.locator('summary').click();
   const row = panel.getByRole('row', { name: new RegExp(fixture.calendar_retry_job_id) });
   await expect(row).toBeVisible();
-  page.once('dialog', dialog => dialog.accept());
   await row.getByRole('button', { name: 'Reintentar aviso' }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Confirmar acción' });
+  await expect(confirmation).toContainText('¿Programar un nuevo intento');
+  await confirmation.getByRole('button', { name: 'Confirmar' }).click();
   await expect(panel.getByText('Reintento programado. El aviso se procesará en el próximo ciclo.')).toBeVisible();
   await expect.poll(async () => {
     const response = await page.request.get('/api/v1/system/calendar-deliveries');

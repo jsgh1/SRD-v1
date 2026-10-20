@@ -55,6 +55,19 @@ test('treasury search isolates literal concepts, receipt lookup, errors and role
   await treasury.getByRole('button', { name: `Ver comprobante ${wanted.receipt}` }).click();
   await expect(page.getByRole('dialog', { name: `Comprobante ${wanted.receipt}` }).getByText(concept)).toBeVisible();
   await page.getByRole('dialog', { name: `Comprobante ${wanted.receipt}` }).getByRole('button', { name: 'Cerrar' }).click();
+  let detailFailed = false;
+  await page.route(`**/api/v1/treasury/movements/${wanted.id}`, async route => {
+    if (!detailFailed) {
+      detailFailed = true;
+      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Comprobante no disponible.' } }) });
+    } else await route.continue();
+  });
+  await treasury.getByRole('button', { name: `Ver comprobante ${wanted.receipt}` }).click();
+  await expect(treasury).toContainText('Comprobante no disponible.');
+  await treasury.getByRole('button', { name: 'Reintentar comprobante' }).click();
+  await expect(page.getByRole('dialog', { name: `Comprobante ${wanted.receipt}` })).toBeVisible();
+  await page.getByRole('dialog', { name: `Comprobante ${wanted.receipt}` }).getByRole('button', { name: 'Cerrar' }).click();
+  await page.unroute(`**/api/v1/treasury/movements/${wanted.id}`);
   await form.getByLabel('Texto de búsqueda').fill(wanted.receipt);
   await form.getByRole('button', { name: 'Buscar', exact: true }).click();
   await expect(treasury.getByText('1 coincidencias en tesorería')).toBeVisible();

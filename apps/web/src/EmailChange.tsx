@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Mail, ShieldCheck } from "lucide-react";
 import { api } from "./api";
 import { ErrorBox } from "./ui";
+import { t } from './i18n';
 
 export function EmailChange({ onChanged }: { onChanged: () => Promise<void> }) {
   const [pending, setPending] = useState<{
@@ -47,12 +48,12 @@ export function EmailChange({ onChanged }: { onChanged: () => Promise<void> }) {
     setBusy(true);
     setError(null);
     try {
-      const result = await api("profile/email-change/confirm", "POST", {
+      await api("profile/email-change/confirm", "POST", {
         challenge_id: pending.challenge_id,
         code: new FormData(event.currentTarget).get("code"),
       });
       await onChanged();
-      setNotice(result.message);
+      setNotice('Correo de acceso actualizado.');
       setPending(undefined);
     } catch (error) {
       setError(error);
@@ -80,32 +81,31 @@ export function EmailChange({ onChanged }: { onChanged: () => Promise<void> }) {
 
   return (
     <section className="panel">
-      <h2>Correo de acceso</h2>
+      <h2>{t('Correo de acceso')}</h2>
       <p className="muted">
-        Verificaremos la nueva dirección antes de reemplazar tu correo actual.
-        Necesitas confirmar tu contraseña.
+        {t('Verificaremos la nueva dirección antes de reemplazar tu correo actual. Necesitas confirmar tu contraseña.')}
       </p>
       <ErrorBox error={error} />
       {notice && (
         <p className="notice" role="status">
-          {notice}
+          {t(notice)}
         </p>
       )}
       <form onSubmit={start}>
         <div className="form-grid">
           <label>
-            Nuevo correo electrónico
+            {t('Nuevo correo electrónico')}
             <input
               name="new_email"
               type="email"
               autoComplete="email"
-              placeholder="nuevo@correo.com"
+              placeholder={t('nuevo@correo.com')}
               required
               maxLength={254}
             />
           </label>
           <label>
-            Contraseña actual
+            {t('Contraseña actual')}
             <input
               name="password"
               type="password"
@@ -116,17 +116,16 @@ export function EmailChange({ onChanged }: { onChanged: () => Promise<void> }) {
         </div>
         <button className="primary" disabled={busy}>
           <Mail size={18} />
-          Enviar código al nuevo correo
+          {t('Enviar código al nuevo correo')}
         </button>
       </form>
       {pending && (
         <form className="email-confirmation" onSubmit={confirm}>
           <p>
-            Tenemos un cambio pendiente para{" "}
-            <strong>{pending.destination}</strong>.
+            {t('Tenemos un cambio pendiente para {email}.', {email: pending.destination})}
           </p>
           <label>
-            Código para cambiar el correo
+            {t('Código para cambiar el correo')}
             <input
               name="code"
               inputMode="numeric"
@@ -141,15 +140,14 @@ export function EmailChange({ onChanged }: { onChanged: () => Promise<void> }) {
           <div className="actions">
             <button className="primary" disabled={busy}>
               <ShieldCheck size={18} />
-              Confirmar cambio de correo
+              {t('Confirmar cambio de correo')}
             </button>
             <button type="button" disabled={busy || wait > 0} onClick={resend}>
-              {wait ? `Reenviar en ${wait} s` : "Reenviar código de correo"}
+              {wait ? t('Reenviar en {seconds} s', {seconds: wait}) : t('Reenviar código de correo')}
             </button>
           </div>
           <p className="muted">
-            El código vence en cinco minutos. Después de ese plazo, confirma de
-            nuevo tu contraseña para solicitar otro.
+            {t('El código vence en cinco minutos. Después de ese plazo, confirma de nuevo tu contraseña para solicitar otro.')}
           </p>
         </form>
       )}

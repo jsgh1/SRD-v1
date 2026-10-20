@@ -4,15 +4,21 @@ $SrdRoot = Split-Path $PSScriptRoot -Parent
 Set-Location -LiteralPath $SrdRoot
 
 & (Join-Path $PSScriptRoot 'Initialize.ps1')
-[string[]]$SrdBuildArgs = if ($Build) { '--build' } else { '--no-build' }
+if ($Build) {
+    foreach ($SrdService in @('gateway', 'identity', 'configuration', 'records', 'calendar', 'notifications', 'audit',
+        'web', 'identity-scheduler', 'calendar-scheduler', 'notifications-scheduler', 'records-scheduler')) {
+        docker compose build $SrdService
+        if ($LASTEXITCODE -ne 0) { throw "Compilación fallida: $SrdService" }
+    }
+}
 
-docker compose up -d --wait @SrdBuildArgs mysql mailpit
+docker compose up -d --wait --no-build mysql mailpit
 if ($LASTEXITCODE -ne 0) { throw 'No se pudieron iniciar MySQL y Mailpit.' }
 docker compose exec -T mysql bash /docker-entrypoint-initdb.d/01-services.sh
 if ($LASTEXITCODE -ne 0) { throw 'No se pudieron preparar las bases de servicio.' }
 
-$SrdServices = @('gateway', 'identity', 'configuration', 'records', 'calendar', 'notifications')
-docker compose up -d --wait @SrdBuildArgs @SrdServices
+$SrdServices = @('gateway', 'identity', 'configuration', 'records', 'calendar', 'notifications', 'audit')
+docker compose up -d --wait --no-build @SrdServices
 if ($LASTEXITCODE -ne 0) { throw 'No se pudieron iniciar los servicios móviles.' }
 foreach ($SrdService in $SrdServices) {
     docker compose exec -T $SrdService php artisan migrate --force
@@ -22,7 +28,7 @@ foreach ($SrdService in $SrdServices) {
 & (Join-Path $PSScriptRoot 'Seed-ComposeTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'No se pudieron preparar las juntas y cuentas sintéticas.' }
 
-docker compose up -d --wait @SrdBuildArgs web identity-scheduler calendar-scheduler notifications-scheduler
+docker compose up -d --wait --no-build web identity-scheduler calendar-scheduler notifications-scheduler records-scheduler
 if ($LASTEXITCODE -ne 0) { throw 'No se pudieron iniciar el acceso local y los planificadores.' }
 
 Write-Host 'Base móvil preparada en http://localhost:8080'

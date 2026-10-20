@@ -1,6 +1,8 @@
 # SRD · Sistema de Registro Digital
 
-Para la demostración actual de web y Expo Go, sigue la [guía de exposición del 9 de octubre de 2026](docs/GUIA-EXPOSICION-2026-10-09.md). Con Docker y el teléfono conectados, `./scripts/Start-Exposition.ps1` inicia los servicios, carga la semilla ficticia y abre Expo Go.
+Para levantar el proyecto desde el ZIP en otra PC, sigue la [guía de entrega portable y semilla](docs/ENTREGA-PORTABLE-2026-10-13.md). `./scripts/Start-Exposition.ps1 -Build -WebOnly` compila los servicios web, inicia Docker y carga datos ficticios; Expo Go es opcional.
+
+Para continuar la web sin repetir trabajo, consulta [pendientes y criterios de cierre](docs/PENDIENTES-WEB-2026-10-16.md) y la [revisión UX](docs/REVISION_UX_WEB.md). La web sirve para demostración, pero aún no está aceptada al 100 %.
 
 El [cliente Windows con Electron](docs/ESCRITORIO.md) abre la interfaz React del servidor local en un paquete x64 probado. Hay un instalador de desarrollo, todavía sin firma ni publicación. El [cliente Android con React Native](docs/MOVIL.md) tiene un APK debug x86_64 probado parcialmente en emulador; sus funciones y aceptación siguen incompletas. Para mostrar el avance móvil en un teléfono con menos memoria en la PC, consulta la [variante Expo Go por USB](apps/mobile-expo/README.md). Para la exposición del 6 de octubre de 2026, consulta [avance y pendientes](docs/AVANCE-PARA-EXPOSICION-2026-10-06.md) y [guía de demostración](docs/GUIA-DEMO-2026-10-06.md).
 

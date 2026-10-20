@@ -8,11 +8,32 @@ use Srd\Access;
 
 final class ContactController
 {
+    public function show(string $id, PresenceService $presence): array
+    {
+        $p = Access::require('contacts.read');
+        abort_if($id === $p['user_id'], 404);
+        $contact = DB::table('memberships as m')->join('users as u', 'u.id', '=', 'm.user_id')
+            ->leftJoin('member_profile_titles as pt', function ($join) {
+                $join->on('pt.organization_id', '=', 'm.organization_id')->on('pt.user_id', '=', 'm.user_id');
+            })
+            ->where('m.organization_id', $p['organization_id'])->where('m.user_id', $id)
+            ->where('m.active', true)->where('u.active', true)
+            ->first(['u.id', 'u.name', 'm.role', 'u.superadmin', 'pt.title', 'pt.title_en']);
+        abort_unless($contact, 404);
+        $states = $presence->effectiveMany([$id]);
+        return ['data' => ['id' => $contact->id, 'name' => $contact->name,
+            'role' => $contact->superadmin ? 'superadmin' : $contact->role,
+            'presence' => $states[$id] ?? 'offline', 'title' => $contact->title, 'title_en' => $contact->title_en]];
+    }
+
     public function __invoke(Request $r, PresenceService $presence): array
     {
         $p = Access::require('contacts.read');
         $d = $r->validate(['q' => 'nullable|string|max:120', 'page' => 'sometimes|integer|min:1']);
         $query = DB::table('memberships as m')->join('users as u', 'u.id', '=', 'm.user_id')
+            ->leftJoin('member_profile_titles as pt', function ($join) {
+                $join->on('pt.organization_id', '=', 'm.organization_id')->on('pt.user_id', '=', 'm.user_id');
+            })
             ->where('m.organization_id', $p['organization_id'])->where('m.active', true)->where('u.active', true)
             ->where('u.id', '!=', $p['user_id']);
         if (($d['q'] ?? '') !== '') {
@@ -23,11 +44,12 @@ final class ContactController
         $total = (clone $query)->count();
         $page = (int) ($d['page'] ?? 1);
         $items = $query->orderBy('u.name')->orderBy('u.id')->forPage($page, 25)
-            ->get(['u.id', 'u.name', 'm.role', 'u.superadmin']);
+            ->get(['u.id', 'u.name', 'm.role', 'u.superadmin', 'pt.title', 'pt.title_en']);
         $states = $presence->effectiveMany($items->pluck('id')->all());
         return ['data' => ['items' => $items->map(fn ($u) => [
             'id' => $u->id, 'name' => $u->name, 'role' => $u->superadmin ? 'superadmin' : $u->role,
             'presence' => $states[$u->id] ?? 'offline',
+            'title' => $u->title, 'title_en' => $u->title_en,
         ]), 'page' => $page, 'page_size' => 25, 'total' => $total]];
     }
 }

@@ -36,6 +36,13 @@ test('folder reading may be delegated and revoked without granting writes',async
   await page.getByRole('button',{name:'Configuración',exact:true}).click();
   const permissions=page.getByRole('region',{name:'Permisos de lectura de Carpeta'});
   await expect(permissions).toBeVisible();
+  await page.route('**/api/v1/members/folder-readers?*',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{message:'Miembros no disponibles.'}})}));
+  await permissions.getByRole('button',{name:'Actualizar permisos'}).click();
+  await expect(permissions).toContainText('Miembros no disponibles.');
+  await expect(permissions.getByLabel(fixture.users.viewer.email,{exact:false})).toHaveCount(0);
+  await page.unroute('**/api/v1/members/folder-readers?*');
+  await permissions.getByRole('button',{name:'Reintentar miembros'}).click();
+  await expect(permissions.getByLabel(fixture.users.viewer.email,{exact:false})).toBeVisible();
   await permissions.getByRole('checkbox',{name:'Consultor',exact:true}).check();
   await permissions.getByRole('button',{name:'Guardar permisos'}).click();
   await expect(permissions.getByText('Permisos de lectura de Carpeta guardados.')).toBeVisible();

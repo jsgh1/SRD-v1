@@ -34,9 +34,12 @@ final class ChallengeService
         (clone $previous)->whereNull('consumed_at')->update(['consumed_at' => now()]);
         DB::table('auth_challenges')->insert(['id' => $id, 'user_id' => $user->id, 'organization_id' => $org, 'purpose' => $purpose, 'destination' => $destination, 'digest' => $this->digest($id, $purpose, $destination, $secret), 'terms_version_id' => $terms, 'expires_at' => $expires, 'created_at' => now(), 'sent_at' => null]);
         $link = $purpose === 'reset' ? config('srd.public_url').'/reset#'.$id.'.'.$secret : null;
+        $language = ($user->language ?? 'es') === 'en' ? 'en' : 'es';
         try {
-            Mail::send('security-mail', ['code' => $secret, 'purpose' => $purpose, 'link' => $link], function ($m) use ($destination, $purpose) {
-                $m->to($destination)->subject($purpose === 'reset' ? 'Restablece tu acceso a SRD' : 'Tu código de seguridad de SRD');
+            Mail::send('security-mail', ['code' => $secret, 'purpose' => $purpose, 'link' => $link, 'language' => $language], function ($m) use ($destination, $purpose, $language) {
+                $m->to($destination)->subject($language === 'en'
+                    ? ($purpose === 'reset' ? 'Reset your SRD access' : 'Your SRD security code')
+                    : ($purpose === 'reset' ? 'Restablece tu acceso a SRD' : 'Tu código de seguridad de SRD'));
             });
         } catch (\Throwable) {
             // Commit the failed attempt and invalidation; never tell the caller that mail was sent.

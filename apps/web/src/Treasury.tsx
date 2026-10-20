@@ -19,7 +19,7 @@ const cop = (value: string) => {
   return `$ ${whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.')},${fraction}`;
 };
 
-export function Treasury({ principal }: { principal: Principal }) {
+export function Treasury({ principal, logoData }: { principal: Principal; logoData?: string | null }) {
   const language = useLanguage();
   const [data, setData] = useState<Summary>(), [page, setPage] = useState(1), [refresh, setRefresh] = useState(0);
   const [from, setFrom] = useState(''), [to, setTo] = useState(''), [query, setQuery] = useState('');
@@ -34,14 +34,16 @@ export function Treasury({ principal }: { principal: Principal }) {
   const postKey = useRef<string | undefined>(undefined), reverseKey = useRef<string | undefined>(undefined);
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
     const params = new URLSearchParams({ page: String(page) });
     if (from) params.set('from', from);
     if (to) params.set('to', to);
     if (query.trim()) params.set('q', query.trim());
     setLoading(true);
-    api<Summary>(`treasury?${params}`).then(value => { if (active) { setData(value); setError(undefined); } })
-      .catch(value => { if (active) setError(value); }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    api<Summary>(`treasury?${params}`, 'GET', undefined, { signal: controller.signal }).then(value => { if (active) { setData(value); setError(undefined); } })
+      .catch(value => { if (active) { setData(undefined); setError(value); } }).finally(() => { window.clearTimeout(timeout); if (active) setLoading(false); });
+    return () => { active = false; window.clearTimeout(timeout); controller.abort(); };
   }, [principal.organization.id, page, from, to, query, refresh]);
   async function exportExcel(format: 'xlsx' | 'pdf' = 'xlsx') {
     if (exporting) return;
@@ -56,7 +58,7 @@ export function Treasury({ principal }: { principal: Principal }) {
       if (format === 'pdf') {
         const data = await api<TreasuryHistoryPdfData>(`treasury/export-pdf?${params}`);
         const { downloadTreasuryHistoryPdf } = await import('./TreasuryHistoryPdf');
-        await downloadTreasuryHistoryPdf(data, principal.organization.name);
+        await downloadTreasuryHistoryPdf(data, principal.organization.name, logoData);
         return;
       }
       const file = await api<Workbook>(`treasury/export?${params}`);
@@ -75,11 +77,16 @@ export function Treasury({ principal }: { principal: Principal }) {
   }
   function update<K extends keyof Form>(key: K, value: Form[K]) {
     postKey.current = undefined;
+    setError(undefined);
     setForm(current => ({ ...current, [key]: value }));
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!mode || busy) return;
+    if (mode === 'movement' && Number(form.amount) === 0) {
+      setError(new Error(t('El importe debe ser mayor que cero.')));
+      return;
+    }
     postKey.current ??= crypto.randomUUID();
     setBusy(true); setError(undefined);
     try {
@@ -106,7 +113,7 @@ export function Treasury({ principal }: { principal: Principal }) {
       addExportFilename(params, receiptName);
       const data = await api<{ filename: string; receipt: Receipt }>(`treasury/movements/${selected.id}/pdf?${params}`);
       const { downloadTreasuryReceiptPdf } = await import('./TreasuryReceiptPdf');
-      await downloadTreasuryReceiptPdf(data.receipt, principal.organization.name, data.filename);
+      await downloadTreasuryReceiptPdf(data.receipt, principal.organization.name, data.filename, logoData);
     } catch (value) { setReceiptExportError(value); }
     finally { setReceiptExporting(false); }
   }
@@ -146,6 +153,7 @@ export function Treasury({ principal }: { principal: Principal }) {
     <div className="page-heading"><div><h1>{t('Tesorería')}</h1><p className="muted">{t('Control de movimientos de {name} · pesos colombianos',{name:principal.organization.name})}</p></div></div>
     <ErrorBox error={error} />
     {loading && !data && <Loading />}
+    {!loading && !data && error && <button type="button" onClick={() => setRefresh(value => value + 1)}>{t('Reintentar tesorería')}</button>}
     {data && <>
       <div className="treasury-summary">
         <section className="panel"><span>{t('Saldo actual')}</span><strong>{cop(data.balance)}</strong><small>{t('Derivado de asientos confirmados')}</small></section>
@@ -157,17 +165,26 @@ export function Treasury({ principal }: { principal: Principal }) {
         : <div className="treasury-actions"><button type="button" className="primary" onClick={() => { setForm(blank()); setMode('movement'); }}>{t('Registrar ingreso o egreso')}</button></div>}
       <section className="panel" aria-label={t('Historial de tesorería')}>
         <div className="section-heading"><h2>{t('Movimientos')}</h2><button type="button" onClick={() => setRefresh(value => value + 1)}>{t('Actualizar')}</button></div>
-        <div className="form-grid treasury-filters"><label>{t('Desde')}<input type="date" value={from} onChange={event => { setFrom(event.target.value); setPage(1); }} /></label><label>{t('Hasta')}<input type="date" value={to} onChange={event => { setTo(event.target.value); setPage(1); }} /></label><label>{t('Concepto o comprobante')}<input maxLength={120} value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} /></label></div>
+        <div className="form-grid treasury-filters"><label>{t('Desde')}<input type="date" value={from} onChange={event => { setFrom(event.target.value); setPage(1); }} /></label><label>{t('Hasta')}<input type="date" value={to} onChange={event => { setTo(event.target.value); setPage(1); }} /></label><label>{t('Concepto o comprobante')}<input maxLength={120} placeholder={t('Ejemplo: cuota o número de comprobante')} value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} /></label></div>
         <ErrorBox error={exportError} />
-        <ExportFilename value={exportName} onChange={setExportName} type="tesoreria"
-          defaultDescription={t('Si dejas el nombre vacío, se descargará como tesoreria_AAAA-MM-DD.xlsx o tesoreria_AAAA-MM-DD.pdf, según el formato, con la fecha de Colombia.')} />
+        <ExportFilename value={exportName} onChange={setExportName} type="tesoreria" />
         <div className="pagination"><button type="button" disabled={exporting || loading || data.total > 2000 || !exportFilenameReady(exportName)} onClick={() => void exportExcel()}>{t(exporting ? 'Preparando archivo…' : 'Exportar Excel')}</button>
           <button type="button" disabled={exporting || loading || data.total > 2000 || !exportFilenameReady(exportName)} onClick={() => void exportExcel('pdf')}>{t(exporting ? 'Preparando archivo…' : 'Exportar PDF')}</button>
-          <span>{t('Incluye todos los asientos de la junta que cumplen los filtros, hasta 2000; no solo la página visible. El saldo tras asiento conserva el valor al confirmar cada comprobante.')}</span></div>
+          <span className="export-help">{t('Descarga hasta 2000 movimientos según los filtros. El saldo refleja los comprobantes confirmados.')}</span></div>
         {loading && <Loading />}
-        {data.items.length ? <div className="table-scroll"><table><thead><tr><th>{t('Comprobante')}</th><th>{t('Fecha')}</th><th>{t('Tipo')}</th><th>{t('Concepto')}</th><th>{t('Responsable')}</th><th>{t('Importe')}</th><th>{t('Saldo tras asiento')}</th><th></th></tr></thead><tbody>
-          {data.items.map(item => <tr key={item.id}><td>{item.receipt}</td><td>{item.effective_date}</td><td>{t(labels[item.kind])}</td><td>{item.concept}</td><td>{item.actor_name}</td><td>{item.sign === -1 ? '−' : '+'}{cop(item.amount)}</td><td>{cop(item.balance_after)}</td><td><button type="button" onClick={() => show(item.id)}>{t('Ver comprobante')}</button></td></tr>)}
-        </tbody></table></div> : <Empty title={t('Sin movimientos')}>{t(data.opened ? 'No hay asientos en este período.' : 'Registra la apertura para comenzar.')}</Empty>}
+        {data.items.length ? <>
+          <div className="table-scroll record-desktop-table"><table><thead><tr><th>{t('Comprobante')}</th><th>{t('Fecha')}</th><th>{t('Tipo')}</th><th>{t('Concepto')}</th><th>{t('Responsable')}</th><th>{t('Importe')}</th><th>{t('Saldo tras asiento')}</th><th></th></tr></thead><tbody>
+            {data.items.map(item => <tr key={item.id}><td>{item.receipt}</td><td>{item.effective_date}</td><td>{t(labels[item.kind])}</td><td>{item.concept}</td><td>{item.actor_name}</td><td>{item.sign === -1 ? '−' : '+'}{cop(item.amount)}</td><td>{cop(item.balance_after)}</td><td><button type="button" onClick={() => show(item.id)}>{t('Ver comprobante')}</button></td></tr>)}
+          </tbody></table></div>
+          <ul className="record-mobile-list" aria-label={t('Historial de tesorería')}>
+            {data.items.map(item => <li className="record-mobile-card" key={item.id}>
+              <div className="record-mobile-heading"><strong>{item.receipt}</strong><span>{t(labels[item.kind])}</span></div>
+              <p className="record-mobile-title">{item.concept}</p>
+              <dl><div><dt>{t('Fecha')}</dt><dd>{item.effective_date}</dd></div><div><dt>{t('Importe')}</dt><dd>{item.sign === -1 ? '−' : '+'}{cop(item.amount)}</dd></div><div><dt>{t('Saldo tras asiento')}</dt><dd>{cop(item.balance_after)}</dd></div><div><dt>{t('Responsable')}</dt><dd>{item.actor_name}</dd></div></dl>
+              <button type="button" onClick={() => show(item.id)}>{t('Ver comprobante')}</button>
+            </li>)}
+          </ul>
+        </> : <Empty title={t('Sin movimientos')}>{t(data.opened ? 'No hay asientos en este período.' : 'Registra la apertura para comenzar.')}</Empty>}
         {data.total > data.page_size && <div className="pagination"><button disabled={page === 1} onClick={() => setPage(value => value - 1)}>{t('Anterior')}</button><span>{t('Página {page} · {count} movimientos',{page,count:data.total})}</span><button disabled={page * data.page_size >= data.total} onClick={() => setPage(value => value + 1)}>{t('Siguiente')}</button></div>}
       </section>
     </>}
@@ -176,8 +193,8 @@ export function Treasury({ principal }: { principal: Principal }) {
         {mode === 'movement' && <label>{t('Tipo')}<select value={form.kind} onChange={event => update('kind', event.target.value as Form['kind'])}><option value="income">{t('Ingreso')}</option><option value="expense">{t('Egreso')}</option></select></label>}
         <label>{t('Importe COP')}<input type="text" inputMode="decimal" required pattern="(0|[1-9][0-9]{0,11})(\.[0-9]{1,2})?" placeholder="0.00" value={form.amount} onChange={event => update('amount', event.target.value)} /></label>
         <label>{t('Fecha efectiva')}<input type="date" required max={today()} value={form.effective_date} onChange={event => update('effective_date', event.target.value)} /></label>
-        <label>{t('Concepto')}<textarea required minLength={3} maxLength={500} value={form.concept} onChange={event => update('concept', event.target.value)} /></label>
-        <label>{t('Referencia del soporte (opcional)')}<input maxLength={500} value={form.support_note} onChange={event => update('support_note', event.target.value)} /></label>
+        <label>{t('Concepto')}<textarea required minLength={3} maxLength={500} placeholder={t('Ejemplo: cuota de mantenimiento de octubre')} value={form.concept} onChange={event => update('concept', event.target.value)} /></label>
+        <label>{t('Referencia del soporte (opcional)')}<input maxLength={500} placeholder={t('Ejemplo: recibo 001 o enlace al soporte')} value={form.support_note} onChange={event => update('support_note', event.target.value)} /></label>
         <p className="muted">{t('Esta cuenta registra información; no mueve dinero real. Los asientos confirmados se corrigen mediante reverso.')}</p>
         <ErrorBox error={error} /><button className="primary" disabled={busy}>{t('Guardar y generar comprobante')}</button>
       </form>
@@ -192,15 +209,14 @@ export function Treasury({ principal }: { principal: Principal }) {
         {selected.reversed_by_id && <div><dt>{t('Revertido por')}</dt><dd>{selected.reversed_by_id}</dd></div>}
       </dl>
       <ErrorBox error={receiptExportError} />
-      <ExportFilename value={receiptName} onChange={setReceiptName} type="tesoreria"
-        defaultDescription={t('Si dejas el nombre vacío, se descargará como comprobante_{number}.pdf o comprobante_{number}.xlsx, según el formato.', { number: selected.receipt })} />
+      <ExportFilename value={receiptName} onChange={setReceiptName} type="tesoreria" />
       <button type="button" disabled={busy || receiptExporting || !exportFilenameReady(receiptName)} onClick={() => void exportReceiptPdf()}>
         {t(receiptExporting ? 'Preparando comprobante…' : 'Descargar comprobante PDF')}
       </button>
       <button type="button" disabled={busy || receiptExporting || !exportFilenameReady(receiptName)} onClick={() => void exportReceiptExcel()}>
         {t(receiptExporting ? 'Preparando comprobante…' : 'Descargar comprobante Excel')}
       </button>
-      {['income', 'expense'].includes(selected.kind) && !selected.reversed_by_id && <form onSubmit={reverse} className="treasury-form"><h3>{t('Corregir mediante reverso')}</h3><label>{t('Motivo del reverso')}<textarea required minLength={10} maxLength={500} value={reason} onChange={event => { reverseKey.current = undefined; setReason(event.target.value); }} /></label><ErrorBox error={error} /><button disabled={busy}>{t('Registrar reverso')}</button></form>}
+      {['income', 'expense'].includes(selected.kind) && !selected.reversed_by_id && <form onSubmit={reverse} className="treasury-form"><h3>{t('Corregir mediante reverso')}</h3><label>{t('Motivo del reverso')}<textarea required minLength={10} maxLength={500} placeholder={t('Ejemplo: comprobante duplicado')} value={reason} onChange={event => { reverseKey.current = undefined; setReason(event.target.value); }} /></label><ErrorBox error={error} /><button disabled={busy}>{t('Registrar reverso')}</button></form>}
     </Modal>}
   </>;
 }

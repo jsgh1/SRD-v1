@@ -86,7 +86,7 @@ test('position catalog persists, protects history and rejects stale forms', asyn
       await viewer.locator('.profile-trigger').click();
       await viewer.getByLabel('Idioma', {exact:true}).selectOption('en');
       await expect(viewer.locator('html')).toHaveAttribute('lang','en');
-      await navigate(viewer,'List'); await viewer.getByRole('button',{name:'Ver Persona de cargos',exact:true}).click();
+      await navigate(viewer,'List'); await viewer.getByRole('button',{name:'View Persona de cargos',exact:true}).click();
       await expect(viewer.getByRole('dialog')).toContainText('Historical committee member');
     } finally { await viewerContext.close(); }
     await navigate(editor,'Registro');

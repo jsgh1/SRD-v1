@@ -3,6 +3,8 @@ use App\Http\Controllers\PhotoController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('internal')->group(function () {
+    Route::post('chat-attachments', [\App\Http\Controllers\ChatAttachmentController::class, 'store']);
+    Route::get('chat-attachments/{id}', [\App\Http\Controllers\ChatAttachmentController::class, 'show'])->whereUuid('id');
     Route::get('folder-access', [\App\Http\Controllers\FolderAccessController::class,'show']);
     Route::put('folder-access', [\App\Http\Controllers\FolderAccessController::class,'update']);
     Route::get('folder-documents', [\App\Http\Controllers\FolderDocumentController::class,'index']);

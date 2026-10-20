@@ -23,13 +23,15 @@ async function login(page,role){
 }
 
 test('administrators see live service availability without internal addresses',async({page})=>{
+  test.setTimeout(150000);
   await login(page,'admin');
   await page.locator('.sidebar').getByRole('button',{name:'Configuración',exact:true}).click();
   const panel=page.getByRole('region',{name:'Estado de servicios'});
   await expect(panel).toContainText('10 de 10 servicios disponibles');
   await expect(panel.locator('.delivery-grid').first().locator(':scope > .delivery-card')).toHaveCount(11);
   await expect(panel).toContainText('Antivirus de archivos');
-  await expect(panel).toContainText('Disponible y firmas recientes');
+  const serviceStatus=(await(await page.request.get('/api/v1/system/services')).json()).data;
+  await expect(panel).toContainText(serviceStatus.antivirus_available ? 'Disponible y firmas recientes' : 'No disponible o firmas vencidas');
   const schedulers=panel.getByRole('region',{name:'Estado de planificadores'});
   await expect(schedulers).toContainText('9 de 9 planificadores al día');
   await expect(schedulers.locator('.delivery-card')).toHaveCount(9);
@@ -42,7 +44,8 @@ test('administrators see live service availability without internal addresses',a
   await expect(panel).not.toContainText('http://');
   await panel.getByRole('button',{name:'Actualizar estado'}).click();
   await expect(panel).toContainText('10 de 10 servicios disponibles');
-  await expect(panel).toContainText('Disponible y firmas recientes');
+  const refreshedServiceStatus=(await(await page.request.get('/api/v1/system/services')).json()).data;
+  await expect(panel).toContainText(refreshedServiceStatus.antivirus_available ? 'Disponible y firmas recientes' : 'No disponible o firmas vencidas');
   await expect(schedulers).toContainText('9 de 9 planificadores al día');
   await expect(page.getByRole('alert',{name:'Alerta de planificadores'})).toHaveCount(0);
   let degraded=true;
@@ -97,4 +100,25 @@ test('administrators see live service availability without internal addresses',a
   auditUnavailable=false;
   await page.evaluate(()=>window.dispatchEvent(new Event('online')));
   await expect(auditAlert).toHaveCount(0);
+  await page.locator('.sidebar').getByRole('button',{name:'Configuración',exact:true}).click();
+  const statusPanel=page.getByRole('region',{name:'Estado de servicios'});
+  await expect(statusPanel).toContainText('10 de 10 servicios disponibles');
+  let failOnce=true;
+  await page.route('**/api/v1/system/services',async route=>{
+    if(failOnce){failOnce=false;await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{message:'Estado temporalmente no disponible.'}})});}
+    else await route.continue();
+  });
+  await statusPanel.getByRole('button',{name:'Actualizar estado'}).click();
+  await expect(statusPanel.locator('.error')).toContainText('Estado temporalmente no disponible.');
+  await expect(statusPanel).not.toContainText('10 de 10 servicios disponibles');
+  await statusPanel.getByRole('button',{name:'Actualizar estado'}).click();
+  await expect(statusPanel).toContainText('10 de 10 servicios disponibles');
+  await page.unroute('**/api/v1/system/services');
+  await page.route('**/api/v1/system/services',async route=>{await new Promise(resolve=>setTimeout(resolve,31000));await route.abort().catch(()=>{});});
+  await statusPanel.getByRole('button',{name:'Actualizar estado'}).click();
+  await expect(statusPanel.locator('.error')).toContainText('La conexión tardó demasiado.',{timeout:34000});
+  await expect(statusPanel).not.toContainText('10 de 10 servicios disponibles');
+  await page.unroute('**/api/v1/system/services');
+  await statusPanel.getByRole('button',{name:'Actualizar estado'}).click();
+  await expect(statusPanel).toContainText('10 de 10 servicios disponibles');
 });

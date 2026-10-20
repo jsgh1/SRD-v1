@@ -14,6 +14,7 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(api: __DIR__.'/../routes/api.php', apiPrefix: 'internal/v1', commands: __DIR__.'/../routes/console.php', health: '/up')
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->trimStrings(except: ['payload.sdp']);
         $middleware->append(Correlation::class);
         $middleware->alias(['internal' => InternalAuth::class]);
     })

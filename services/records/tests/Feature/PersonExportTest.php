@@ -202,7 +202,28 @@ final class PersonExportTest extends TestCase
         $this->assertStringNotContainsString('NOTA-PRIVADA-EXPORT', json_encode(DB::table('outbox_events')->get()));
     }
 
-    public function test_export_rejects_more_than_2000_people_without_truncation(): void
+    public function test_person_pdf_payload_uses_only_the_current_council_logo(): void
+    {
+        $logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lZkAAAAASUVORK5CYII=';
+        $settings = ['version' => 0, 'allowed_columns' => ['zone', 'phone'],
+            'h1' => 'JUNTA COMUNAL', 'h2' => 'Sector norte', 'h3' => 'ASISTENCIA',
+            'h1_en' => 'COMMUNITY BOARD', 'h2_en' => 'North area', 'h3_en' => 'ATTENDANCE', 'logo_data' => $logo];
+        $this->internal('PUT', 'planilla-settings', $settings, $this->principal())->assertOk();
+        $own = $this->create('LOGO-OWN', 'Persona propia', $this->principal());
+        $foreign = $this->create('LOGO-OTHER', 'Persona ajena', $this->principal(org: self::OTHER));
+
+        $this->internal('GET', 'persons/'.$own.'/pdf', [], $this->principal())
+            ->assertOk()->assertJsonPath('data.logo_data', $logo);
+        $this->internal('GET', 'persons/export-pdf', [], $this->principal())
+            ->assertOk()->assertJsonPath('data.logo_data', $logo);
+        $this->internal('GET', 'persons/'.$foreign.'/pdf', [], $this->principal(org: self::OTHER))
+            ->assertOk()->assertJsonPath('data.logo_data', null);
+        $this->internal('GET', 'persons/export-pdf', [], $this->principal(org: self::OTHER))
+            ->assertOk()->assertJsonPath('data.logo_data', null);
+        $this->internal('GET', 'persons/'.$foreign.'/pdf', [], $this->principal())->assertNotFound();
+    }
+
+    public function test_export_rejects_more_than_2000_and_routes_large_excel_to_the_queue(): void
     {
         $p = $this->principal();
         for ($start = 1; $start <= 2001; $start += 100) {
@@ -221,7 +242,7 @@ final class PersonExportTest extends TestCase
         $this->internal('GET', 'persons/export-pdf', [], $p)->assertUnprocessable();
         $this->assertDatabaseMissing('outbox_events', ['action' => 'person.export']);
         DB::table('persons')->where('document_number', 'DOC-2001')->delete();
-        $this->internal('GET', 'persons/export', [], $p)->assertOk()->assertJsonPath('data.count', 2000);
+        $this->internal('GET', 'persons/export', [], $p)->assertUnprocessable();
         $this->internal('GET', 'persons/export-pdf', [], $p)->assertOk()->assertJsonPath('data.count', 2000);
     }
 }

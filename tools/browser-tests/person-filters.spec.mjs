@@ -40,6 +40,7 @@ test('person filters combine exact values and affiliation, paginate and reset', 
     expect(response.ok()).toBeTruthy(); ids.push((await response.json()).data.id);
   }
   await navigate(page,'Lista');
+  await page.locator('details.person-advanced summary').click();
   await page.getByRole('button',{name:'Agregar filtro adicional',exact:true}).click();
   await page.getByLabel('Valor del filtro 1').fill("50%_ O'Reilly");
   await page.getByRole('combobox',{name:'Afiliación',exact:true}).selectOption('1');

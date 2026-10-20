@@ -18,6 +18,7 @@ export function FolderAccessSettings() {
   const [searchText, setSearchText] = useState(''), [search, setSearch] = useState(''), [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [revision, setRevision] = useState(0);
   const [error, setError] = useState<unknown>(), [status, setStatus] = useState('');
+  const [candidateError, setCandidateError] = useState<unknown>(), [candidateRevision, setCandidateRevision] = useState(0);
   useEffect(() => {
     let active = true;
     setLoading(true); setError(undefined);
@@ -37,11 +38,12 @@ export function FolderAccessSettings() {
   }, [revision]);
   useEffect(() => {
     let active = true;
+    setCandidates(undefined); setCandidateError(undefined);
     api<Listing>(`members/folder-readers?page=${page}${search ? `&search=${encodeURIComponent(search)}` : ''}`).then(value => {
-      if (active) { setCandidates(value); setKnown(current => ({ ...current, ...Object.fromEntries(value.items.map(item => [item.id, item])) })); }
-    }).catch(reason => { if (active) setError(reason); });
+      if (active) { setCandidates(value); setCandidateError(undefined); setKnown(current => ({ ...current, ...Object.fromEntries(value.items.map(item => [item.id, item])) })); }
+    }).catch(reason => { if (active) { setCandidates(undefined); setCandidateError(reason); } });
     return () => { active = false; };
-  }, [page, search, revision]);
+  }, [page, search, revision, candidateRevision]);
   async function save(event: FormEvent) {
     event.preventDefault(); if (!settings || saving) return;
     setSaving(true); setError(undefined); setStatus('');
@@ -66,6 +68,8 @@ export function FolderAccessSettings() {
       <h3>{t('Personas con lectura individual')}</h3><p className="muted">{t('Hasta 20 membresías. Conceder lectura individual no permite escribir ni extiende el acceso a otras juntas.')}</p>
       <div className="actions"><input aria-label={t('Buscar miembro para Carpeta')} value={searchText} maxLength={120} onChange={event => setSearchText(event.target.value)} placeholder={t('Nombre o correo')} />
         <button type="button" disabled={saving} onClick={() => { setPage(1); setSearch(searchText.trim()); }}>{t('Buscar')}</button></div>
+      <ErrorBox error={candidateError} />
+      {!!candidateError && <button type="button" onClick={() => setCandidateRevision(value => value + 1)}>{t('Reintentar miembros')}</button>}
       {members.length > 0 && <div><p>{t('Seleccionados: {count}/20', { count: members.length })}</p><div className="actions">{members.map(id => {
         const grant = settings?.reader_memberships.find(item => item.id === id);
         const expired = grant && (!known[id] || known[id].version !== grant.version);

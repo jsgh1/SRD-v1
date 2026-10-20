@@ -31,6 +31,7 @@ async function mutation(page, method, url, data) {
 
 
 test('dashboard refreshes confirmed counts, retries failures and uses server date', async ({ page }) => {
+  test.setTimeout(120000);
   await login(page,'admin');
   const total=page.locator('.stat').filter({has:page.getByText('Personas registradas',{exact:true})}).locator('strong');
   await expect(total).toHaveText('0');
@@ -47,6 +48,11 @@ test('dashboard refreshes confirmed counts, retries failures and uses server dat
     await expect(page.getByRole('alert')).toContainText('Fallo temporal');
     await expect(page.locator('.stat')).toHaveCount(0);
     await expect(page.getByRole('button',{name:'Actualizar indicadores',exact:true})).toBeEnabled();
+    await page.unroute('**/api/v1/dashboard');
+    await page.route('**/api/v1/dashboard',async route=>{await new Promise(resolve=>setTimeout(resolve,20000));await route.abort().catch(()=>{});});
+    await page.getByRole('button',{name:'Actualizar indicadores',exact:true}).click();
+    await expect(page.getByRole('alert')).toContainText('La conexión tardó demasiado.',{timeout:19000});
+    await expect(page.locator('.stat')).toHaveCount(0);
     await page.unroute('**/api/v1/dashboard');
     await page.route('**/api/v1/dashboard',async route=>{const response=await route.fetch();const body=await response.json();body.data.date='2030-01-02';body.data.generated_at='2030-01-02T12:00:00+00:00';await route.fulfill({response,json:body});});
     await page.getByRole('button',{name:'Actualizar indicadores',exact:true}).click();

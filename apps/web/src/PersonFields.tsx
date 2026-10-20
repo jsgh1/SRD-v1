@@ -43,16 +43,16 @@ export function PersonFieldSettings() {
           return <fieldset className="custom-field-card" key={field.id}>
             <legend>{t('Campo {number}', {number: index + 1})}</legend>
             <div className="form-grid">
-              <label>{t('Etiqueta del campo')}<input required maxLength={80} value={field.label} onChange={e => change(index, { label: e.target.value, label_en: '' })} /></label>
-              <label>{t('Etiqueta en inglés')}<input required maxLength={80} value={field.label_en ?? ''} onChange={e => change(index, { label_en: e.target.value })} /></label>
+              <label>{t('Etiqueta del campo')}<input required maxLength={80} placeholder={t('Ej.: Ocupación')} value={field.label} onChange={e => change(index, { label: e.target.value, label_en: '' })} /></label>
+              <label>{t('Etiqueta en inglés')}<input required maxLength={80} placeholder={t('E.g.: Occupation')} value={field.label_en ?? ''} onChange={e => change(index, { label_en: e.target.value })} /></label>
               <label>{t('Tipo del campo')}<select disabled={!!stored} value={field.type} onChange={e => change(index, { type: e.target.value as PersonField['type'], options: [] })}>{Object.entries(types).map(([key, label]) => <option key={key} value={key}>{t(label)}</option>)}</select></label>
               <label className="inline"><input type="checkbox" checked={field.active} onChange={e => change(index, { active: e.target.checked })} />{t('Campo activo')}</label>
               <label className="inline"><input type="checkbox" checked={field.required} onChange={e => change(index, { required: e.target.checked })} />{t('Obligatorio al completar')}</label>
             </div>
             {field.type === 'select' && <div className="custom-options">
               {field.options.map((option, optionIndex) => <div className="custom-option" key={option.id}>
-                <label>{t('Opción {number}', {number: optionIndex + 1})}<input required maxLength={80} value={option.label} onChange={e => change(index, { options: field.options.map(o => o.id === option.id ? { ...o, label: e.target.value, label_en: '' } : o) })} /></label>
-                <label>{t('Opción {number} en inglés', {number: optionIndex + 1})}<input required maxLength={80} value={option.label_en ?? ''} onChange={e => change(index, { options: field.options.map(o => o.id === option.id ? { ...o, label_en: e.target.value } : o) })} /></label>
+                <label>{t('Opción {number}', {number: optionIndex + 1})}<input required maxLength={80} placeholder={t('Ej.: Independiente')} value={option.label} onChange={e => change(index, { options: field.options.map(o => o.id === option.id ? { ...o, label: e.target.value, label_en: '' } : o) })} /></label>
+                <label>{t('Opción {number} en inglés', {number: optionIndex + 1})}<input required maxLength={80} placeholder={t('E.g.: Self-employed')} value={option.label_en ?? ''} onChange={e => change(index, { options: field.options.map(o => o.id === option.id ? { ...o, label_en: e.target.value } : o) })} /></label>
                 <label className="inline"><input type="checkbox" checked={option.active} onChange={e => change(index, { options: field.options.map(o => o.id === option.id ? { ...o, active: e.target.checked } : o) })} />{t('Opción {number} activa', {number: optionIndex + 1})}</label>
                 {!stored?.options.some(o => o.id === option.id) && <button type="button" onClick={() => change(index, { options: field.options.filter(o => o.id !== option.id) })}>{t('Retirar opción {number}', {number: optionIndex + 1})}</button>}
               </div>)}

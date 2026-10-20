@@ -24,10 +24,12 @@ export function AssetSearch({ query }: { query: string }) {
   const [page, setPage] = useState(1), [retry, setRetry] = useState(0);
   const [data, setData] = useState<Page>(), [error, setError] = useState<unknown>();
   const [detail, setDetail] = useState<Detail>(), [detailError, setDetailError] = useState<unknown>();
+  const [failedDetailId, setFailedDetailId] = useState<string>();
   const [detailBusy, setDetailBusy] = useState(false);
   const [movementBusy, setMovementBusy] = useState(false), [movementError, setMovementError] = useState<unknown>();
+  const [failedMovementPage, setFailedMovementPage] = useState<number>();
   useEffect(() => {
-    let active = true; setData(undefined); setError(undefined);
+    let active = true; setData(undefined); setError(undefined); setDetailError(undefined); setFailedDetailId(undefined);
     api<Page>(`assets?${new URLSearchParams({ q: query, page: String(page) })}`)
       .then(result => { if (active) setData(result); })
       .catch(value => { if (active) setError(value); });
@@ -37,8 +39,8 @@ export function AssetSearch({ query }: { query: string }) {
   async function open(id: string) {
     const current = ++generation.current;
     setMovementBusy(false);
-    setDetailBusy(true); setDetailError(undefined); setMovementError(undefined); setDetail(undefined);
-    try { const value = await api<Detail>(`assets/${id}`); if (current === generation.current) setDetail(value); }
+    setFailedDetailId(id); setDetailBusy(true); setDetailError(undefined); setMovementError(undefined); setFailedMovementPage(undefined); setDetail(undefined);
+    try { const value = await api<Detail>(`assets/${id}`); if (current === generation.current) { setDetail(value); setFailedDetailId(undefined); } }
     catch (value) { if (current === generation.current) setDetailError(value); }
     finally { if (current === generation.current) setDetailBusy(false); }
   }
@@ -46,11 +48,11 @@ export function AssetSearch({ query }: { query: string }) {
     if (!detail || movementBusy) return;
     const id = detail.asset.id;
     const currentGeneration = ++generation.current;
-    setMovementBusy(true); setMovementError(undefined);
+    setFailedMovementPage(pageNumber); setMovementBusy(true); setMovementError(undefined);
     try {
       const result = await api<Detail>(`assets/${id}?movement_page=${pageNumber}`);
       if (currentGeneration !== generation.current) return;
-      setDetail(current => current?.asset.id === id ? result : current);
+      setDetail(current => current?.asset.id === id ? result : current); setFailedMovementPage(undefined);
     } catch (value) { if (currentGeneration === generation.current) setMovementError(value); }
     finally { if (currentGeneration === generation.current) setMovementBusy(false); }
   }
@@ -72,6 +74,7 @@ export function AssetSearch({ query }: { query: string }) {
         <span>{t('Página {page}', { page })}</span><button disabled={page * data.page_size >= data.total} onClick={() => setPage(value => value + 1)}>{t('Siguiente')}</button></div>
     </>}
     <ErrorBox error={detailError} />
+    {!!detailError && failedDetailId && <button type="button" onClick={() => void open(failedDetailId)}>{t('Reintentar bien')}</button>}
     {detailBusy && <Loading />}
     {detail && <Modal title={`${detail.asset.code} · ${localized(detail.asset.name, detail.asset.name_en)}`} onClose={() => { generation.current++; setDetail(undefined); setDetailBusy(false); setMovementBusy(false); setDetailError(undefined); setMovementError(undefined); }}>
       <dl className="treasury-receipt">
@@ -88,6 +91,7 @@ export function AssetSearch({ query }: { query: string }) {
       <h3>{t('Historial de movimientos')}</h3>
       <p role="status">{t('{count} movimientos', { count: detail.movement_total })}</p>
       <ErrorBox error={movementError} />
+      {!!movementError && failedMovementPage !== undefined && <button type="button" onClick={() => void movementPage(failedMovementPage)}>{t('Reintentar movimientos')}</button>}
       {movementBusy && <Loading />}
       <div className="table-scroll"><table><thead><tr><th>{t('N.º')}</th><th>{t('Operación')}</th><th>{t('Cambio')}</th><th>{t('Existencia')}</th><th>{t('Motivo')}</th><th>{t('Responsable')}</th></tr></thead>
         <tbody>{detail.movements.map(item => <tr key={item.id}><td>{item.sequence}</td><td>{t(movementLabels[item.type] || item.type)}</td>

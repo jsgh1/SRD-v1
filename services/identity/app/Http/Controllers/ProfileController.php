@@ -12,9 +12,23 @@ final class ProfileController
     public function update(Request $r): array
     {
         $p = Access::require('profile.write');
-        $d = $r->validate(['name' => 'required|string|max:120', 'theme' => 'required|in:light,dark', 'presence' => 'required|in:online,away,dnd,invisible', 'language' => 'sometimes|in:es,en', 'role' => 'prohibited', 'email' => 'prohibited']);
+        $d = $r->validate(['name' => 'required|string|max:120', 'theme' => 'required|in:light,dark',
+            'presence' => 'required|in:online,away,dnd,invisible', 'language' => 'sometimes|in:es,en',
+            'title' => 'nullable|string|max:120|required_with:title_en',
+            'title_en' => 'nullable|string|max:120|required_with:title',
+            'role' => 'prohibited', 'email' => 'prohibited']);
         DB::transaction(function () use ($d, $p) {
-            DB::table('users')->where('id', $p['user_id'])->update($d + ['updated_at' => now()]);
+            DB::table('users')->where('id', $p['user_id'])->update(array_diff_key($d, array_flip(['title', 'title_en'])) + ['updated_at' => now()]);
+            if (array_key_exists('title', $d) || array_key_exists('title_en', $d)) {
+                if (!empty($d['title']) && !empty($d['title_en'])) {
+                    DB::table('member_profile_titles')->updateOrInsert(
+                        ['organization_id' => $p['organization_id'], 'user_id' => $p['user_id']],
+                        ['title' => $d['title'], 'title_en' => $d['title_en']]);
+                } else {
+                    DB::table('member_profile_titles')->where('organization_id', $p['organization_id'])
+                        ->where('user_id', $p['user_id'])->delete();
+                }
+            }
             Outbox::record('profile.updated', $p['organization_id'], $p['user_id'], $p['user_id']);
         });
 

@@ -1,8 +1,9 @@
 import { t } from './i18n';
+import { pdfLogoBlock } from './pdfLogo';
 
 export type TreasuryHistoryPdfData = { filename: string; date: string; count: number; headers: string[]; rows: string[][] };
 
-export function treasuryHistoryPdfDefinition(data: TreasuryHistoryPdfData, organizationName: string) {
+export function treasuryHistoryPdfDefinition(data: TreasuryHistoryPdfData, organizationName: string, logoData?: string | null) {
   if (!/^[A-Za-z0-9][A-Za-z0-9._ -]{0,119}\.pdf$/.test(data.filename)
     || !/^\d{4}-\d{2}-\d{2}$/.test(data.date) || data.headers.length !== 12
     || data.count !== data.rows.length || data.rows.length > 2000
@@ -16,6 +17,7 @@ export function treasuryHistoryPdfDefinition(data: TreasuryHistoryPdfData, organ
     defaultStyle: { font: 'Roboto', fontSize: 10, color: '#111827' },
     header: { text: `${t('Tesorería')} · ${organizationName}`, margin: [36, 16, 36, 0], fontSize: 9, color: '#475569' },
     content: [
+      ...pdfLogoBlock(logoData),
       { text: t('Historial de Tesorería'), bold: true, fontSize: 19, margin: [0, 0, 0, 6] },
       { text: t('Fecha (Colombia): {date} · Asientos: {count}', { date: data.date, count: data.count }), margin: [0, 0, 0, 8] },
       { text: t('El saldo tras asiento corresponde al momento de su confirmación. No se recalcula con los filtros ni representa necesariamente el saldo actual.'), fontSize: 9, margin: [0, 0, 0, 14] },
@@ -35,8 +37,8 @@ export function treasuryHistoryPdfDefinition(data: TreasuryHistoryPdfData, organ
   };
 }
 
-export async function downloadTreasuryHistoryPdf(data: TreasuryHistoryPdfData, organizationName: string): Promise<void> {
-  const definition = treasuryHistoryPdfDefinition(data, organizationName);
+export async function downloadTreasuryHistoryPdf(data: TreasuryHistoryPdfData, organizationName: string, logoData?: string | null): Promise<void> {
+  const definition = treasuryHistoryPdfDefinition(data, organizationName, logoData);
   const [{ default: pdfMake }, { default: fonts }] = await Promise.all([
     import('pdfmake/build/pdfmake.js'), import('pdfmake/build/vfs_fonts.js'),
   ]);

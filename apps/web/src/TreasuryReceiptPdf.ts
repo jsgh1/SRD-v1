@@ -1,4 +1,5 @@
 import { t } from './i18n';
+import { pdfLogoBlock } from './pdfLogo';
 
 export type TreasuryReceipt = {
   id: string; number: number; receipt: string; kind: 'opening' | 'income' | 'expense' | 'reversal';
@@ -13,7 +14,7 @@ const money = (value: string) => {
   return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.')},${fraction} COP`;
 };
 
-export function treasuryReceiptPdfDefinition(receipt: TreasuryReceipt, organizationName: string) {
+export function treasuryReceiptPdfDefinition(receipt: TreasuryReceipt, organizationName: string, logoData?: string | null) {
   if (!/^TES-\d{6,12}$/.test(receipt.receipt) || !(receipt.kind in labels)
     || ![1, -1].includes(receipt.sign)
     || !/^\d+\.\d{2}$/.test(receipt.amount) || !/^\d+\.\d{2}$/.test(receipt.balance_after)) {
@@ -37,6 +38,7 @@ export function treasuryReceiptPdfDefinition(receipt: TreasuryReceipt, organizat
     info: { title: t('Comprobante {number}', { number: receipt.receipt }), subject: t('Tesorería SRD') },
     defaultStyle: { font: 'Roboto', fontSize: 10, color: '#111827' },
     content: [
+      ...pdfLogoBlock(logoData),
       { text: t('Comprobante de tesorería'), fontSize: 20, bold: true, margin: [0, 0, 0, 8] },
       { text: organizationName, fontSize: 12, margin: [0, 0, 0, 8] },
       { text: receipt.receipt, fontSize: 14, bold: true, margin: [0, 0, 0, 18] },
@@ -57,11 +59,11 @@ export function treasuryReceiptPdfDefinition(receipt: TreasuryReceipt, organizat
   };
 }
 
-export async function downloadTreasuryReceiptPdf(receipt: TreasuryReceipt, organizationName: string, filename = `comprobante_${receipt.receipt}.pdf`): Promise<void> {
+export async function downloadTreasuryReceiptPdf(receipt: TreasuryReceipt, organizationName: string, filename = `comprobante_${receipt.receipt}.pdf`, logoData?: string | null): Promise<void> {
   if (!/^[A-Za-z0-9][A-Za-z0-9._ -]{0,119}\.pdf$/.test(filename)) {
     throw new Error(t('El nombre del comprobante PDF no tiene un formato válido.'));
   }
-  const definition = treasuryReceiptPdfDefinition(receipt, organizationName);
+  const definition = treasuryReceiptPdfDefinition(receipt, organizationName, logoData);
   const [{ default: pdfMake }, { default: fonts }] = await Promise.all([
     import('pdfmake/build/pdfmake.js'), import('pdfmake/build/vfs_fonts.js'),
   ]);

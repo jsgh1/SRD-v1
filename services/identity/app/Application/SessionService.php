@@ -46,15 +46,21 @@ final class SessionService
         abort_unless($role, 401);
         $membership = $role === 'superadmin' ? null : DB::table('memberships')
             ->where('user_id', $user->id)->where('organization_id', $s->organization_id)
-            ->where('active', true)->first(['id', 'version']);
+            ->where('active', true)->first(['id', 'version', 'person_id']);
         abort_unless($role === 'superadmin' || $membership, 401);
         $org = $this->organization($s->organization_id);
+        $title = DB::table('member_profile_titles')->where('organization_id', $s->organization_id)
+            ->where('user_id', $user->id)->first(['title', 'title_en']);
         $accepted = DB::table('terms_acceptances')->where('user_id', $user->id)->where('organization_id', $org['id'])->where('terms_version_id', $org['terms']['id'])->exists();
         abort_unless($allowNewTerms || $accepted, 403);
         if ($touchActivity) DB::table('auth_sessions')->where('id', $s->id)->whereNull('revoked_at')->update(['last_activity_at' => now()]);
 
         return ['user_id' => $user->id, 'session_id' => $s->id, 'organization_id' => $org['id'], 'role' => $role,
             'membership_id' => $membership?->id, 'membership_version' => $membership ? (int)$membership->version : null,
-            'user' => ['name' => $user->name, 'email' => $user->email, 'theme' => $user->theme, 'presence' => $user->presence, 'language' => $user->language], 'organization' => $org, 'terms_required' => ! $accepted];
+            'person_id' => $membership?->person_id,
+            'user' => ['name' => $user->name, 'email' => $user->email, 'theme' => $user->theme,
+                'presence' => $user->presence, 'language' => $user->language,
+                'title' => $title?->title, 'title_en' => $title?->title_en],
+            'organization' => $org, 'terms_required' => ! $accepted];
     }
 }

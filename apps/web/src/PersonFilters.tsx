@@ -8,8 +8,14 @@ export type ExtraFilter = { field_id: string; value: string; operator?: 'eq' | '
 export function PersonFilters({ value, onChange, allowed = null }: { value: ExtraFilter[]; onChange: (value: ExtraFilter[]) => void; allowed?: string[] | null }) {
   useLanguage();
   const [schema, setSchema] = useState<FieldSchema>(), [error, setError] = useState<unknown>();
-  useEffect(() => { let active = true; api<FieldSchema>('person-fields').then(result => { if (active) setSchema(result); }).catch(e => { if (active) setError(e); }); return () => { active = false; }; }, []);
-  if (error) return <div className="person-extra-filters"><ErrorBox error={error} /><p>{t('No se pudo cargar el catálogo de filtros adicionales. Recarga la página para intentarlo de nuevo.')}</p></div>;
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setSchema(undefined); setError(undefined);
+    api<FieldSchema>('person-fields').then(result => { if (active) setSchema(result); }).catch(e => { if (active) setError(e); });
+    return () => { active = false; };
+  }, [revision]);
+  if (error) return <div className="person-extra-filters"><ErrorBox error={error} /><button type="button" onClick={() => setRevision(value => value + 1)}>{t('Reintentar filtros adicionales')}</button></div>;
   if (!schema) return <Loading />;
   const fields = schema.fields.filter(field => allowed === null || allowed.includes(field.id));
   if (!fields.length) return null;

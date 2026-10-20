@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+test.use({ channel: 'chrome' });
 import fs from "node:fs";
 import path from "node:path";
 const root = path.resolve(import.meta.dirname, "../..");
@@ -69,10 +70,10 @@ test("SMTP login, real person CRUD, isolation, persistent theme and logout", asy
   await page.getByLabel("Código de verificación").fill(code);
   await page.getByRole("button", { name: "Confirmar código" }).click();
   await expect(
-    page.getByRole("heading", { name: "Hola, Administrador" }),
+    page.getByRole("heading", { name: /Hola, Administrador|Hello, Administrator/ }),
   ).toBeVisible();
   await expect(
-    page.getByText("Personas registradas", { exact: true }),
+    page.getByText(/^(Personas registradas|Registered people)$/),
   ).toBeVisible();
   await page.screenshot({
     path: path.join(root, ".local/dashboard-desktop.png"),
@@ -96,54 +97,54 @@ test("SMTP login, real person CRUD, isolation, persistent theme and logout", asy
   });
   expect(badCsrf.status()).toBe(419);
   await page
-    .getByRole("button", { name: "Nuevo registro", exact: true })
+    .getByRole("button", { name: /^(Nuevo registro|New record)$/ })
     .click();
-  await page.getByLabel("Tipo de documento").selectOption("CC");
-  await page.getByLabel("Número de documento").fill("000" + Date.now());
-  await page.getByLabel("Nombres", { exact: false }).fill("Persona sintética");
+  await page.getByLabel(/Tipo de documento|Document type/).selectOption("CC");
+  await page.getByLabel(/Número de documento|Document number/).fill("000" + Date.now());
+  await page.getByLabel(/Nombres|Given names/).fill("Persona sintética");
   await page
-    .getByLabel("Fundamento o referencia del soporte")
+    .getByLabel(/Fundamento o referencia del soporte|Authorization basis or supporting reference/)
     .fill("Prueba automatizada");
   await page
-    .getByLabel("Finalidad de la captura")
+    .getByLabel(/Finalidad de la captura|Purpose of collection/)
     .fill("Verificar registro y eliminación");
   await page
-    .getByLabel("Información reservada")
+    .getByLabel(/Información reservada|Restricted to administration and registration/)
     .fill("Nota ficticia de validación");
   await page
-    .getByRole("button", { name: "Guardar registro", exact: true })
+    .getByRole("button", { name: /^(Guardar registro|Save record)$/ })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Lista de personas" }),
+    page.getByRole("heading", { name: /^(Lista de personas|People)$/ }),
   ).toBeVisible();
   await expect(
-    page.getByText("Persona sintética", { exact: true }),
+    page.locator('.person-desktop-table').getByText("Persona sintética", { exact: true }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Ver Persona sintética", exact: true })
+    .getByRole("button", { name: /^(Ver|View) Persona sintética$/ })
     .click();
   await expect(page.getByText("Nota ficticia de validación")).toBeVisible();
-  await page.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await page.getByRole("button", { name: /^(Cerrar|Close)$/ }).click();
   await page
-    .getByRole("button", { name: "Eliminar Persona sintética", exact: true })
+    .getByRole("button", { name: /^(Eliminar|Delete) Persona sintética$/ })
     .click();
-  await page.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await page.getByRole("button", { name: /^(Cancelar|Cancel)$/ }).click();
   await expect(
-    page.getByText("Persona sintética", { exact: true }),
+    page.locator('.person-desktop-table').getByText("Persona sintética", { exact: true }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Eliminar Persona sintética", exact: true })
+    .getByRole("button", { name: /^(Eliminar|Delete) Persona sintética$/ })
     .click();
-  await page.getByRole("button", { name: "Sí, eliminar", exact: true }).click();
+  await page.getByRole("button", { name: /^(Sí, eliminar|Yes, delete)$/ }).click();
   await expect(
-    page.getByText("Persona sintética", { exact: true }),
+    page.locator('.person-desktop-table').getByText("Persona sintética", { exact: true }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: /Prueba Admin/ }).click();
   if ((await page.locator("html").getAttribute("data-theme")) === "dark") {
-    await page.getByRole("button", { name: "Cambiar a tema claro" }).click();
+    await page.getByRole("button", { name: /Cambiar a tema claro|Switch to light theme/ }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   }
-  await page.getByRole("button", { name: "Cambiar a tema oscuro" }).click();
+  await page.getByRole("button", { name: /Cambiar a tema oscuro|Switch to dark theme/ }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -152,7 +153,7 @@ test("SMTP login, real person CRUD, isolation, persistent theme and logout", asy
   await expect(tab.locator("html")).toHaveAttribute("data-theme", "dark");
   await tab.close();
   await page.setViewportSize({ width: 360, height: 800 });
-  await page.getByRole("button", { name: "Abrir menú" }).click();
+  await page.getByRole("button", { name: /Abrir menú|Open menu/ }).click();
   await page.getByRole("button", { name: "Home", exact: true }).click();
   await page.screenshot({
     path: path.join(root, ".local/dashboard-mobile-dark.png"),
@@ -165,10 +166,10 @@ test("SMTP login, real person CRUD, isolation, persistent theme and logout", asy
   ).toBe(true);
   await page.getByRole("button", { name: /Prueba Admin/ }).click();
   await page
-    .getByRole("button", { name: "Cerrar sesión", exact: true })
+    .getByRole("button", { name: /^(Cerrar sesión|Sign out)$/ })
     .click();
   await expect(
-    page.getByRole("heading", { name: /Iniciar sesión|Encuentra tu junta/ }),
+    page.getByRole("heading", { name: /Iniciar sesión|Encuentra tu junta|Sign in|Find your council/ }),
   ).toBeVisible();
   expect((await context.request.get("/api/v1/persons")).status()).toBe(401);
   expect(errors).toEqual([]);
@@ -180,6 +181,11 @@ test("mobile login layout and reduced motion", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Iniciar sesión" }),
   ).toBeVisible();
+  const motion = await page.getByRole('button', { name: 'Ingresar', exact: true }).evaluate(button => ({
+    transition: getComputedStyle(button).transitionDuration,
+    animation: getComputedStyle(button).animationName,
+  }));
+  expect(motion).toEqual({ transition: '0s', animation: 'none' });
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

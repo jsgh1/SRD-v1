@@ -25,8 +25,8 @@ async function login(page, role) {
 }
 async function navigate(page, name) { await page.locator('.sidebar').getByRole('button', { name, exact: true }).click(); }
 async function mutation(page, method, url, data) {
-  const token = (await (await page.request.get('/api/v1/csrf')).json()).data.token;
-  return page.request.fetch(url, { method, data, headers: { 'X-CSRF-TOKEN': token } });
+  const token = (await (await page.request.get('/api/v1/csrf', { timeout: 10000 })).json()).data.token;
+  return page.request.fetch(url, { method, data, headers: { 'X-CSRF-TOKEN': token }, timeout: 10000 });
 }
 
 test('junta filter selection persists, delegates cannot grant and revocation rejects an open form',async({page,browser})=>{
@@ -41,8 +41,8 @@ test('junta filter selection persists, delegates cannot grant and revocation rej
   const stale=await page.context().newPage();
   const panel=p=>p.getByRole('region',{name:'Configuración de filtros de personas'});
   async function save(p,status=200){
-    const response=p.waitForResponse(r=>r.request().method()==='PUT'&&r.url().endsWith('/api/v1/person-filter-settings'));
-    await panel(p).getByRole('button',{name:'Guardar filtros visibles',exact:true}).click();
+    const response=p.waitForResponse(r=>r.request().method()==='PUT'&&r.url().endsWith('/api/v1/person-filter-settings'), { timeout: 10000 });
+    await panel(p).getByRole('button',{name:'Guardar filtros visibles',exact:true}).click({ timeout: 10000 });
     expect((await response).status()).toBe(status);
   }
   try {
@@ -52,7 +52,7 @@ test('junta filter selection persists, delegates cannot grant and revocation rej
     await expect(stale.locator('.sidebar').getByRole('button',{name:'Home',exact:true})).toBeVisible();
     await navigate(stale,'Configuración');
     await expect(panel(stale).getByRole('checkbox',{name:'Género',exact:true})).toBeChecked();
-    for(const label of ['Estado','Zona','Afiliación','Tipo de documento','Rol descriptivo','Cargo','Intervalo de nacimiento','Intervalo de registro','Referencia oculta']) await panel(page).getByRole('checkbox',{name:label,exact:true}).uncheck();
+    for(const label of ['Estado','Zona','Afiliación','Tipo de documento','Rol en la comunidad','Cargo','Intervalo de nacimiento','Intervalo de registro','Referencia oculta']) await panel(page).getByRole('checkbox',{name:label,exact:true}).uncheck({timeout:10000});
     await panel(page).getByRole('checkbox',{name:'Permitir a Consultor',exact:true}).check();
     await save(page);
     await save(stale,409);
@@ -83,9 +83,10 @@ test('junta filter selection persists, delegates cannot grant and revocation rej
     await expect(panel(viewer)).toHaveCount(0);
     await navigate(page,'Lista');
     const form=page.getByRole('form',{name:'Filtros de personas'});
+    await form.locator('summary').filter({hasText:'Más filtros de la ficha'}).click();
     await expect(form.getByRole('combobox',{name:'Género',exact:true})).toBeVisible();
     await expect(form.getByRole('combobox',{name:'Zona',exact:true})).toBeVisible();
-    for(const name of ['Estado','Afiliación','Tipo de documento','Rol descriptivo','Cargo']) await expect(form.getByRole('combobox',{name,exact:true})).toHaveCount(0);
+    for(const name of ['Estado','Afiliación','Tipo de documento','Rol en la comunidad','Cargo']) await expect(form.getByRole('combobox',{name,exact:true})).toHaveCount(0);
     await page.getByRole('button',{name:'Agregar filtro adicional',exact:true}).click();
     await expect(page.getByLabel('Campo adicional 1').locator('option')).toHaveCount(1);
     await page.getByLabel('Valor del filtro 1').fill('Norte');
@@ -98,9 +99,10 @@ test('junta filter selection persists, delegates cannot grant and revocation rej
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
     await page.screenshot({path:path.join(root,'.local/filter-settings-list-mobile.png'),fullPage:true});
     await page.reload();
-    await expect(page.locator('.sidebar').getByRole('button',{name:'Home',exact:true})).toBeAttached();
     await page.setViewportSize({width:1280,height:900});
+    await expect(page.locator('.sidebar').getByRole('button',{name:'Home',exact:true})).toBeAttached();
     await navigate(page,'Lista');
+    await form.locator('summary').filter({hasText:'Más filtros de la ficha'}).click();
     await expect(form.getByRole('combobox',{name:'Género',exact:true})).toBeVisible();
     await expect(form.getByRole('combobox',{name:'Cargo',exact:true})).toHaveCount(0);
     await navigate(page,'Configuración');
@@ -112,8 +114,8 @@ test('junta filter selection persists, delegates cannot grant and revocation rej
     await expect(englishPanel.getByRole('checkbox',{name:'Gender',exact:true})).toBeChecked();
     await expect(englishPanel.getByRole('checkbox',{name:'Visible sector',exact:true})).toBeVisible();
     await expect(englishPanel.getByRole('button',{name:'Save visible filters'})).toBeVisible();
+    expect((await mutation(page,'DELETE','/api/v1/persons/'+id,{version:1,confirmed:true})).status()).toBe(200);
   } finally {
     await stale.close(); await viewerContext.close();
-    expect((await mutation(page,'DELETE','/api/v1/persons/'+id,{version:1,confirmed:true})).status()).toBe(200);
   }
 });

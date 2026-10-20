@@ -1,5 +1,7 @@
 # Exportación de personas
 
+Las exportaciones Excel y PDF de 501–2.000 personas usan un trabajo en segundo plano con resultado disponible durante 24 horas y enlace autorizado de 15 minutos. El planificador genera el XLSX binario; para PDF prepara los datos tabulares y el navegador genera el archivo binario al descargarlo. Al vencer el resultado, el estado de consulta cambia a **Vencida**, deja de incluir un ticket y la web pide ejecutar otra exportación; intentar descargar desde una pestaña que seguía abierta actualiza ese estado. El resultado vencido no se restaura desde la interfaz. Los demás módulos aún no usan esta cola; ver [WEB_ACEPTACION.md](WEB_ACEPTACION.md).
+
 ## Ficha individual en Excel y PDF
 
 Abre el detalle desde Lista de personas y pulsa **Descargar ficha Excel** o **Descargar ficha PDF**. El nombre opcional exige confirmar la casilla; vacío usa `ficha_persona_AAAA-MM-DD.xlsx` con la fecha de Colombia. La API `GET /api/v1/persons/{id}/xlsx` consulta de nuevo la persona de la junta activa y exige emisor gateway y permiso `persons.export`; el gateway valida sesión y limita la descarga a cinco solicitudes por minuto.

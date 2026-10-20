@@ -50,6 +50,7 @@ test('registration interval follows the Bogota calendar and visibility policy', 
     await create('female');await create('female');await create('male');
     await page.locator('.sidebar').getByRole('button',{name:'Lista',exact:true}).click();
     const form=page.getByRole('form',{name:'Filtros de personas'});
+    await form.locator('.person-advanced summary').click();
     await expect(form.getByLabel('Registro desde',{exact:true})).toBeVisible();
     await form.getByLabel('Buscar',{exact:true}).fill(name);
     await form.getByLabel('Registro desde',{exact:true}).fill(today);

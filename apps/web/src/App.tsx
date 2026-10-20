@@ -25,6 +25,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import {
+  ApiError,
   api,
   canAdmin,
   canWrite,
@@ -42,11 +43,14 @@ import { PersonFieldSettings } from "./PersonFields";
 import { PersonPositionSettings } from './PersonPositions';
 import { PersonFilterSettings } from './PersonFilterSettings';
 import { PlanillaSettings } from './PlanillaSettings';
+import { PrivacyRequests } from './PrivacyRequests';
 import { Presence } from './Presence';
 import { broadcastLanguage, formatLocale, localizedTerms, setLanguage, t, useLanguage } from './i18n';
 import { Contacts } from './Contacts';
 import { Chat } from './Chat';
+import { VoiceCall } from './VoiceCall';
 import { GlobalSearch } from './GlobalSearch';
+import { ExportCenter } from './ExportCenter';
 import { ServiceStatus } from './ServiceStatus';
 import { SchedulerAlert } from './SchedulerAlert';
 import { DeliveryAlert } from './DeliveryAlert';
@@ -75,20 +79,44 @@ export function App() {
     [organizationLogo, setOrganizationLogo] = useState<string | null>(null),
     [profilePhoto, setProfilePhoto] = useState<string | null>(null),
     [loading, setLoading] = useState(true),
+    [bootError, setBootError] = useState<unknown>(),
     [page, setPage] = useState("home"),
     [menu, setMenu] = useState(false),
     [profile, setProfile] = useState(false),
     [presenceSaving, setPresenceSaving] = useState(false),
     [languageSaving, setLanguageSaving] = useState(false),
     [calendarTarget, setCalendarTarget] = useState<string>(),
+    [personExportTarget, setPersonExportTarget] = useState<string>(),
     [chatTarget, setChatTarget] = useState<string>(),
     [chatConversationTarget, setChatConversationTarget] = useState<string>(),
+    [voiceConversation, setVoiceConversation] = useState<{ id: string; name: string }>(),
     [folderTarget, setFolderTarget] = useState<string>(),
     [folderRead, setFolderRead] = useState(false),
     [themeSaving, setThemeSaving] = useState(false),
     [theme, setTheme] = useState(localStorage.getItem("srd-theme") || "light"),
     [error, setError] = useState<unknown>();
   const profileAnchor = useRef<HTMLDivElement>(null);
+  const profileButton = useRef<HTMLButtonElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const mobile = window.matchMedia('(max-width: 650px)');
+    if (!mobile.matches) { setMenu(false); return; }
+    document.querySelector<HTMLButtonElement>('#main-sidebar nav button')?.focus();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenu(false);
+        menuButton.current?.focus();
+      }
+    };
+    const closeOnResize = () => { if (!mobile.matches) setMenu(false); };
+    window.addEventListener('keydown', closeOnEscape);
+    mobile.addEventListener('change', closeOnResize);
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape);
+      mobile.removeEventListener('change', closeOnResize);
+    };
+  }, [menu]);
   useEffect(() => {
     if (!profile) return;
     const closeOutside = (event: PointerEvent) => {
@@ -101,7 +129,7 @@ export function App() {
     if (location.pathname === '/invite') { setLoading(false); return; }
     api<Principal>("me")
       .then(p => { setPrincipal(p); setLanguage(p.user.language, p.user_id); })
-      .catch(() => {})
+      .catch(value => { if (!(value instanceof ApiError && value.status === 401)) setBootError(value); })
       .finally(() => setLoading(false));
   }, []);
   useEffect(() => {
@@ -141,15 +169,19 @@ export function App() {
     setProfilePhoto(null);
     const refresh = () => {
       const request = ++latest;
-      void api<{items: {present: boolean}[]}>(`users/${principal.user_id}/photos`)
-        .then(data => data.items[0]?.present ? api<{content: string; mime: string}>(`users/${principal.user_id}/photos/avatar`) : null)
+      void (principal.person_id
+        ? api<{content: string; mime: string}>(`persons/${principal.person_id}/photos/person`).catch(() => null)
+        : Promise.resolve(null))
+        .then(personPhoto => personPhoto || api<{items: {present: boolean}[]}>(`users/${principal.user_id}/photos`)
+          .then(data => data.items[0]?.present ? api<{content: string; mime: string}>(`users/${principal.user_id}/photos/avatar`) : null))
         .then(data => { if (active && request === latest) setProfilePhoto(data?.mime === 'image/png' ? `data:image/png;base64,${data.content}` : null); })
         .catch(() => { if (active && request === latest) setProfilePhoto(null); });
     };
     refresh();
     window.addEventListener('srd-profile-photo-updated', refresh);
-    return () => { active = false; window.removeEventListener('srd-profile-photo-updated', refresh); };
-  }, [principal?.organization.id, principal?.user_id, principal?.terms_required]);
+    window.addEventListener('srd-person-photo-updated', refresh);
+    return () => { active = false; window.removeEventListener('srd-profile-photo-updated', refresh); window.removeEventListener('srd-person-photo-updated', refresh); };
+  }, [principal?.organization.id, principal?.user_id, principal?.person_id, principal?.terms_required]);
   useEffect(() => {
     const fn = (e: StorageEvent) => {
       if (e.key === "srd-theme") setTheme(e.newValue || "light");
@@ -227,11 +259,16 @@ export function App() {
     }
   }
   function navigate(value: string) {
+    const wasNavigationOpen = menu || profile;
     setFolderTarget(undefined);
     setPage(value);
     setMenu(false);
     setProfile(false);
     setError(null);
+    requestAnimationFrame(() => {
+      window.scrollTo(0, 0);
+      if (wasNavigationOpen) document.querySelector<HTMLElement>('.workspace')?.focus({ preventScroll: true });
+    });
   }
   const chatStarted = useCallback(() => setChatTarget(undefined), []);
   const chatOpened = useCallback(() => setChatConversationTarget(undefined), []);
@@ -243,6 +280,13 @@ export function App() {
         <Loading />
       </main>
     );
+  if (bootError && !principal)
+    return <main className="boot"><div className="panel"><ErrorBox error={bootError} /><button type="button" className="primary" onClick={() => {
+      setBootError(undefined); setLoading(true);
+      void api<Principal>('me').then(p => { setPrincipal(p); setLanguage(p.user.language, p.user_id); })
+        .catch(value => { if (!(value instanceof ApiError && value.status === 401)) setBootError(value); })
+        .finally(() => setLoading(false));
+    }}>{t('Reintentar')}</button></div></main>;
   if (!principal)
     return (
       <Login
@@ -298,6 +342,7 @@ export function App() {
     { key: "calendar", label: "Calendario", icon: CalendarDays },
     { key: "treasury", label: "Tesorería", icon: Wallet, allow: ["superadmin", "admin", "treasurer"].includes(principal.role) },
     { key: "inventory", label: "Inventario", icon: Package, allow: ["superadmin", "admin", "treasurer"].includes(principal.role) },
+    { key: 'export', label: 'Exportar', icon: Download },
     { key: "settings", label: "Configuración", icon: Settings },
     {
       key: "audit",
@@ -316,8 +361,11 @@ export function App() {
     >
       <header className="app-header">
         <button
+          ref={menuButton}
           className="icon-button hamburger"
-          aria-label={t('Abrir menú')}
+          aria-label={t(menu ? 'Cerrar menú' : 'Abrir menú')}
+          aria-expanded={menu}
+          aria-controls="main-sidebar"
           onClick={() => setMenu(!menu)}
         >
           <Menu />
@@ -343,10 +391,14 @@ export function App() {
           <span>{t('Buscar en la junta')}</span>
         </button>
         <div className="profile-anchor" ref={profileAnchor} onKeyDown={event => {
-          if (event.key === 'Escape') setProfile(false);
+          if (event.key === 'Escape' && profile) {
+            setProfile(false);
+            profileButton.current?.focus();
+          }
         }}>
-          <Notifications key={principal.organization.id} organizationId={principal.organization.id} doNotDisturb={principal.user.presence === 'dnd'} onEvent={id => { setCalendarTarget(id); navigate('calendar'); }} onChat={id => { setChatTarget(undefined); setChatConversationTarget(id); navigate('chat'); }} />
+          <Notifications key={principal.organization.id} organizationId={principal.organization.id} doNotDisturb={principal.user.presence === 'dnd'} onEvent={id => { setCalendarTarget(id); navigate('calendar'); }} onChat={id => { setChatTarget(undefined); setChatConversationTarget(id); navigate('chat'); }} onExport={id => { setPersonExportTarget(id); navigate('list'); }} />
           <button
+            ref={profileButton}
             className="profile-trigger"
             aria-label={t('Abrir perfil de {name}', {name: principal.user.name})}
             aria-expanded={profile}
@@ -414,7 +466,7 @@ export function App() {
             </div>
         </div>
       </header>
-      <aside className={"sidebar " + (menu ? "open" : "")}>
+      <aside id="main-sidebar" className={"sidebar " + (menu ? "open" : "")}>
         <span className="nav-label">{t('MI JUNTA')}</span>
         <nav>
           {links.map(({ key, label, icon: Icon }) => (
@@ -428,33 +480,24 @@ export function App() {
             </button>
           ))}
         </nav>
-        <div className="sidebar-bottom">
-          <ShieldCheck size={22} />
-          <strong>{t('Tu espacio de confianza')}</strong>
-          <p>
-            {t('Acceso según tu rol.')}
-            <br />
-            {t('Información de tu junta.')}
-          </p>
-          <span className="version">{t('SRD · Desarrollo 0.1')}</span>
-        </div>
       </aside>
       {menu && (
         <button
           className="menu-backdrop"
           aria-label={t('Cerrar menú')}
-          onClick={() => setMenu(false)}
+          onClick={() => { setMenu(false); menuButton.current?.focus(); }}
         />
       )}
-      <main className="workspace">
+      <main className="workspace" tabIndex={-1} inert={menu}>
         <ErrorBox error={error} />
+        <VoiceCall key={`${principal.organization.id}:${principal.user_id}`} conversationId={page === 'chat' ? voiceConversation?.id : undefined} contactName={voiceConversation?.name} selfId={principal.user_id} selfName={principal.user.name} selfPhoto={profilePhoto} organizationId={principal.organization.id} doNotDisturb={principal.user.presence === 'dnd'} />
         {canAdmin(principal.role) && <SchedulerAlert key={`${principal.organization.id}:${principal.user_id}`} onOpen={() => {
           navigate('settings');
-          window.scrollTo({ top: 0 });
+          requestAnimationFrame(() => document.getElementById('settings-services')?.scrollIntoView({ block: 'start' }));
         }} />}
         {canAdmin(principal.role) && <DeliveryAlert key={`${principal.organization.id}:${principal.user_id}`} onOpen={() => {
           navigate('settings');
-          window.scrollTo({ top: 0 });
+          requestAnimationFrame(() => document.getElementById('settings-services')?.scrollIntoView({ block: 'start' }));
         }} />}
         {canAdmin(principal.role) && <AuditDeliveryAlert key={`${principal.organization.id}:${principal.user_id}`} onOpen={() => {
           navigate('audit');
@@ -474,23 +517,27 @@ export function App() {
           <Persons
             principal={principal}
             mode={page === "list" ? "list" : "lookup"}
+            openExportJobId={personExportTarget}
+            onExportOpened={() => setPersonExportTarget(undefined)}
             onCreate={() => navigate("register")}
           />
         )}
         {page === "settings" && (
           <SettingsPanel
+            key={`${principal.organization.id}:${principal.user_id}`}
             principal={principal}
             reload={reload}
             setTheme={setTheme}
           />
         )}
-          {page === "audit" && <Audit key={`${principal.organization.id}:audit`} principal={principal} />}
+          {page === "audit" && <Audit key={`${principal.organization.id}:audit`} principal={principal} logoData={organizationLogo} />}
           {page === 'calendar' && <Calendar key={`${principal.organization.id}:calendar`} principal={principal} openEventId={calendarTarget} onOpened={() => setCalendarTarget(undefined)} />}
-          {page === 'treasury' && <Treasury key={`${principal.organization.id}:treasury`} principal={principal} />}
-          {page === 'inventory' && <Inventory key={`${principal.organization.id}:inventory`} principal={principal} />}
+          {page === 'treasury' && <Treasury key={`${principal.organization.id}:treasury`} principal={principal} logoData={organizationLogo} />}
+          {page === 'inventory' && <Inventory key={`${principal.organization.id}:inventory`} principal={principal} logoData={organizationLogo} />}
+          {page === 'export' && <ExportCenter principal={principal} onOpen={navigate} />}
           {page === 'folders' && (canAdmin(principal.role) || folderRead) && <Folders key={`${principal.organization.id}:folders:${folderTarget ?? 'root'}`} canManage={canAdmin(principal.role)} initialFolder={folderTarget} />}
           {page === 'contacts' && <Contacts key={`${principal.organization.id}:contacts`} organizationId={principal.organization.id} onChat={id => { setChatTarget(id); navigate('chat'); }} />}
-          {page === 'chat' && <Chat key={`${principal.organization.id}:chat`} userId={chatTarget} conversationId={chatConversationTarget} onStarted={chatStarted} onOpened={chatOpened} selfId={principal.user_id} organizationId={principal.organization.id} onContacts={() => navigate('contacts')} />}
+          {page === 'chat' && <Chat key={`${principal.organization.id}:chat`} userId={chatTarget} conversationId={chatConversationTarget} onStarted={chatStarted} onOpened={chatOpened} selfId={principal.user_id} organizationId={principal.organization.id} onContacts={() => navigate('contacts')} onVoiceSelection={setVoiceConversation} />}
           {page === 'search' && <GlobalSearch key={`${principal.organization.id}:search`} principal={principal} folderRead={folderRead || canAdmin(principal.role)} onOpenFolder={id => { navigate('folders'); setFolderTarget(id); }} />}
         {page === "downloads" && (
           <>
@@ -535,9 +582,11 @@ function Dashboard({
     [detail, setDetail] = useState<string>();
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
     setBusy(true); setData(undefined); setError(undefined);
-    api("dashboard").then(value => { if (active) setData(value); }).catch(e => { if (active) setError(e); }).finally(() => { if (active) setBusy(false); });
-    return () => { active = false; };
+    api("dashboard", 'GET', undefined, { signal: controller.signal }).then(value => { if (active) setData(value); }).catch(e => { if (active) setError(e); }).finally(() => { window.clearTimeout(timeout); if (active) setBusy(false); });
+    return () => { active = false; window.clearTimeout(timeout); controller.abort(); };
   }, [principal.organization.id, refresh]);
   const total = data?.total ?? 0;
   const max = Math.max(
@@ -548,7 +597,6 @@ function Dashboard({
     <>
       <section className="welcome">
         <div>
-          <span className="eyebrow">{t('TU COMUNIDAD, EN UN SOLO LUGAR')}</span>
           <h1>
             {t('Hola, {role}', {role: t(roleNames[principal.role])})}{' '}
             <Hand className="wave" size={30} />
@@ -687,7 +735,7 @@ function Dashboard({
         )
       )}
       {detail && (
-        <PersonDetail id={detail} onClose={() => setDetail(undefined)} />
+        <PersonDetail id={detail} principal={principal} onClose={() => setDetail(undefined)} />
       )}
     </>
   );
@@ -759,6 +807,8 @@ function SettingsPanel({
     [busy, setBusy] = useState(false),
     [target, setTarget] = useState<Organization>(),
     [code, setCode] = useState("");
+  const [title, setTitle] = useState(principal.user.title ?? ''),
+    [titleEn, setTitleEn] = useState(principal.user.title_en ?? '');
   async function submit(
     e: FormEvent<HTMLFormElement>,
     path: string,
@@ -790,6 +840,13 @@ function SettingsPanel({
           <p className="muted">{t('Tu perfil, la identidad y los permisos de tu junta.')}</p>
         </div>
       </div>
+      <nav className="settings-jump" aria-label={t('Secciones de configuración')}>
+        <a href="#settings-profile">{t('Mi perfil')}</a>
+        <a href="#settings-persons">{t('Personas y fichas')}</a>
+        {canAdmin(principal.role) && <a href="#settings-access">{t('Acceso y permisos')}</a>}
+        {canAdmin(principal.role) && <a href="#settings-services">{t('Estado de servicios')}</a>}
+        <a href="#settings-security">{t('Seguridad y junta')}</a>
+      </nav>
       <ErrorBox error={error} />
       {notice && (
         <p className="notice" role="status">
@@ -797,10 +854,9 @@ function SettingsPanel({
           {notice}
         </p>
       )}
-      {canAdmin(principal.role) && <div id="service-status"><ServiceStatus key={principal.organization.id} /></div>}
-      <section className="panel">
+      <section className="panel" id="settings-profile">
         <h2>{t('Mi perfil')}</h2>
-        <ProfilePhoto key={`${principal.organization.id}:${principal.user_id}`} userId={principal.user_id} />
+        <ProfilePhoto key={`${principal.organization.id}:${principal.user_id}`} userId={principal.user_id} personId={principal.person_id} />
         <form onSubmit={(e) => submit(e, "profile", "PATCH")}>
           <div className="form-grid">
             <label>
@@ -815,6 +871,14 @@ function SettingsPanel({
             <label>
               {t('Correo de acceso')}
               <input value={principal.user.email} readOnly />
+            </label>
+            <label>
+              {t('Cargo visible en esta junta (ES)')}
+              <input name="title" value={title} onChange={event => setTitle(event.target.value)} required={Boolean(titleEn.trim())} maxLength={120} placeholder={t('Ej.: Coordinadora')} />
+            </label>
+            <label>
+              {t('Cargo visible en esta junta (EN)')}
+              <input name="title_en" value={titleEn} onChange={event => setTitleEn(event.target.value)} required={Boolean(title.trim())} maxLength={120} placeholder={t('Ejemplo: Community coordinator')} />
             </label>
             <label>
               {t('Tema')}
@@ -840,8 +904,9 @@ function SettingsPanel({
               </select>
             </label>
           </div>
+          <p className="muted">{t('El cargo es opcional; si lo escribes, completa ambas versiones. Se muestra en Contactos y no cambia tus permisos.')}</p>
           <p className="muted">
-            {t('La conexión se confirma cada 30 segundos y vence tras 90 segundos sin señal. Invisible se representa como Desconectado. No molestar oculta el distintivo de la campana, pero conserva los avisos en la bandeja.')}
+            {t('Invisible aparece como Desconectado. No molestar oculta el indicador de avisos, pero conserva los mensajes en la bandeja.')}
           </p>
           <button className="primary" disabled={busy}>
             {t('Guardar perfil')}
@@ -850,15 +915,19 @@ function SettingsPanel({
       </section>
       <EmailChange onChanged={reload} />
       <QuickLinkSettings principal={principal} />
+      <span id="settings-persons" className="settings-anchor" />
       <PersonFieldSettings key={`${principal.organization.id}:fields`} />
       {canAdmin(principal.role) && <PersonPositionSettings key={`${principal.organization.id}:positions`} />}
       <PersonFilterSettings key={`${principal.organization.id}:filters`} />
       <PlanillaSettings key={`${principal.organization.id}:planilla`} organizationName={principal.organization.name} />
+      {canAdmin(principal.role) && <PrivacyRequests key={`${principal.organization.id}:privacy`} userId={principal.user_id} />}
+      <span id="settings-access" className="settings-anchor" />
       {canAdmin(principal.role) && <FolderAccessSettings key={`${principal.organization.id}:folder-access`} />}
       {canAdmin(principal.role) && <Memberships key={`${principal.organization.id}:memberships`} principal={principal} />}
       {principal.role === 'superadmin' && <Organizations key={`${principal.organization.id}:organizations`} principal={principal} />}
       {principal.role === 'superadmin' && <PlatformAccounts key={`${principal.organization.id}:platform-accounts`} />}
-        <section className="panel">
+      {canAdmin(principal.role) && <div id="settings-services"><div id="service-status"><ServiceStatus key={principal.organization.id} /></div></div>}
+        <section className="panel" id="settings-security">
           <h2>{t('Seguridad de la cuenta')}</h2>
         <button
           disabled={busy}
@@ -896,6 +965,7 @@ function SettingsPanel({
               required
               value={code}
               onChange={(e) => setCode(e.target.value)}
+              placeholder={t('Ejemplo: barrio-central')}
             />
           </label>
           <button>{t('Cargar términos')}</button>
